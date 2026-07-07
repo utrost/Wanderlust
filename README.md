@@ -35,6 +35,7 @@ cartographer of your own world.
 | Doc | For whom | What's in it |
 | --- | --- | --- |
 | [Design Spec](docs/DESIGN.md) | Anyone who wants the "why" | Philosophy, core mechanic, gamification, full feature set, non-goals |
+| [Design Brief](docs/DESIGN_BRIEF.md) | Designers | Visual & UX briefing: tone, the heat-ramp brand, screens to design, constraints |
 | [User Guide](docs/USER_GUIDE.md) | Future users | How the app works from the outside: walking, maps, finds, notes, import/export |
 | [Architecture](docs/ARCHITECTURE.md) | Contributors | System shape, map-matching approach, data model, stack, key risks |
 | [Roadmap](docs/ROADMAP.md) | Contributors & the curious | Phased plan from geo-core to iOS, what's deferred and why |
