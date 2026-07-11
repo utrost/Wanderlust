@@ -20,3 +20,4 @@ editing history.
 | [0004](0004-local-first-no-cloud.md) | Local-first, no cloud, no account | Accepted |
 | [0005](0005-offline-rendering-maplibre-pmtiles.md) | Offline rendering: MapLibre Native + PMTiles | Accepted |
 | [0006](0006-license.md) | License (AGPL-3.0, under review) | Proposed |
+| [0007](0007-fog-of-war-optional-reveal-lens.md) | "Fog of war" as an optional reveal lens ("Uncharted"), not a default | Proposed |

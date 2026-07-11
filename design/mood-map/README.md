@@ -20,6 +20,7 @@ that fills in as you walk. Sections:
   soft cartographer's mist over unwalked ground (streets stay faintly legible,
   so it still invites) that clears into full ink as you walk. Shown at the same
   three life stages, light and dark, as an optional third view — not the default.
+  Design rationale: [ADR-0007](../../docs/adr/0007-fog-of-war-optional-reveal-lens.md).
 - **Notes &amp; photos** — the memory layer: browsing, opening, and pinning notes.
 - **Choosing a home area** — first-run onboarding: search, confirm a boundary,
   download offline, or draw your own area.
