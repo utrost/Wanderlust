@@ -1,0 +1,16 @@
+[package]
+name = "geo-core"
+version = "0.0.1"
+description = "Wanderlust geo-core: map-matching, routing graph, and the local data model."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Deliberately dependency-free for now. The Phase 0 spike (map-matching + the
+# guardrail) is pure Rust and hermetic so it builds and tests anywhere. Heavier
+# concerns — the SQLite binding, a real spatial index, the FFI bridge — arrive
+# as separate, opt-in pieces rather than being baked into the core spike.
+[dependencies]
+
+[lib]
+name = "geo_core"

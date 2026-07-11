@@ -4,19 +4,25 @@ A phased plan from nothing to a lifetime map. Ordering follows the architecture:
 **de-risk the geo-core first, wrap platforms around it, defer routing.** See
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Status legend: 🔴 not started · 🟡 in progress · 🟢 done. Everything is 🔴 today.
+Status legend: 🔴 not started · 🟡 in progress · 🟢 done. Phase 0 is underway —
+the geo-core map-matching spike and its guardrail are implemented and tested.
 
 ---
 
 ## Phase 0 — Foundations 🔴
 Prove the risky pieces in isolation, before any polished app.
 
-- 🔴 **Geo-core skeleton** (platform-agnostic): data model, SQLite schema.
-- 🔴 **Map-matching spike**: snap-to-edge + shortest-path fill, *with the
+- 🟢 **Geo-core skeleton** (platform-agnostic): data model, SQLite schema
+  ([`geo-core`](../geo-core/)).
+- 🟡 **Map-matching spike**: snap-to-edge + shortest-path fill, *with the
   don't-paint-what-you-didn't-walk guardrail* (see
-  [ADR-0001](adr/0001-pragmatic-map-matching.md)). Validate on real GPX traces,
-  including messy/flâneur ones.
-- 🔴 **Routing graph** load + query for one region.
+  [ADR-0001](adr/0001-pragmatic-map-matching.md)). Implemented and tested;
+  reachable from the app through the FFI boundary + GeoJSON loader
+  ([`geo-ffi`](../geo-ffi/)), validated end-to-end (GeoJSON network + GPX in →
+  correct street ids out) on a real-coordinate sample. Still to validate on real
+  OSM data and messy/flâneur GPX.
+- 🟡 **Routing graph** load + query for one region. Build + Dijkstra done;
+  region loading pending.
 - 🔴 **PMTiles + MapLibre** render of one area, offline.
 
 **Exit criteria:** feed a GPX file in → correct per-segment counts out, no

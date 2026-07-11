@@ -1,0 +1,12 @@
+# Cargo workspace for Wanderlust's native crates.
+# The Flutter surface (app/) is not a Cargo member; it links the geo-core via
+# FFI (see ADR-0003). Additional crates (e.g. the flutter_rust_bridge glue) will
+# join this workspace as they are added.
+[workspace]
+resolver = "2"
+members = ["geo-core", "geo-ffi"]
+
+[workspace.package]
+edition = "2021"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/utrost/Wanderlust"

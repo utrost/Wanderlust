@@ -1,0 +1,37 @@
+name: wanderlust
+description: "Paint the streets you've walked. Offline-first, private walking map."
+publish_to: "none"
+version: 0.0.1+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # FFI to the Rust geo-core (ADR-0003) — used by lib/geo/geo_core_ffi.dart.
+  ffi: ^2.1.0
+
+  # Intended Phase-1 stack (added as the features land, so `pub get` stays
+  # trivially resolvable while the shell is scaffolded):
+  #   maplibre_gl        offline vector basemap — MapLibre Native + PMTiles (ADR-0005)
+  #   geolocator         foreground location; background strategy is a Phase-1 spike
+  #   flutter_rust_bridge   codegen alternative to the hand-written FFI binding
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # Newsreader (serif) and Work Sans (sans) are the brand faces. They are OFL
+  # and will be bundled as assets here (not fetched at runtime — offline-first),
+  # wired to the `fontFamily` names used in the theme.
+  # fonts:
+  #   - family: Newsreader
+  #     fonts: [{ asset: assets/fonts/Newsreader-Regular.ttf }, ...]
+  #   - family: Work Sans
+  #     fonts: [{ asset: assets/fonts/WorkSans-Regular.ttf }, ...]
