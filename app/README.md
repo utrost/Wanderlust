@@ -4,10 +4,17 @@ The cross-platform UI layer (ADR-0003). Android-first (ADR-0002); the heavy,
 correctness-critical geo logic lives in the Rust [`geo-core`](../geo-core/) and
 is linked via FFI.
 
-> **Scaffold stage.** This currently renders the filling-map home screen with
-> the ramp and street network from the design mocks, driven by bundled sample
-> data. Live GPS, offline MapLibre tiles, and the geo-core FFI wiring are the
-> next steps (see [ROADMAP](../docs/ROADMAP.md), Phase 1).
+> **Scaffold stage.** This renders the filling-map home screen (ramp + street
+> network from the design mocks) and calls the **real Rust geo-core over FFI** on
+> startup — matching a bundled sample walk and showing the result in a status
+> chip ("geo-core · lit N streets · 0 phantom blocked"). The native
+> `libwanderlust_geo.so` is cross-compiled with cargo-ndk in CI and bundled into
+> the APK. Live GPS and offline MapLibre tiles are the next steps (see
+> [ROADMAP](../docs/ROADMAP.md), Phase 1).
+
+CI publishes a **debug APK** artifact (`wanderlust-debug-apk`) on every run —
+download it from the run's Summary page to sideload on Android without a local
+Flutter setup.
 
 ## First-time setup
 

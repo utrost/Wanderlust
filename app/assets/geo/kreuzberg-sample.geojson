@@ -1,0 +1,346 @@
+{
+ "type": "FeatureCollection",
+ "_note": "Hand-sketched sample of Kreuzberg streets (approximate WGS84) for the geo-core spike; replace with an OSM extract via tools/.",
+ "features": [
+  {
+   "type": "Feature",
+   "id": 1,
+   "properties": {
+    "name": "Wrangelstraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.43,
+      52.495
+     ],
+     [
+      13.4315,
+      52.495
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 2,
+   "properties": {
+    "name": "Falckensteinstraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.43,
+      52.495
+     ],
+     [
+      13.43,
+      52.4959
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 3,
+   "properties": {
+    "name": "Görlitzer Ufer"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.4315,
+      52.495
+     ],
+     [
+      13.433,
+      52.495
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 4,
+   "properties": {
+    "name": "Skalitzer Straße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.4315,
+      52.495
+     ],
+     [
+      13.4315,
+      52.4959
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 5,
+   "properties": {
+    "name": "Oppelner Straße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.433,
+      52.495
+     ],
+     [
+      13.4345,
+      52.495
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 6,
+   "properties": {
+    "name": "Lausitzer Straße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.433,
+      52.495
+     ],
+     [
+      13.433,
+      52.4959
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 7,
+   "properties": {
+    "name": "Manteuffelstraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.4345,
+      52.495
+     ],
+     [
+      13.4345,
+      52.4959
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 8,
+   "properties": {
+    "name": "Cuvrystraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.43,
+      52.4959
+     ],
+     [
+      13.4315,
+      52.4959
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 9,
+   "properties": {
+    "name": "Bevernstraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.43,
+      52.4959
+     ],
+     [
+      13.43,
+      52.4968
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 10,
+   "properties": {
+    "name": "Liegnitzer Straße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.4315,
+      52.4959
+     ],
+     [
+      13.433,
+      52.4959
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 11,
+   "properties": {
+    "name": "Wrangelstraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.4315,
+      52.4959
+     ],
+     [
+      13.4315,
+      52.4968
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 12,
+   "properties": {
+    "name": "Falckensteinstraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.433,
+      52.4959
+     ],
+     [
+      13.4345,
+      52.4959
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 13,
+   "properties": {
+    "name": "Görlitzer Ufer"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.433,
+      52.4959
+     ],
+     [
+      13.433,
+      52.4968
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 14,
+   "properties": {
+    "name": "Skalitzer Straße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.4345,
+      52.4959
+     ],
+     [
+      13.4345,
+      52.4968
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 15,
+   "properties": {
+    "name": "Oppelner Straße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.43,
+      52.4968
+     ],
+     [
+      13.4315,
+      52.4968
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 16,
+   "properties": {
+    "name": "Lausitzer Straße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.4315,
+      52.4968
+     ],
+     [
+      13.433,
+      52.4968
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "id": 17,
+   "properties": {
+    "name": "Manteuffelstraße"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.433,
+      52.4968
+     ],
+     [
+      13.4345,
+      52.4968
+     ]
+    ]
+   }
+  }
+ ]
+}

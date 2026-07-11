@@ -8,8 +8,8 @@ import 'heat_ramp.dart';
 /// the mocks exactly.
 class WanderlustColors {
   static final Color paperBg = oklch(0.95, 0.012, 80); // light basemap
-  static final Color paperCard = const Color(0xFFFBF8F2);
-  static final Color canvasBg = const Color(0xFFE7E2D7);
+  static const Color paperCard = Color(0xFFFBF8F2);
+  static const Color canvasBg = Color(0xFFE7E2D7);
   static final Color darkBg = oklch(0.22, 0.014, 75); // dark basemap
   static final Color ink = oklch(0.25, 0.02, 75); // primary text
   static final Color inkMuted = oklch(0.5, 0.02, 75);

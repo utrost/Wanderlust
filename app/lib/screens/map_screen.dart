@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../data/street_network.dart';
+import '../geo/geo_core_ffi.dart';
+import '../geo/live_match.dart';
 import '../theme/wanderlust_theme.dart';
 import '../widgets/filling_map_painter.dart';
 
@@ -17,6 +19,9 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   FillLevel _level = FillLevel.month;
+
+  // Proves the native geo-core loads and matches on the device.
+  late final Future<MatchResult?> _liveMatch = runSampleMatch();
 
   static const _labels = {
     FillLevel.week: 'First week',
@@ -43,6 +48,8 @@ class _MapScreenState extends State<MapScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _areaChip(),
+                  const SizedBox(height: 10),
+                  _geoStatusChip(),
                   const Spacer(),
                   _stagePicker(),
                   const SizedBox(height: 12),
@@ -75,6 +82,40 @@ class _MapScreenState extends State<MapScreen> {
               style: TextStyle(fontSize: 10.5, color: WanderlustColors.inkMuted)),
         ],
       ),
+    );
+  }
+
+  /// Small on-device readout of the native geo-core matching the bundled
+  /// sample walk over FFI. Confirms the Rust `.so` loaded and ran.
+  Widget _geoStatusChip() {
+    return FutureBuilder<MatchResult?>(
+      future: _liveMatch,
+      builder: (context, snap) {
+        final String label;
+        if (snap.connectionState != ConnectionState.done) {
+          label = 'geo-core · matching…';
+        } else if (snap.data case final r?) {
+          label = 'geo-core · lit ${r.walked.length} streets · ${r.gapsRejected} phantom blocked';
+        } else {
+          label = 'geo-core · native library not loaded';
+        }
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: WanderlustColors.paperCard.withValues(alpha: 0.86),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: WanderlustColors.inkMuted,
+            ),
+          ),
+        );
+      },
     );
   }
 
