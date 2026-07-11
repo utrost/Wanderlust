@@ -1,19 +1,17 @@
-import 'dart:convert';
-import 'dart:ffi';
-import 'dart:io' show Platform;
-
-import 'package:ffi/ffi.dart';
-
 /// Dart binding to the Rust geo-core over its C ABI (ADR-0003, see
 /// geo-ffi/include/wanderlust_geo.h). Load a street network once, then match
 /// walks against it. This is the seam through which "import a GPX → watch real
 /// streets light up" runs.
 ///
-/// Scaffold: the native library (`libwanderlust_geo.so`) is produced by
-/// cross-compiling geo-ffi with cargo-ndk into the Android `jniLibs`. Until that
-/// build step is wired into the Gradle setup, this module is not yet imported by
-/// the UI — the map screen renders bundled sample data.
+/// The native library (`libwanderlust_geo.so`) is cross-compiled from geo-ffi
+/// with cargo-ndk into the Android `jniLibs` (see .github/workflows/ci.yml).
 library;
+
+import 'dart:convert';
+import 'dart:ffi';
+import 'dart:io' show Platform;
+
+import 'package:ffi/ffi.dart';
 
 // ── native signatures ───────────────────────────────────────────────────────
 typedef _FromGeoJsonNative = Pointer<Void> Function(Pointer<Utf8>);

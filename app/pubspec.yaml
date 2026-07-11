@@ -27,6 +27,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # Sample street network + walk, matched live through the Rust geo-core on
+    # device to prove the FFI path (see lib/geo/live_match.dart).
+    - assets/geo/kreuzberg-sample.geojson
+    - assets/geo/walk-goerli.gpx
   # Newsreader (serif) and Work Sans (sans) are the brand faces. They are OFL
   # and will be bundled as assets here (not fetched at runtime — offline-first),
   # wired to the `fontFamily` names used in the theme.
