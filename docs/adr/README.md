@@ -16,7 +16,7 @@ editing history.
 | --- | --- | --- |
 | [0001](0001-pragmatic-map-matching.md) | Pragmatic map-matching (snap + graph fill), not HMM | Accepted |
 | [0002](0002-android-first-ios-later.md) | Android first, iOS later | Accepted |
-| [0003](0003-flutter-with-native-geo-core.md) | Flutter surface with a native geo-core via FFI | Proposed |
+| [0003](0003-flutter-with-native-geo-core.md) | Flutter surface with a native geo-core via FFI | Accepted |
 | [0004](0004-local-first-no-cloud.md) | Local-first, no cloud, no account | Accepted |
 | [0005](0005-offline-rendering-maplibre-pmtiles.md) | Offline rendering: MapLibre Native + PMTiles | Accepted |
 | [0006](0006-license.md) | License (AGPL-3.0, under review) | Proposed |

@@ -1,7 +1,7 @@
 # ADR-0003: Flutter surface with a native geo-core via FFI
 
-- **Status:** Proposed
-- **Date:** 2026-07-07
+- **Status:** Accepted
+- **Date:** 2026-07-07 (accepted 2026-07-11)
 
 ## Context
 
@@ -32,8 +32,10 @@ module (leaning Rust) wired in via FFI** rather than in pure Dart. This gives th
 best "Android now, iOS nearly free" story while keeping the performance-critical,
 correctness-critical geo logic in a fast, portable, well-tooled language.
 
-Status is Proposed pending a check of current package maturity
-(background-location, `maplibre` plugin, Flutter↔Rust FFI ergonomics).
+Accepted for the build. The package-maturity check (background-location,
+`maplibre` plugin, Flutter↔Rust FFI ergonomics) folds into Phase 0 de-risking
+rather than blocking the decision; the geo-core is being built Rust-first so
+that check does not gate progress on the core.
 
 ## Consequences
 
