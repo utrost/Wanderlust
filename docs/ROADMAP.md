@@ -31,8 +31,11 @@ phantom streets.
 ## Phase 1 — Walkable MVP (Android) 🔴
 The smallest thing that delivers the core joy: walk → map fills.
 
-- 🔴 **Background GPS recording** with adaptive sampling + battery budget as an
-  explicit acceptance criterion (see [Architecture](ARCHITECTURE.md#background-gps--a-first-class-risk)).
+- 🟡 **GPS recording** — foreground recording (a walk as a live GPS trace with
+  duration/distance, exportable as GPX) is implemented in the app. *Background*
+  recording with adaptive sampling + battery budget as an explicit acceptance
+  criterion (see [Architecture](ARCHITECTURE.md#background-gps--a-first-class-risk))
+  is still the open, first-class risk.
 - 🔴 **Live filling map**: counts drive color + width (faint/thin 1× →
   saturated/broad 20×).
 - 🔴 **Area selection**: admin boundary or drawn rectangle; per-area PMTiles.

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/street_network.dart';
 import '../geo/geo_core_ffi.dart';
 import '../geo/live_match.dart';
+import '../recording/walk_recorder.dart';
 import '../theme/wanderlust_theme.dart';
 import '../widgets/filling_map_painter.dart';
 
@@ -22,6 +23,14 @@ class _MapScreenState extends State<MapScreen> {
 
   // Proves the native geo-core loads and matches on the device.
   late final Future<MatchResult?> _liveMatch = runSampleMatch();
+
+  final WalkRecorder _recorder = WalkRecorder();
+
+  @override
+  void dispose() {
+    _recorder.dispose();
+    super.dispose();
+  }
 
   static const _labels = {
     FillLevel.week: 'First week',
@@ -51,9 +60,24 @@ class _MapScreenState extends State<MapScreen> {
                   const SizedBox(height: 10),
                   _geoStatusChip(),
                   const Spacer(),
-                  _stagePicker(),
-                  const SizedBox(height: 12),
-                  Center(child: _startWalkPill()),
+                  ListenableBuilder(
+                    listenable: _recorder,
+                    builder: (context, _) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!_recorder.isRecording) _stagePicker(),
+                        const SizedBox(height: 12),
+                        Center(
+                          child: _recorder.isRecording
+                              ? _recordingPanel()
+                              : GestureDetector(
+                                  onTap: _onStartWalk,
+                                  child: _startWalkPill(),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -129,6 +153,73 @@ class _MapScreenState extends State<MapScreen> {
       selected: {_level},
       showSelectedIcon: false,
       onSelectionChanged: (s) => setState(() => _level = s.first),
+    );
+  }
+
+  Future<void> _onStartWalk() async {
+    final ok = await _recorder.start();
+    if (ok || !mounted) return;
+    final message = _recorder.lastError == RecorderError.locationServiceDisabled
+        ? 'Turn on location to record a walk.'
+        : 'Location permission is needed to record a walk.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _twoDigits(int n) => n.toString().padLeft(2, '0');
+
+  Widget _recordingPanel() {
+    final e = _recorder.elapsed;
+    final clock = '${_twoDigits(e.inMinutes)}:${_twoDigits(e.inSeconds % 60)}';
+    final km = (_recorder.distanceMeters / 1000).toStringAsFixed(2);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: WanderlustColors.paperCard.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 18,
+              offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: WanderlustColors.accent, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '$clock · $km km · ${_recorder.pointCount} pts',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: WanderlustColors.ink,
+            ),
+          ),
+          const SizedBox(width: 14),
+          GestureDetector(
+            onTap: _recorder.stop,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: WanderlustColors.accent,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: const Text(
+                'Stop',
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFFBF8F2)),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

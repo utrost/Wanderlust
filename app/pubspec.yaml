@@ -14,6 +14,10 @@ dependencies:
   # FFI to the Rust geo-core (ADR-0003) — used by lib/geo/geo_core_ffi.dart.
   ffi: ^2.1.0
 
+  # Foreground GPS for walk recording (lib/recording/walk_recorder.dart).
+  # Background recording is a separate Phase-1 spike.
+  geolocator: ^13.0.0
+
   # Intended Phase-1 stack (added as the features land, so `pub get` stays
   # trivially resolvable while the shell is scaffolded):
   #   maplibre_gl        offline vector basemap — MapLibre Native + PMTiles (ADR-0005)

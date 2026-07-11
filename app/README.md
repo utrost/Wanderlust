@@ -22,14 +22,19 @@ This repo tracks the Dart source (`lib/`) and config, but not the generated
 per-platform folders. Generate them once:
 
 ```bash
+# Generates android/, injects location permissions, builds the geo-core .so
+# into jniLibs (needs Rust android targets + cargo-ndk + ANDROID_NDK_HOME):
+../tools/prepare_android.sh
 cd app
-flutter create --org com.wanderlust --project-name wanderlust --platforms=android,ios .
 flutter pub get
 flutter run          # on an attached Android device or emulator
 ```
 
-`flutter create` over an existing project adds the missing `android/` and
-`ios/` scaffolding without touching `lib/`.
+`prepare_android.sh` runs `flutter create` (which adds `android/` without
+touching `lib/`), adds the walk-recorder's location permissions, and
+cross-compiles the native geo-core. For a UI-only run without the native library
+or GPS, plain `flutter create --platforms=android .` is enough — the FFI status
+chip just shows "not loaded".
 
 ## Layout
 
