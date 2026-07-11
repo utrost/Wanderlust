@@ -11,11 +11,14 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # FFI to the Rust geo-core (ADR-0003) — used by lib/geo/geo_core_ffi.dart.
+  ffi: ^2.1.0
+
   # Intended Phase-1 stack (added as the features land, so `pub get` stays
   # trivially resolvable while the shell is scaffolded):
   #   maplibre_gl        offline vector basemap — MapLibre Native + PMTiles (ADR-0005)
   #   geolocator         foreground location; background strategy is a Phase-1 spike
-  #   ffi / flutter_rust_bridge   the boundary to the Rust geo-core (ADR-0003)
+  #   flutter_rust_bridge   codegen alternative to the hand-written FFI binding
 
 dev_dependencies:
   flutter_test:

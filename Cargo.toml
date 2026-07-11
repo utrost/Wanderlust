@@ -4,7 +4,7 @@
 # join this workspace as they are added.
 [workspace]
 resolver = "2"
-members = ["geo-core"]
+members = ["geo-core", "geo-ffi"]
 
 [workspace.package]
 edition = "2021"

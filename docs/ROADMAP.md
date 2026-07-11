@@ -16,9 +16,11 @@ Prove the risky pieces in isolation, before any polished app.
   ([`geo-core`](../geo-core/)).
 - 🟡 **Map-matching spike**: snap-to-edge + shortest-path fill, *with the
   don't-paint-what-you-didn't-walk guardrail* (see
-  [ADR-0001](adr/0001-pragmatic-map-matching.md)). Implemented and unit-tested on
-  synthetic networks; still to validate on real GPX traces, including
-  messy/flâneur ones.
+  [ADR-0001](adr/0001-pragmatic-map-matching.md)). Implemented and tested;
+  reachable from the app through the FFI boundary + GeoJSON loader
+  ([`geo-ffi`](../geo-ffi/)), validated end-to-end (GeoJSON network + GPX in →
+  correct street ids out) on a real-coordinate sample. Still to validate on real
+  OSM data and messy/flâneur GPX.
 - 🟡 **Routing graph** load + query for one region. Build + Dijkstra done;
   region loading pending.
 - 🔴 **PMTiles + MapLibre** render of one area, offline.

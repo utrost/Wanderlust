@@ -14,10 +14,11 @@ FFI. Android-first; iOS is a later veneer. See the ADRs
 | Path | What |
 | --- | --- |
 | [`geo-core/`](geo-core/) | Rust: map-matching, routing graph, data model. Built + tested today. |
+| [`geo-ffi/`](geo-ffi/) | Rust: C ABI + GeoJSON loader over geo-core, for the app to call via FFI. Built + tested today. |
 | [`app/`](app/) | Flutter surface. Scaffolded; compiled in CI. |
 | [`design/mood-map/`](design/mood-map/) | The visual-direction prototype (runnable HTML). |
 | [`docs/`](docs/) | Design spec, architecture, roadmap, ADRs. |
-| `tools/` | Tile pipeline (PMTiles from OSM) — planned. |
+| [`tools/`](tools/) | Tile pipeline: OSM extract → PMTiles + street GeoJSON. Scaffolded. |
 
 ## geo-core (Rust)
 
