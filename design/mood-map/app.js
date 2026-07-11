@@ -239,6 +239,101 @@
       grid(cards);
   }
 
+  // ── Uncharted: the "fog of war" idea, reframed as a gentle reveal ──────────
+  // Same walk data as the filling map, seen through a cartographer's mist:
+  // unwalked ground sits under soft haze (streets still faintly legible, so it
+  // invites rather than hides); walking clears the haze into full ink. A third
+  // lens on the Streets ↔ Memories toggle, never the default.
+  function faintGridPaths(dark) {
+    var stroke = dark ? 'oklch(0.3 0.012 75)' : 'oklch(0.84 0.012 75)';
+    var out = '';
+    for (var i = 0; i < S.length; i++) {
+      out += '<path d="' + S[i].d + '" stroke="' + stroke + '" stroke-width="1.1" fill="none" stroke-linecap="round"></path>';
+    }
+    return out;
+  }
+
+  // Black holes punched into the fog mask: a generous, feathered corridor along
+  // every walked segment plus a "you are here" bubble. Width grows with the
+  // walk count, so a daily corridor clears a broad swath and a one-off walk
+  // clears just a thread.
+  function maskHoles(key) {
+    var out = '';
+    for (var i = 0; i < S.length; i++) {
+      var s = S[i];
+      if (s[key] <= 0) continue;
+      var w = M.rampWidth(s[key]) + 12;
+      out += '<path d="' + s.d + '" stroke="#000" stroke-width="' + w + '" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>';
+    }
+    return out;
+  }
+
+  function viewToggle(active, dark) {
+    var items = ['Streets', 'Memories', 'Uncharted'];
+    var chipBg = dark ? 'rgba(36,31,25,0.7)' : 'rgba(251,248,242,0.9)';
+    var chipBorder = dark ? '1px solid rgba(242,237,227,0.14)' : '1px solid rgba(58,46,34,0.1)';
+    var inactive = dark ? 'oklch(0.72 0.02 80)' : 'oklch(0.5 0.02 75)';
+    var pills = items.map(function (t) {
+      if (t === active) {
+        return '<div style="padding:6px 12px; font-size:11.5px; font-weight:600; color:#FBF8F2; background:oklch(0.42 0.09 50); border-radius:100px;">' + t + '</div>';
+      }
+      return '<div style="padding:6px 12px; font-size:11.5px; font-weight:500; color:' + inactive + '; border-radius:100px;">' + t + '</div>';
+    }).join('');
+    return '<div style="position:absolute; top:16px; left:16px; right:16px; display:flex; justify-content:center;">' +
+      '<div style="display:flex; background:' + chipBg + '; backdrop-filter:blur(6px); border:' + chipBorder + '; border-radius:100px; padding:3px; gap:2px; box-shadow:0 4px 12px rgba(58,46,34,0.08);">' +
+      pills + '</div></div>';
+  }
+
+  function fogInner(lvl, dark, id) {
+    var paperBg = dark ? 'oklch(0.22 0.014 75)' : 'oklch(0.95 0.012 80)';
+    var waterC = dark ? 'oklch(0.27 0.02 230)' : 'oklch(0.90 0.014 220)';
+    var parkC = dark ? 'oklch(0.26 0.02 140)' : 'oklch(0.90 0.02 140)';
+    var fogC = dark ? 'oklch(0.205 0.012 75)' : 'oklch(0.9 0.028 82)';
+    var fogOp = dark ? '0.8' : '0.74';
+    var posC = dark ? 'oklch(0.78 0.12 55)' : 'oklch(0.4 0.1 50)';
+    return '<div style="position:relative; height:100%; width:100%; overflow:hidden; background:' + paperBg + ';">' +
+      '<svg viewBox="0 0 440 440" preserveAspectRatio="xMidYMid slice" style="position:absolute; inset:0; width:100%; height:100%;">' +
+        '<defs>' +
+          '<filter id="fogBlur-' + id + '" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="7"></feGaussianBlur></filter>' +
+          '<mask id="reveal-' + id + '" maskUnits="userSpaceOnUse" x="-20" y="-20" width="480" height="480">' +
+            '<rect x="-20" y="-20" width="480" height="480" fill="#fff"></rect>' +
+            '<g filter="url(#fogBlur-' + id + ')">' + maskHoles(lvl.key) + '<circle cx="220" cy="255" r="46" fill="#000"></circle></g>' +
+          '</mask>' +
+        '</defs>' +
+        '<path d="M0,300 Q160,180 260,320 T440,250" stroke="' + waterC + '" stroke-width="20" fill="none"></path>' +
+        '<ellipse cx="110" cy="80" rx="80" ry="46" fill="' + parkC + '"></ellipse>' +
+        '<ellipse cx="350" cy="370" rx="46" ry="34" fill="' + parkC + '"></ellipse>' +
+        faintGridPaths(dark) +
+        segPaths(lvl.key, { dark: dark }) +
+        '<rect x="0" y="0" width="440" height="440" fill="' + fogC + '" fill-opacity="' + fogOp + '" mask="url(#reveal-' + id + ')"></rect>' +
+        '<circle cx="220" cy="255" r="5.5" fill="' + posC + '"></circle>' +
+        '<circle cx="220" cy="255" r="9" fill="none" stroke="' + posC + '" stroke-width="1.2" opacity="0.5"></circle>' +
+      '</svg>' +
+      viewToggle('Uncharted', dark) +
+      startWalkPill(dark) +
+    '</div>';
+  }
+
+  function fogCard(lvl, dark, id) {
+    var suffix = dark ? ' <span style="color:oklch(0.5 0.02 75); font-style:normal; font-size:13px;">· dark</span>' : '';
+    return '<div>' +
+      '<div style="margin-bottom:14px;">' +
+        '<div style="font-family:\'Newsreader\',serif; font-style:italic; font-size:17px;">' + lvl.label + suffix + '</div>' +
+        '<div style="font-size:12px; font-variant-numeric:tabular-nums; color:oklch(0.5 0.02 75); margin-top:2px;">' + lvl.percent + '% revealed</div>' +
+      '</div>' +
+      frame({ width: 260, height: 562, dark: dark }, fogInner(lvl, dark, id)) +
+    '</div>';
+  }
+
+  function fogSection() {
+    var cards = '';
+    heroLevels.forEach(function (lvl, i) { cards += fogCard(lvl, false, 'l' + i); });
+    heroLevels.forEach(function (lvl, i) { cards += fogCard(lvl, true, 'd' + i); });
+    return sectionHead('Uncharted — the map draws itself in',
+        'A reframe of your friend’s “fog of war” idea. Instead of a dark military mask that hides where you haven’t been, unwalked ground sits under a soft cartographer’s mist — streets stay faintly legible, so the map still <em>invites</em> rather than conceals. Walking clears the haze into full ink; as an area nears completeness the mist burns off entirely (and the “claimed” seal can land). It’s a third position on the Streets ↔ Memories toggle — an optional lens, never the default calm paper map.', '88px 0 28px') +
+      grid(cards);
+  }
+
   // ── Notes & photos ─────────────────────────────────────────────────────────
   function noteMarkers() {
     var raw = [
@@ -595,6 +690,7 @@
       header() +
       foundations() +
       fillingMap() +
+      fogSection() +
       notesSection() +
       onboardingSection() +
       unwalkedSection() +

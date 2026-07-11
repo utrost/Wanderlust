@@ -16,6 +16,10 @@ that fills in as you walk. Sections:
 - **The filling map** — the signature moment: the same Kreuzberg street network
   at three points in a walking life (first week → a few months → two years), in
   both light and dark.
+- **Uncharted** — an exploration of the "fog of war" idea, reframed on-brand: a
+  soft cartographer's mist over unwalked ground (streets stay faintly legible,
+  so it still invites) that clears into full ink as you walk. Shown at the same
+  three life stages, light and dark, as an optional third view — not the default.
 - **Notes &amp; photos** — the memory layer: browsing, opening, and pinning notes.
 - **Choosing a home area** — first-run onboarding: search, confirm a boundary,
   download offline, or draw your own area.
