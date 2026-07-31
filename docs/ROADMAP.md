@@ -4,15 +4,19 @@ A phased plan from nothing to a lifetime map. Ordering follows the architecture:
 **de-risk the geo-core first, wrap platforms around it, defer routing.** See
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Status legend: 🔴 not started · 🟡 in progress · 🟢 done. Phase 0 is underway —
-the geo-core map-matching spike and its guardrail are implemented and tested.
+Status legend: 🔴 not started · 🟡 in progress · 🟢 done.
+
+Current status: **pre-alpha scaffold**. The core map-matching spike, FFI bridge,
+Flutter surface, foreground walk recorder, and CI-built Android debug APK exist.
+The first end-to-end real-area loop does not exist yet.
 
 ---
 
-## Phase 0 — Foundations 🔴
+## Phase 0 — Foundations 🟡
 Prove the risky pieces in isolation, before any polished app.
 
-- 🟢 **Geo-core skeleton** (platform-agnostic): data model, SQLite schema
+- 🟢 **Geo-core skeleton** (platform-agnostic): data model, SQLite-oriented
+  schema sketch, routing graph, and segment-count model
   ([`geo-core`](../geo-core/)).
 - 🟡 **Map-matching spike**: snap-to-edge + shortest-path fill, *with the
   don't-paint-what-you-didn't-walk guardrail* (see
@@ -21,14 +25,21 @@ Prove the risky pieces in isolation, before any polished app.
   ([`geo-ffi`](../geo-ffi/)), validated end-to-end (GeoJSON network + GPX in →
   correct street ids out) on a real-coordinate sample. Still to validate on real
   OSM data and messy/flâneur GPX.
-- 🟡 **Routing graph** load + query for one region. Build + Dijkstra done;
-  region loading pending.
+- 🟡 **Routing graph** load + query for one region. Graph build + Dijkstra are
+  implemented; real region loading from an OSM-derived street-network artifact is
+  pending.
+- 🟡 **Tile/data pipeline scaffold**: tooling docs exist for OSM extract →
+  PMTiles + street GeoJSON, but the exact Planetiler profile, walkable-way
+  filter, simplification, and on-device render/matching validation are pending.
 - 🔴 **PMTiles + MapLibre** render of one area, offline.
+- 🔴 **Real-device debug APK smoke test**: CI produces a debug APK, but launch,
+  FFI load, foreground recording, and permission behavior still need to be
+  checked on an Android device.
 
-**Exit criteria:** feed a GPX file in → correct per-segment counts out, no
-phantom streets.
+**Exit criteria:** choose one real area, render it offline, feed a GPX file in →
+correct per-segment counts out, no phantom streets.
 
-## Phase 1 — Walkable MVP (Android) 🔴
+## Phase 1 — Walkable MVP (Android) 🟡
 The smallest thing that delivers the core joy: walk → map fills.
 
 - 🟡 **GPS recording** — foreground recording (a walk as a live GPS trace with
@@ -36,9 +47,12 @@ The smallest thing that delivers the core joy: walk → map fills.
   recording with adaptive sampling + battery budget as an explicit acceptance
   criterion (see [Architecture](ARCHITECTURE.md#background-gps--a-first-class-risk))
   is still the open, first-class risk.
-- 🔴 **Live filling map**: counts drive color + width (faint/thin 1× →
-  saturated/broad 20×).
-- 🔴 **Area selection**: admin boundary or drawn rectangle; per-area PMTiles.
+- 🔴 **Persistent walk state**: store walks, matched edge ids, and durable
+  `edge_id -> count` values locally.
+- 🔴 **Live filling map**: persisted counts drive color + width (faint/thin 1× →
+  saturated/broad 20×) instead of the scaffold-stage demo fill picker.
+- 🔴 **Area selection**: admin boundary or drawn rectangle; per-area PMTiles and
+  matching network.
 - 🔴 **GPX import** — the onboarding wow-moment; prioritized early so first run
   isn't a blank map.
 - 🔴 **Export**: GeoJSON (with `count`), GPX, ZIP backup.
@@ -71,10 +85,29 @@ The one routing-adjacent feature, deliberately last.
 
 ---
 
+## Immediate next steps
+
+1. **Real-device APK smoke test** — download the latest `wanderlust-debug-apk`
+   CI artifact and sideload it on Android. Verify launch, FFI status chip,
+   permission request, foreground recording, distance/point updates, and stop.
+2. **One real test area** — pick a small area and make the OSM extract → PMTiles
+   + street GeoJSON pipeline reproducible.
+3. **Offline render proof** — load that PMTiles file through MapLibre in the app.
+4. **Recorded walk to counts** — send `WalkRecorder.toGpx()` through geo-core,
+   persist matched edge ids/counts, and redraw the map from real counts.
+5. **Background GPS spike** — only after the foreground loop works, measure
+   screen-off recording, app-kill resilience, trace quality, and battery drain.
+
+---
+
 ## Open questions
 
 Tracked here until decided; each blocks the phase noted.
 
+- **First real test area** — Bremen home area vs the existing Kreuzberg sample.
+  *(Phase 0)*
+- **Android smoke-test result** — whether the CI-built APK actually loads the
+  native geo-core and records foreground GPS on Uwe's device. *(Phase 0)*
 - **Onboarding flow** — area selection + the optional GPX-import step. *(Phase 1)*
 - **The completeness denominator** — what counts as "walkable" in an area (both
   sides of a divided road? park paths absent from OSM? private roads?). Directly

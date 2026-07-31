@@ -11,9 +11,41 @@ personal territory grow.
 It is the opposite of a fitness tracker. You are not an athlete here — you are a
 cartographer of your own world.
 
-> **Status: pre-alpha — vision & design only.** There is no application code in
-> this repository yet. What follows is a set of design documents that describe
-> what Wanderlust is and how it will be built.
+> **Status: pre-alpha scaffold.** Wanderlust now contains a Rust geo-core, a
+> Flutter Android-first app scaffold, foreground GPS recording, FFI wiring, and a
+> CI-built debug APK. The product is not yet a walkable MVP: real-area offline
+> maps, persistent per-street counts, GPX import, export/backup, and background
+> GPS are still open. See [Current state](#current-state) and
+> [Roadmap](docs/ROADMAP.md).
+
+---
+
+## Current state
+
+Implemented and CI-verified:
+
+- **Rust geo-core** (`geo-core/`) with the platform-independent data model,
+  routing graph, snap-to-edge map matching, shortest-path fill, and the
+  "don't paint what you didn't walk" guardrail.
+- **FFI layer** (`geo-ffi/`) with a C ABI, GeoJSON street-network loading, GPX
+  matching, and integration tests.
+- **Flutter app scaffold** (`app/`) that renders the filling-map surface, calls
+  the real Rust geo-core through FFI on startup when the native library is
+  bundled, and shows the result in a status chip.
+- **Foreground walk recording** in the app: location permission flow, live
+  elapsed time, distance, point count, and GPX export of the captured trace while
+  the app is open.
+- **CI** (`.github/workflows/ci.yml`) for Rust format/clippy/tests plus Flutter
+  analyze/test/debug APK build. The debug APK is uploaded as the
+  `wanderlust-debug-apk` artifact on successful CI runs.
+
+Still not implemented:
+
+- Offline PMTiles + MapLibre rendering of a real selected area.
+- Real OSM-derived street-network generation tuned for matching.
+- Persistent `edge_id -> count` storage and a live map driven by real counts.
+- GPX import, user export, and ZIP backup flows.
+- Background GPS with battery and app-kill resilience.
 
 ---
 
@@ -34,6 +66,7 @@ cartographer of your own world.
 
 | Doc | For whom | What's in it |
 | --- | --- | --- |
+| [Build Guide](BUILD.md) | Developers | Repo layout, setup, CI, and what can be built where |
 | [Design Spec](docs/DESIGN.md) | Anyone who wants the "why" | Philosophy, core mechanic, gamification, full feature set, non-goals |
 | [Design Brief](docs/DESIGN_BRIEF.md) | Designers | Visual & UX briefing: tone, the heat-ramp brand, screens to design, constraints |
 | [User Guide](docs/USER_GUIDE.md) | Future users | How the app works from the outside: walking, maps, finds, notes, import/export |
@@ -42,7 +75,7 @@ cartographer of your own world.
 | [Decision Records](docs/adr/README.md) | Contributors | The load-bearing technical decisions and their rationale |
 
 If you're new, read the [Design Spec](docs/DESIGN.md) first — everything else
-follows from it.
+follows from it. If you want to run or change code, read [BUILD.md](BUILD.md).
 
 ---
 
