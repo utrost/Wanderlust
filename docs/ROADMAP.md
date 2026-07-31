@@ -96,8 +96,10 @@ The one routing-adjacent feature, deliberately last.
    CI artifact and sideload it on Android. Verify launch, FFI status chip,
    permission request, foreground recording, distance/point updates, and stop
    ([#5](https://github.com/utrost/Wanderlust/issues/5)).
-2. **One real test area** — pick a small area and make the OSM extract → PMTiles
-   + street GeoJSON pipeline reproducible
+2. **First real test area** — use **Bremen center**, anchored on the Roland /
+   Marktplatz (`53.0759058, 8.8073262`) with an initial 1.5 km radius bbox
+   (`8.784897,53.062431,8.829756,53.089380`) for the OSM extract → PMTiles +
+   street GeoJSON pipeline proof
    ([#6](https://github.com/utrost/Wanderlust/issues/6)).
 3. **Offline render proof** — load that PMTiles file through MapLibre in the app
    ([#8](https://github.com/utrost/Wanderlust/issues/8)).
@@ -114,8 +116,6 @@ The one routing-adjacent feature, deliberately last.
 
 Tracked here until decided; each blocks the phase noted.
 
-- **First real test area** — Bremen home area vs the existing Kreuzberg sample.
-  *(Phase 0)*
 - **Android smoke-test result** — whether the CI-built APK actually loads the
   native geo-core and records foreground GPS on Uwe's device. *(Phase 0)*
 - **Onboarding flow** — area selection + the optional GPX-import step. *(Phase 1)*
