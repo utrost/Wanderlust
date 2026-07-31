@@ -70,10 +70,33 @@ For a UI-only run without the native library or GPS, plain
 `flutter create --platforms=android .` is enough; the FFI status chip should show
 that the native library is not loaded instead of crashing.
 
+## Test APK pipeline
+
+The dedicated [Test APK workflow](.github/workflows/test-apk.yml) builds an
+Android APK specifically for testers.
+
+It runs automatically on:
+
+- every push to `main`
+- tags named `test-apk-*`
+
+It can also be started manually from GitHub Actions with **Run workflow**.
+Manual runs have an optional `release_tag` field. If set, the workflow publishes
+or updates a GitHub prerelease with the APK attached.
+
+Outputs:
+
+- A workflow artifact named like `wanderlust-test-<short-sha>.apk` on every run.
+- A prerelease APK asset when run with `release_tag` or from a `test-apk-*` tag.
+
+Use artifacts for quick internal checks. Use prereleases when you want to send a
+more stable link to non-technical testers.
+
 ## Debug APK from CI
 
 Every successful CI run uploads a `wanderlust-debug-apk` artifact. Use that for
-real-device smoke tests when the local Android toolchain is not installed.
+real-device smoke tests when the local Android toolchain is not installed. The
+Test APK workflow above is the preferred path for builds intended for testers.
 
 Smoke-test checklist:
 
