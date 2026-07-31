@@ -1,10 +1,14 @@
 # Wanderlust — User Guide
 
-> **Note:** Wanderlust is pre-alpha and not yet buildable. This guide describes
-> the intended experience so contributors and early readers share one picture of
-> the app. It will become the real user manual as features land.
+> **Note:** Wanderlust is pre-alpha. A CI-built Android debug APK exists with the
+> filling-map scaffold, native geo-core sample matching, and foreground walk
+> recording. The full user experience below is still the target: area selection,
+> offline maps, persistent counts, GPX import/export, and background recording are
+> not implemented yet. This guide will become the real user manual as features
+> land.
 
-For the reasoning behind these choices, see the [Design Spec](DESIGN.md).
+For the reasoning behind these choices, see the [Design Spec](DESIGN.md). For
+current implementation status, see the [Roadmap](ROADMAP.md).
 
 ---
 
