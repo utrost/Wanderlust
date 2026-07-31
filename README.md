@@ -49,6 +49,26 @@ Still not implemented:
 
 ---
 
+## Installing the Android test app
+
+Wanderlust is not in the Play Store yet. Testers install a temporary debug build
+by hand:
+
+1. Open the download link from the maintainer on your Android phone.
+2. Download the file named `wanderlust-debug-apk` or `app-debug.apk`.
+3. If the file is a `.zip`, open it and extract the `.apk` file inside.
+4. Tap the `.apk` file.
+5. Android may warn that your browser or file app is not allowed to install apps.
+   Choose **Settings**, enable **Allow from this source**, then go back.
+6. Tap **Install**.
+7. Open **Wanderlust**. When asked for location permission, choose **Allow while
+   using the app**.
+
+This is expected for early test builds. Only install APKs from a link sent by the
+project maintainer.
+
+---
+
 ## What makes it different
 
 - **Collecting, not competing.** The filling map *is* the reward. No leaderboards,
