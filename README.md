@@ -54,22 +54,24 @@ Still not implemented:
 
 ## Installing the Android test app
 
-Wanderlust is not in the Play Store yet. Testers install a temporary debug build
-by hand. The maintainer can send either a workflow artifact link or a prerelease
-APK link from GitHub.
+Wanderlust is not in the Play Store yet. For now, testers install a test APK by
+hand. This is called sideloading.
 
-1. Open the download link from the maintainer on your Android phone.
-2. Download the file named `wanderlust-debug-apk` or `app-debug.apk`.
-3. If the file is a `.zip`, open it and extract the `.apk` file inside.
+1. Open the APK download link from the project maintainer on your Android phone.
+2. Download the file. It may be named `wanderlust-test-...apk`,
+   `wanderlust-debug-apk`, or `app-debug.apk`.
+3. If the download is a `.zip` file, open it first and extract the `.apk` file
+   inside.
 4. Tap the `.apk` file.
-5. Android may warn that your browser or file app is not allowed to install apps.
-   Choose **Settings**, enable **Allow from this source**, then go back.
+5. If Android blocks the install, tap **Settings**, enable **Allow from this
+   source**, then go back to the install screen.
 6. Tap **Install**.
-7. Open **Wanderlust**. When asked for location permission, choose **Allow while
-   using the app**.
+7. Open **Wanderlust**.
+8. When Android asks for location access, choose **Allow while using the app**.
 
-This is expected for early test builds. Only install APKs from a link sent by the
-project maintainer.
+After installing, you can turn **Allow from this source** off again in Android
+settings if you want. Only install Wanderlust APKs from links sent by the project
+maintainer.
 
 ---
 
