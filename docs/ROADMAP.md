@@ -30,11 +30,14 @@ Prove the risky pieces in isolation, before any polished app.
   pending.
 - 🟡 **Tile/data pipeline scaffold**: tooling docs exist for OSM extract →
   PMTiles + street GeoJSON, but the exact Planetiler profile, walkable-way
-  filter, simplification, and on-device render/matching validation are pending.
-- 🔴 **PMTiles + MapLibre** render of one area, offline.
+  filter, simplification, and on-device render/matching validation are pending
+  ([#6](https://github.com/utrost/Wanderlust/issues/6)).
+- 🔴 **PMTiles + MapLibre** render of one area, offline
+  ([#8](https://github.com/utrost/Wanderlust/issues/8)).
 - 🔴 **Real-device debug APK smoke test**: CI produces a debug APK, but launch,
   FFI load, foreground recording, and permission behavior still need to be
-  checked on an Android device.
+  checked on an Android device
+  ([#5](https://github.com/utrost/Wanderlust/issues/5)).
 
 **Exit criteria:** choose one real area, render it offline, feed a GPX file in →
 correct per-segment counts out, no phantom streets.
@@ -48,9 +51,11 @@ The smallest thing that delivers the core joy: walk → map fills.
   criterion (see [Architecture](ARCHITECTURE.md#background-gps--a-first-class-risk))
   is still the open, first-class risk.
 - 🔴 **Persistent walk state**: store walks, matched edge ids, and durable
-  `edge_id -> count` values locally.
+  `edge_id -> count` values locally
+  ([#7](https://github.com/utrost/Wanderlust/issues/7)).
 - 🔴 **Live filling map**: persisted counts drive color + width (faint/thin 1× →
-  saturated/broad 20×) instead of the scaffold-stage demo fill picker.
+  saturated/broad 20×) instead of the scaffold-stage demo fill picker
+  ([#7](https://github.com/utrost/Wanderlust/issues/7)).
 - 🔴 **Area selection**: admin boundary or drawn rectangle; per-area PMTiles and
   matching network.
 - 🔴 **GPX import** — the onboarding wow-moment; prioritized early so first run
@@ -89,14 +94,19 @@ The one routing-adjacent feature, deliberately last.
 
 1. **Real-device APK smoke test** — download the latest `wanderlust-debug-apk`
    CI artifact and sideload it on Android. Verify launch, FFI status chip,
-   permission request, foreground recording, distance/point updates, and stop.
+   permission request, foreground recording, distance/point updates, and stop
+   ([#5](https://github.com/utrost/Wanderlust/issues/5)).
 2. **One real test area** — pick a small area and make the OSM extract → PMTiles
-   + street GeoJSON pipeline reproducible.
-3. **Offline render proof** — load that PMTiles file through MapLibre in the app.
+   + street GeoJSON pipeline reproducible
+   ([#6](https://github.com/utrost/Wanderlust/issues/6)).
+3. **Offline render proof** — load that PMTiles file through MapLibre in the app
+   ([#8](https://github.com/utrost/Wanderlust/issues/8)).
 4. **Recorded walk to counts** — send `WalkRecorder.toGpx()` through geo-core,
-   persist matched edge ids/counts, and redraw the map from real counts.
+   persist matched edge ids/counts, and redraw the map from real counts
+   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
 5. **Background GPS spike** — only after the foreground loop works, measure
-   screen-off recording, app-kill resilience, trace quality, and battery drain.
+   screen-off recording, app-kill resilience, trace quality, and battery drain
+   ([#9](https://github.com/utrost/Wanderlust/issues/9)).
 
 ---
 
