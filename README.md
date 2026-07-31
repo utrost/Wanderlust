@@ -37,7 +37,10 @@ Implemented and CI-verified:
   the app is open.
 - **CI** (`.github/workflows/ci.yml`) for Rust format/clippy/tests plus Flutter
   analyze/test/debug APK build. The debug APK is uploaded as the
-  `wanderlust-debug-apk` artifact on successful CI runs.
+  `wanderlust-debug-apk` artifact on successful CI runs. A dedicated
+  [Test APK](.github/workflows/test-apk.yml) workflow also builds tester-friendly
+  APK artifacts on `main` and can publish prerelease APKs from manual runs or
+  `test-apk-*` tags.
 
 Still not implemented:
 
@@ -52,7 +55,8 @@ Still not implemented:
 ## Installing the Android test app
 
 Wanderlust is not in the Play Store yet. Testers install a temporary debug build
-by hand:
+by hand. The maintainer can send either a workflow artifact link or a prerelease
+APK link from GitHub.
 
 1. Open the download link from the maintainer on your Android phone.
 2. Download the file named `wanderlust-debug-apk` or `app-debug.apk`.

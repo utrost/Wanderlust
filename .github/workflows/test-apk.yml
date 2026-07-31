@@ -1,0 +1,99 @@
+name: Test APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional tag to publish as a prerelease, e.g. test-apk-2026-07-31"
+        required: false
+        type: string
+  push:
+    branches: ["main"]
+    tags: ["test-apk-*"]
+
+# Cancel superseded builds on the same branch/tag, but keep distinct manual runs.
+concurrency:
+  group: test-apk-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-apk:
+    name: build Android test APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Point cargo-ndk at the runner's NDK
+        run: echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+
+      - name: Prepare Android (scaffold + permissions + native geo-core)
+        run: bash tools/prepare_android.sh
+
+      - name: Pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: app
+        run: flutter analyze
+
+      - name: Test
+        working-directory: app
+        run: flutter test
+
+      - name: Build debug APK
+        working-directory: app
+        run: flutter build apk --debug
+
+      - name: Name APK for testers
+        id: package
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          apk_name="wanderlust-test-${short_sha}.apk"
+          cp app/build/app/outputs/flutter-apk/app-debug.apk "$apk_name"
+          echo "apk_name=$apk_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload test APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.apk_name }}
+          path: ${{ steps.package.outputs.apk_name }}
+          if-no-files-found: error
+
+      - name: Publish prerelease APK
+        if: startsWith(github.ref, 'refs/tags/test-apk-') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          APK_NAME: ${{ steps.package.outputs.apk_name }}
+        run: |
+          notes=$(printf 'Wanderlust Android test APK built from %s.\n\nFor tester install steps, see README.md → Installing the Android test app.' "$GITHUB_SHA")
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$APK_NAME" --clobber
+            gh release edit "$RELEASE_TAG" --prerelease --title "Wanderlust test APK ${RELEASE_TAG}" --notes "$notes"
+          else
+            gh release create "$RELEASE_TAG" "$APK_NAME" \
+              --target "$GITHUB_SHA" \
+              --title "Wanderlust test APK ${RELEASE_TAG}" \
+              --notes "$notes" \
+              --prerelease
+          fi
