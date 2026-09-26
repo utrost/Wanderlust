@@ -9,7 +9,8 @@ opening and saving files; the app does not request broad storage access.
 - **Import GPX**: choose a UTF-8 GPX track file. One file becomes one saved walk,
   including all of its track segments. Import commits the walk before updating
   Bremen street coverage. Walks outside the bundled area are retained even when
-  they paint no streets.
+  they paint no streets. Download/select the corresponding nearby map to match
+  these saved walks later; see [nearby maps](NEARBY_MAPS.md).
 - **Export GPX**: use the download button beside a walk and choose a destination.
   GPX includes coordinates, elevation, available timestamps, track breaks, and
   Wanderlust's horizontal-accuracy extension. It is an interchange format, not

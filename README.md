@@ -121,3 +121,7 @@ client that never talks to a server; see
 
 GPX import/export and local backup/restore are available from **Saved walks**.
 See [formats, limits, and phone acceptance checks](docs/IMPORT_EXPORT.md).
+
+Outside the bundled city-center map? Use **Offline maps → Download nearby map**
+to save a roughly 4 × 4 km street map around your GPS fix, with local coverage.
+See [download behavior and phone checks](docs/NEARBY_MAPS.md).

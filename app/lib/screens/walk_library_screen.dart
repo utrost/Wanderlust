@@ -80,7 +80,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     // Raw data is committed before matching. A matching failure cannot lose it.
     await widget.onChanged();
     _message =
-        '$added walk${added == 1 ? '' : 's'} added; ${walks.length - added} already saved. Streets update for walks inside Bremen center.';
+        '$added walk${added == 1 ? '' : 's'} added; ${walks.length - added} already saved. Streets update for walks inside the selected map.';
   }
 
   Future<void> _backup() async {

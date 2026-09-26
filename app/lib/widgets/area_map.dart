@@ -49,7 +49,8 @@ class _AreaMapState extends State<AreaMap> {
   @override
   void didUpdateWidget(AreaMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.areaRequest != oldWidget.areaRequest) {
+    if (widget.areaRequest != oldWidget.areaRequest ||
+        widget.network.version != oldWidget.network.version) {
       _pendingCenter = false;
       _transform.value = Matrix4.identity();
     } else if (widget.centerRequest != oldWidget.centerRequest) {
@@ -58,7 +59,10 @@ class _AreaMapState extends State<AreaMap> {
   }
 
   void _centerIfReady() {
-    if (!mounted || !_pendingCenter || _size == null || widget.position == null) {
+    if (!mounted ||
+        !_pendingCenter ||
+        _size == null ||
+        widget.position == null) {
       return;
     }
     final p = widget.position!;

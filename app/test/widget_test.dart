@@ -55,7 +55,7 @@ void main() {
     expect(find.text('53.07591, 8.80733'), findsOneWidget);
     expect(find.text('Start walk'), findsOneWidget);
     expect(find.text('Stop'), findsNothing);
-    expect(find.byTooltip('Show Bremen area'), findsOneWidget);
+    expect(find.byTooltip('Show map area'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

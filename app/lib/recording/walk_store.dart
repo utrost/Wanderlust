@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'saved_walk.dart';
+import '../maps/area_store.dart';
 export 'saved_walk.dart';
 
 import '../coverage/coverage_store.dart';
@@ -21,7 +22,7 @@ abstract class WalkStore {
 /// Recording journal. Each fix commits independently, so a process death can
 /// lose only fixes whose write has not yet committed. Open sessions are retained
 /// as interrupted; recovery never invents points or silently resumes GPS.
-class SqliteWalkStore implements WalkStore, CoverageStore {
+class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
   SqliteWalkStore({DatabaseFactory? factory, String? databasePath})
     : _providedFactory = factory,
       _path = databasePath;
@@ -39,7 +40,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore {
       return await _factory.openDatabase(
         file,
         options: OpenDatabaseOptions(
-          version: 3,
+          version: 4,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
           },
@@ -52,10 +53,12 @@ class SqliteWalkStore implements WalkStore, CoverageStore {
             );
             await _createCoverage(db);
             await _createTransfer(db);
+            await _createAreas(db);
           },
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 2) await _createCoverage(db);
             if (oldVersion < 3) await _createTransfer(db);
+            if (oldVersion < 4) await _createAreas(db);
           },
         ),
       );
@@ -63,6 +66,102 @@ class SqliteWalkStore implements WalkStore, CoverageStore {
       _opening = null;
       rethrow;
     }
+  }
+
+  static Future<void> _createAreas(DatabaseExecutor db) async {
+    await db.execute(
+      'CREATE TABLE offline_area (version TEXT PRIMARY KEY, name TEXT NOT NULL, geojson TEXT NOT NULL, downloaded_at TEXT NOT NULL, bytes INTEGER NOT NULL)',
+    );
+    await db.execute(
+      'CREATE TABLE offline_selection (id INTEGER PRIMARY KEY CHECK(id = 1), version TEXT REFERENCES offline_area(version) ON DELETE SET NULL)',
+    );
+    await db.insert('offline_selection', {'id': 1});
+  }
+
+  @override
+  Future<List<OfflineArea>> listAreas() async {
+    final rows = await (await _db).query(
+      'offline_area',
+      columns: ['version', 'name', 'downloaded_at', 'bytes'],
+      orderBy: 'downloaded_at DESC',
+    );
+    return rows
+        .map(
+          (r) => OfflineArea(
+            version: r['version'] as String,
+            name: r['name'] as String,
+            downloadedAt: DateTime.parse(r['downloaded_at'] as String),
+            bytes: r['bytes'] as int,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<String?> readArea(String version) async {
+    final rows = await (await _db).query(
+      'offline_area',
+      columns: ['geojson'],
+      where: 'version = ?',
+      whereArgs: [version],
+    );
+    return rows.isEmpty ? null : rows.single['geojson'] as String;
+  }
+
+  @override
+  Future<String?> readActiveArea() async {
+    final rows = await (await _db).rawQuery(
+      'SELECT geojson FROM offline_area JOIN offline_selection USING(version) WHERE offline_selection.id = 1',
+    );
+    return rows.isEmpty ? null : rows.single['geojson'] as String;
+  }
+
+  @override
+  Future<void> saveArea(String geojson) async {
+    if (utf8.encode(geojson).length > 16 * 1024 * 1024) {
+      throw const FormatException('Map exceeds the 16 MiB offline limit.');
+    }
+    final area = AreaNetwork.parse(geojson);
+    await (await _db).transaction((txn) async {
+      final rows = await txn.query('offline_area', columns: ['version']);
+      if (rows.length >= 8 && !rows.any((r) => r['version'] == area.version)) {
+        throw StateError(
+          'Eight maps are saved. Remove an unused map before downloading another.',
+        );
+      }
+      // UPSERT preserves the selection FK; REPLACE would clear it via DELETE.
+      final values = {
+        'name': area.name,
+        'geojson': geojson,
+        'downloaded_at': DateTime.now().toUtc().toIso8601String(),
+        'bytes': utf8.encode(geojson).length,
+      };
+      final updated = await txn.update(
+        'offline_area',
+        values,
+        where: 'version = ?',
+        whereArgs: [area.version],
+      );
+      if (updated == 0) {
+        await txn.insert('offline_area', {'version': area.version, ...values});
+      }
+    });
+  }
+
+  @override
+  Future<void> selectArea(String? version) async {
+    await (await _db).update('offline_selection', {
+      'version': version,
+    }, where: 'id = 1');
+  }
+
+  @override
+  Future<void> deleteArea(String version) async {
+    await (await _db).delete(
+      'offline_area',
+      where: 'version = ?',
+      whereArgs: [version],
+    );
   }
 
   @override

@@ -28,14 +28,14 @@ circle. Starting a walk centers the first fix automatically. **Center on me**
 recenters on the recording's latest fix, or requests a one-off location while
 idle without creating a walk. Panning remains manual after centering; subsequent
 fixes move the dot without pulling the map away from where you are looking.
-**Show Bremen area** returns to the full bundled street view.
+**Show map area** returns to the full selected street view.
 
 The compact GPS HUD shows coordinates, accuracy, and the age of the fix. It
 explicitly reports waiting for GPS and locations outside the offline Bremen
 bounds. Fixes older than 30 seconds use a gray marker and a last-fix label;
 recording uses a 5 m distance filter, so an aging fix can also mean you have not
-moved. Coverage remains restricted to the bundled network, even if you center
-on a position outside it. Stopping retains the last marker; idle centering can
+moved. Coverage uses the selected network. If your position is outside it,
+use **Download a map here** to save nearby streets; see [nearby maps](NEARBY_MAPS.md). Stopping retains the last marker; idle centering can
 refresh it. The bundled geo-core diagnostic is now behind the info button.
 
 Phone follow-up: check initial positioning, accuracy-circle size, pan then
@@ -45,7 +45,7 @@ complete outdoor recording/coverage test remains open.
 
 ## Storage boundary
 
-`app/lib/recording/walk_store.dart` owns database schema version 3 in
+`app/lib/recording/walk_store.dart` owns database schema version 4 in
 `wanderlust.db`: `recorded_walk` and `recorded_point`. SQLite plugin access is lazy
 so an unavailable database reports a recording error instead of crashing startup.
 Writes are serialized and stop waits for queued fixes. Foreign keys are enabled.
@@ -54,8 +54,8 @@ The journal is separate from the older area/segment schema sketch in
 `geo-core/src/schema.rs`. Version 2 adds durable per-walk edge membership and
 network-scoped counts; see [Bremen coverage](BREMEN_SLICE.md). The current
 saved-walk list loads all recorded points; imports have explicit resource limits.
-Version 3 adds stable backup identities and segment/missing-time metadata. Both
-older database versions migrate in place. Paging remains needed for large libraries.
+Version 3 adds stable backup identities and segment/missing-time metadata. Older database versions migrate in place. Version 4 adds offline maps and
+persisted area selection. Paging remains needed for large libraries.
 
 ## Conservative GPX matching
 

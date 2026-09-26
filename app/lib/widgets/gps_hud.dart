@@ -67,7 +67,7 @@ class GpsHud extends StatelessWidget {
               ),
             if (outside)
               const Text(
-                'Outside offline Bremen map',
+                'Outside selected offline map',
                 style: TextStyle(fontSize: 11),
               ),
             if (old && recording)

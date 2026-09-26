@@ -62,8 +62,9 @@ The smallest thing that delivers the core joy: walk → map fills.
   GPS HUD are implemented. Continuous updates during recording and the richer
   PMTiles basemap remain pending
   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
-- 🔴 **Area selection**: admin boundary or drawn rectangle; per-area PMTiles and
-  matching network.
+- 🟡 **Area selection**: GPS-centered 4 × 4 km street downloads, persistent
+  offline map picker, and per-area coverage implemented. Admin boundaries, drawn
+  rectangles, and per-area PMTiles remain open. See [nearby maps](NEARBY_MAPS.md).
 - 🟢 **GPX import** — document picker, strict validation, segment/time preservation,
   duplicate detection, and coverage updates. Native phone picker validation pending.
 - 🟡 **Export and backup** — per-walk GPX and versioned JSON backup/merge restore
@@ -82,7 +83,8 @@ Turn the heatmap into a keepsake.
   "claimed" seal. Depends on resolving the *completeness denominator* question.
 - 🔴 **Finds**: collectible POIs from OSM.
 - 🔴 **Notes & photos** pinned to positions / finds (local only).
-- 🔴 **Multiple areas** (the "passport").
+- 🟡 **Multiple areas**: eight downloadable street maps plus the bundled map;
+  the richer "passport" experience remains open.
 
 ## Phase 3 — iOS 🔴
 The veneer, not a rewrite — enabled by the reusable geo-core.

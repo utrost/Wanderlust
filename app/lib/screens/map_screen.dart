@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'walk_library_screen.dart';
+import 'offline_maps_screen.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../widgets/gps_hud.dart';
@@ -28,7 +30,12 @@ class _MapScreenState extends State<MapScreen> {
 
   final SqliteWalkStore _store = SqliteWalkStore();
   late final WalkRecorder _recorder = WalkRecorder(store: _store);
-  late final CoverageController _coverage = CoverageController(store: _store);
+  late final CoverageController _coverage = CoverageController(
+    store: _store,
+    loadNetwork: () async =>
+        await _store.readActiveArea() ??
+        await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
+  );
 
   Position? _previewPosition;
   bool _locating = false;
@@ -106,6 +113,28 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _showMaps() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => OfflineMapsScreen(
+          store: _store,
+          position: _currentFix,
+          activeVersion: _coverage.network?.version,
+          onSelect: (source, version) async {
+            final ok = await _coverage.useNetwork(
+              source,
+              persistSelection: () => _store.selectArea(version),
+            );
+            if (!ok) return false;
+            if (mounted) setState(() => _areaRequest++);
+            await _coverage.synchronize(_recorder.savedWalks);
+            return true;
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -148,7 +177,7 @@ class _MapScreenState extends State<MapScreen> {
           ListenableBuilder(
             listenable: _coverage,
             builder: (context, _) => _coverage.network == null
-                ? const Center(child: Text('Loading Bremen streets…'))
+                ? const Center(child: Text('Loading saved streets…'))
                 : AreaMap(
                     network: _coverage.network!,
                     counts: _coverage.counts,
@@ -168,10 +197,16 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   Row(
                     children: [
-                      Expanded(child: _areaChip()),
+                      Expanded(
+                        child: ListenableBuilder(
+                          listenable: _coverage,
+                          builder: (context, _) =>
+                              InkWell(onTap: _showMaps, child: _areaChip()),
+                        ),
+                      ),
                       _geoStatusChip(),
                       IconButton.filledTonal(
-                        tooltip: 'Show Bremen area',
+                        tooltip: 'Show map area',
                         onPressed: () => setState(() => _areaRequest++),
                         icon: const Icon(Icons.map_outlined),
                       ),
@@ -201,6 +236,33 @@ class _MapScreenState extends State<MapScreen> {
                       network: _coverage.network,
                       error: _gpsError,
                     ),
+                  ),
+                  ListenableBuilder(
+                    listenable: _coverage,
+                    builder: (context, _) {
+                      final p = _currentFix;
+                      final outside =
+                          p != null &&
+                          _coverage.network != null &&
+                          !_coverage.network!.contains(
+                            Offset(p.longitude, p.latitude),
+                          );
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: _showMaps,
+                          icon: Icon(
+                            outside
+                                ? Icons.download_outlined
+                                : Icons.map_outlined,
+                            size: 18,
+                          ),
+                          label: Text(
+                            outside ? 'Download a map here' : 'Offline maps',
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const Spacer(),
                   ListenableBuilder(
@@ -263,7 +325,7 @@ class _MapScreenState extends State<MapScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Bremen center',
+            _coverage.network?.name ?? 'Bremen center',
             style: WanderlustTheme.serif.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w500,
@@ -271,7 +333,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           Text(
-            'stays on your phone',
+            'offline · tap to choose map',
             style: TextStyle(fontSize: 10.5, color: WanderlustColors.inkMuted),
           ),
         ],
@@ -326,7 +388,7 @@ class _MapScreenState extends State<MapScreen> {
             applicationName: 'Wanderlust',
             children: [
               const SelectableText(
-                'Map data © OpenStreetMap contributors, ODbL 1.0\nhttps://www.openstreetmap.org/copyright\nOffline street view of Bremen center. Pinch to zoom. Streets update after saving a walk.',
+                'Map data © OpenStreetMap contributors, ODbL 1.0\nhttps://www.openstreetmap.org/copyright\nOffline street view. Tap the area name to download or choose maps. Pinch to zoom. Streets update after saving a walk.',
               ),
             ],
           ),

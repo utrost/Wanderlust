@@ -101,6 +101,39 @@ class CoverageController extends ChangeNotifier {
     _notify();
   }
 
+  /// Queue area changes with matching: an in-flight result is always committed
+  /// to its original network, never the newly selected map.
+  Future<bool> useNetwork(
+    String source, {
+    Future<void> Function()? persistSelection,
+  }) async {
+    var success = false;
+    _queue = _queue.then((_) async {
+      if (_disposed) return;
+      busy = true;
+      _notify();
+      try {
+        await initialize();
+        final area = AreaNetwork.parse(source);
+        await _store.registerNetwork(area);
+        final savedCounts = await _store.readCounts(area.version);
+        if (persistSelection != null) await persistSelection();
+        network = area;
+        counts = Map.unmodifiable(savedCounts);
+        error = null;
+        _initializing = Future.value();
+        success = true;
+      } catch (e) {
+        error = CoverageFailure('Could not open map', e.toString());
+      } finally {
+        busy = false;
+        _notify();
+      }
+    });
+    await _queue;
+    return success;
+  }
+
   Future<void> synchronize(List<SavedWalk> walks) {
     if (_disposed) return Future.value();
     final snapshot = List<SavedWalk>.of(walks);

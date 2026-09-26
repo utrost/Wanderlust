@@ -10,6 +10,8 @@ is linked via FFI.
 > retries. The saved-walk library imports/exports GPX and creates/restores JSON
 > backups through native document dialogs. See [import/export](../docs/IMPORT_EXPORT.md). Startup runs a bundled walk
 > through Rust FFI; tapping a failed status chip reveals the underlying error.
+> GPS-centered street-map downloads and an offline area picker extend coverage
+> outside the bundled center; see [nearby maps](../docs/NEARBY_MAPS.md).
 > A richer PMTiles basemap, continuous recording-time updates, and background
 > recording remain open. See [coverage evaluation](../docs/BREMEN_SLICE.md).
 > See [recording and matching behavior](../docs/RECORDING.md).
