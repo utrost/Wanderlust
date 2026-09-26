@@ -197,3 +197,146 @@ fn sorted(mut v: Vec<u64>) -> Vec<u64> {
     v.sort_unstable();
     v
 }
+
+fn gap_graph() -> Graph {
+    Graph::build(
+        (0..3)
+            .map(|i| {
+                Segment::new(
+                    i + 1,
+                    vec![
+                        LngLat::new(dlng(i as f64 * 20.0, 0.0), 0.0),
+                        LngLat::new(dlng((i + 1) as f64 * 20.0, 0.0), 0.0),
+                    ],
+                )
+            })
+            .collect(),
+    )
+}
+
+#[test]
+fn off_network_fix_breaks_fill() {
+    let graph = gap_graph();
+    let points = vec![
+        LngLat::new(dlng(15.0, 0.0), 0.0),
+        LngLat::new(dlng(30.0, 0.0), dlat(100.0)),
+        LngLat::new(dlng(45.0, 0.0), 0.0),
+    ];
+    assert_eq!(
+        walked_ids(
+            &graph,
+            &match_track(&graph, &points, MatchConfig::default())
+        ),
+        vec![1, 3]
+    );
+}
+
+#[test]
+fn gpx_breaks_and_outages_never_fill() {
+    use geo_core::{gpx::parse_tracks, matcher::match_gpx_tracks};
+    let graph = gap_graph();
+    let point = |metres: f64, time: &str| {
+        format!("<trkpt lat='0' lon='{}'>{time}</trkpt>", dlng(metres, 0.0))
+    };
+    let a = point(15.0, "<time>2026-07-11T09:00:00Z</time>");
+    for (b, boundary, expected) in [
+        (
+            point(45.0, "<time>2026-07-11T09:00:15Z</time>"),
+            "",
+            vec![1, 2, 3],
+        ),
+        (
+            point(45.0, "<time>2026-07-11T09:05:00Z</time>"),
+            "",
+            vec![1, 3],
+        ),
+        (
+            point(45.0, "<time>2026-07-11T09:00:01Z</time>"),
+            "",
+            vec![1, 3],
+        ),
+        (
+            point(45.0, "<time>2026-07-11T08:59:59Z</time>"),
+            "",
+            vec![1, 3],
+        ),
+        (
+            point(45.0, "<time>2026-07-11T09:00:15Z</time>"),
+            "</trkseg><trkseg>",
+            vec![1, 3],
+        ),
+        (point(45.0, ""), "", vec![1, 3]),
+    ] {
+        let mut tracks = parse_tracks(&format!(
+            "<gpx><trk><trkseg>{a}{boundary}{b}</trkseg></trk></gpx>"
+        ))
+        .unwrap();
+        // Each endpoint has independent consecutive support. The test varies
+        // only whether interpolation between these supported edges is allowed.
+        let mut supported = Vec::new();
+        for track in &mut tracks {
+            let first = track.first().unwrap().clone();
+            let last = track.last().unwrap().clone();
+            let mut before = first.clone();
+            before.time = first.time.map(|t| t - chrono::Duration::seconds(1));
+            let mut after = last.clone();
+            after.time = last.time.map(|t| t + chrono::Duration::seconds(1));
+            let mut points = vec![before];
+            points.extend(track.clone());
+            points.push(after);
+            supported.push(points);
+        }
+        let tracks = supported;
+        assert_eq!(
+            walked_ids(
+                &graph,
+                &match_gpx_tracks(&graph, &tracks, MatchConfig::default())
+            ),
+            expected
+        );
+    }
+}
+
+#[test]
+fn ambiguous_parallel_streets_and_junctions_are_left_dark() {
+    let graph = Graph::build(vec![
+        Segment::new(
+            1,
+            vec![LngLat::new(0.0, 0.0), LngLat::new(dlng(100.0, 0.0), 0.0)],
+        ),
+        Segment::new(
+            2,
+            vec![
+                LngLat::new(0.0, dlat(10.0)),
+                LngLat::new(dlng(100.0, 0.0), dlat(10.0)),
+            ],
+        ),
+    ]);
+    let noise = [4.0, 5.0, 6.0].map(|y| LngLat::new(dlng(50.0, 0.0), dlat(y)));
+    assert!(match_track(&graph, &noise, MatchConfig::default())
+        .walked
+        .is_empty());
+    let grid = build_grid(3, 100.0, LngLat::new(13.4, 52.5));
+    assert!(
+        match_track(&grid.graph, &[grid.node[1][1]], MatchConfig::default())
+            .walked
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_single_gps_excursion_does_not_paint_a_side_street() {
+    use geo_core::{gpx::TrackPoint, matcher::match_gpx_tracks};
+    let graph = gap_graph();
+    let origin = chrono::DateTime::parse_from_rfc3339("2026-09-26T09:00:00Z").unwrap();
+    let track: Vec<_> = [8.0, 10.0, 30.0, 12.0, 14.0]
+        .iter()
+        .enumerate()
+        .map(|(i, metres)| TrackPoint {
+            pos: LngLat::new(dlng(*metres, 0.0), 0.0),
+            time: Some(origin + chrono::Duration::seconds(i as i64 * 10)),
+        })
+        .collect();
+    let result = match_gpx_tracks(&graph, &[track], MatchConfig::default());
+    assert_eq!(walked_ids(&graph, &result), vec![1]);
+}

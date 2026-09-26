@@ -24,3 +24,11 @@ tools/out/
 # Tooling / OS
 .DS_Store
 *.log
+
+# Python tooling
+__pycache__/
+
+# Generated Flutter project metadata / IDE files
+app/.metadata
+app/.idea/
+app/*.iml

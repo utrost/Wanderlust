@@ -4,17 +4,21 @@ The cross-platform UI layer (ADR-0003). Android-first (ADR-0002); the heavy,
 correctness-critical geo logic lives in the Rust [`geo-core`](../geo-core/) and
 is linked via FFI.
 
-> **Scaffold stage.** This renders the filling-map home screen (ramp + street
-> network from the design mocks) and calls the **real Rust geo-core over FFI** on
-> startup — matching a bundled sample walk and showing the result in a status
-> chip ("geo-core · lit N streets · 0 phantom blocked"). The native
-> `libwanderlust_geo.so` is cross-compiled with cargo-ndk in CI and bundled into
-> the APK. Live GPS and offline MapLibre tiles are the next steps (see
-> [ROADMAP](../docs/ROADMAP.md), Phase 1).
+> **Pre-alpha.** The filling map now uses real bundled Bremen street geometry
+> and saved per-walk coverage. Foreground GPS records
+> durable walks in SQLite, including interruption recovery and failed-save
+> retries. The saved-walk library imports/exports GPX and creates/restores JSON
+> backups through native document dialogs. See [import/export](../docs/IMPORT_EXPORT.md). Startup runs a bundled walk
+> through Rust FFI; tapping a failed status chip reveals the underlying error.
+> A richer PMTiles basemap, continuous recording-time updates, and background
+> recording remain open. See [coverage evaluation](../docs/BREMEN_SLICE.md).
+> See [recording and matching behavior](../docs/RECORDING.md).
 
 CI publishes a **debug APK** artifact (`wanderlust-debug-apk`) on every run —
 download it from the run's Summary page to sideload on Android without a local
 Flutter setup.
+
+Requires Flutter 3.41+ / Dart 3.11+ for the document-picker and XML dependencies.
 
 ## First-time setup
 
@@ -34,7 +38,7 @@ flutter run          # on an attached Android device or emulator
 touching `lib/`), adds the walk-recorder's location permissions, and
 cross-compiles the native geo-core. For a UI-only run without the native library
 or GPS, plain `flutter create --platforms=android .` is enough — the FFI status
-chip just shows "not loaded".
+chip reports that the native library or ABI is unavailable.
 
 ## Layout
 
@@ -49,6 +53,6 @@ chip just shows "not loaded".
 
 ## Verification
 
-The app is compiled and analyzed in CI (`.github/workflows/ci.yml`) against
-Flutter stable, since it can't be built in the design/geo-core dev container
-(no Flutter SDK there).
+Run `flutter analyze` and `flutter test` from `app/`. CI also builds the host
+Rust library and enables the real FFI/SQLite integration test. See
+[the Bremen slice](../docs/BREMEN_SLICE.md) for evaluation and native-test setup.

@@ -21,8 +21,13 @@ impl Matcher {
     }
 
     /// Match a GPX track, returning traversed segments (once each).
-    pub fn match_gpx(&self, gpx_xml: &str, cfg: MatchConfig) -> MatchResult {
-        self.match_points(&gpx::parse_positions(gpx_xml), cfg)
+    pub fn match_gpx(&self, gpx_xml: &str, cfg: MatchConfig) -> Result<MatchResult, String> {
+        let tracks = gpx::parse_tracks(gpx_xml)?;
+        Ok(geo_core::matcher::match_gpx_tracks(
+            &self.graph,
+            &tracks,
+            cfg,
+        ))
     }
 
     /// Match an ordered list of GPS points.

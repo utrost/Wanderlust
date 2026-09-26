@@ -7,7 +7,7 @@ void main() {
 
     // The calm map chrome renders regardless of whether the native geo-core is
     // present (the FFI status resolves asynchronously and degrades gracefully).
-    expect(find.text('Kreuzberg'), findsOneWidget);
+    expect(find.text('Bremen center'), findsOneWidget);
     expect(find.text('Start walk'), findsOneWidget);
   });
 }

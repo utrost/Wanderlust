@@ -47,7 +47,8 @@ pub unsafe extern "C" fn wanderlust_matcher_free(matcher: *mut Matcher) {
 }
 
 /// Match a GPX track. Returns an owned JSON C string:
-/// `{"walked":[id,...],"gaps_filled":n,"gaps_rejected":n}`, or null on error.
+/// `{"walked":[id,...],"gaps_filled":n,"gaps_rejected":n}` or
+/// `{"error":"description"}` for invalid GPX; null on invalid pointers/panic.
 ///
 /// # Safety
 /// `matcher` must be a live handle; `gpx` a valid NUL-terminated UTF-8 C string.
@@ -66,7 +67,10 @@ pub unsafe extern "C" fn wanderlust_match_gpx(
     };
 
     let json = catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let result = matcher.match_gpx(&gpx_owned, MatchConfig::default());
+        let result = match matcher.match_gpx(&gpx_owned, MatchConfig::default()) {
+            Ok(result) => result,
+            Err(message) => return serde_json::json!({"error": message}).to_string(),
+        };
         let ids = matcher.walked_ids(&result);
         serde_json::json!({
             "walked": ids,

@@ -20,17 +20,19 @@ mkdir -p "$OUT"
 IFS=',' read -r MINLNG MINLAT MAXLNG MAXLAT <<<"$BBOX"
 
 echo "==> Clipping ${PBF} to ${AREA} bbox"
-osmium extract --bbox "${MINLNG},${MINLAT},${MAXLNG},${MAXLAT}" \
+osmium extract --strategy=complete_ways --bbox "${MINLNG},${MINLAT},${MAXLNG},${MAXLAT}" \
   --overwrite -o "${OUT}/${AREA}.osm.pbf" "${PBF}"
 
 echo "==> Extracting walkable street network → GeoJSON"
-# Highways a pedestrian can walk; tags kept minimal for the geo-core loader.
-osmium tags-filter "${OUT}/${AREA}.osm.pbf" \
-  w/highway=residential,living_street,footway,path,pedestrian,tertiary,secondary,unclassified,service,cycleway,steps,track \
+# Keep OSM node identity; GeoJSON export of whole ways loses real junctions.
+osmium tags-filter "${OUT}/${AREA}.osm.pbf" w/highway \
   --overwrite -o "${OUT}/${AREA}.streets.osm.pbf"
-osmium export "${OUT}/${AREA}.streets.osm.pbf" \
-  --geometry-types=linestring \
-  --overwrite -o "${OUT}/${AREA}.streets.geojson"
+osmium cat "${OUT}/${AREA}.streets.osm.pbf" \
+  --overwrite -o "${OUT}/${AREA}.streets.osm"
+python3 "$(dirname "$0")/build_network.py" \
+  "${OUT}/${AREA}.streets.osm" "${OUT}/${AREA}.streets.geojson" \
+  --bbox "$BBOX" --area-id "$AREA" --name "$AREA" \
+  --report "${OUT}/${AREA}.network-report.json"
 
 echo "==> Building offline vector tiles (PMTiles) with Planetiler"
 # Requires planetiler.jar on PATH or PLANETILER_JAR set.

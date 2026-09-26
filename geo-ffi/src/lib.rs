@@ -20,7 +20,7 @@
 //!   <trkpt lat="52.4950" lon="13.4313"></trkpt>
 //! </trkseg></gpx>"#;
 //! let m = Matcher::from_geojson(geojson).unwrap();
-//! let r = m.match_gpx(gpx, MatchConfig::default());
+//! let r = m.match_gpx(gpx, MatchConfig::default()).unwrap();
 //! assert_eq!(m.walked_ids(&r), vec![1]);
 //! ```
 

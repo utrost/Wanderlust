@@ -13,16 +13,16 @@ cartographer of your own world.
 
 > **Status: pre-alpha scaffold.** Wanderlust now contains a Rust geo-core, a
 > Flutter Android-first app scaffold, foreground GPS recording, FFI wiring, and a
-> CI-built debug APK. The product is not yet a walkable MVP: real-area offline
-> maps, persistent per-street counts, GPX import, export/backup, and background
-> GPS are still open. See [Current state](#current-state) and
+> CI-built debug APK. It now also has real offline Bremen street geometry and
+> persistent per-walk coverage. The product is not yet a walkable MVP: the richer
+> offline basemap, GPX import, export/backup, and background GPS are still open. See [Current state](#current-state) and
 > [Roadmap](docs/ROADMAP.md).
 
 ---
 
 ## Current state
 
-Implemented and CI-verified:
+Implemented, with automated checks configured in CI:
 
 - **Rust geo-core** (`geo-core/`) with the platform-independent data model,
   routing graph, snap-to-edge map matching, shortest-path fill, and the
@@ -32,9 +32,12 @@ Implemented and CI-verified:
 - **Flutter app scaffold** (`app/`) that renders the filling-map surface, calls
   the real Rust geo-core through FFI on startup when the native library is
   bundled, and shows the result in a status chip.
-- **Foreground walk recording** in the app: location permission flow, live
-  elapsed time, distance, point count, and GPX export of the captured trace while
-  the app is open.
+- **Foreground walk recording**: permission flow, elapsed time, distance, and
+  point count; fixes are journaled to SQLite with timestamps and accuracy.
+  Saved walks survive restarts, interrupted sessions are recovered, and failed
+  saves can be retried. Saved GPX is viewable/copyable in the app.
+- **Matching safeguards**: GPX segment/time boundaries, conservative ambiguity
+  handling, and explicit native diagnostics. See [recording notes](docs/RECORDING.md).
 - **CI** (`.github/workflows/ci.yml`) for Rust format/clippy/tests plus Flutter
   analyze/test/debug APK build. The debug APK is uploaded as the
   `wanderlust-debug-apk` artifact on successful CI runs. A dedicated
@@ -42,11 +45,15 @@ Implemented and CI-verified:
   APK artifacts on `main` and can publish prerelease APKs from manual runs or
   `test-apk-*` tags.
 
+**Bremen coverage slice:** a reproducible OSM network, versioned/idempotent street
+counts, and an offline pan/zoom street view driven by saved walks now exist.
+See [implementation and evaluation](docs/BREMEN_SLICE.md).
+
 Still not implemented:
 
 - Offline PMTiles + MapLibre rendering of a real selected area.
-- Real OSM-derived street-network generation tuned for matching.
-- Persistent `edge_id -> count` storage and a live map driven by real counts.
+- Field validation of matching on real noisy GPS traces.
+- Continuous map updates during a walk (coverage currently updates after saving).
 - GPX import, user export, and ZIP backup flows.
 - Background GPS with battery and app-kill resilience.
 
@@ -111,3 +118,6 @@ Licensed under the **GNU Affero General Public License v3.0** — see
 [`LICENSE`](LICENSE). The choice is still under discussion for a local-first
 client that never talks to a server; see
 [ADR-0006](docs/adr/0006-license.md).
+
+GPX import/export and local backup/restore are available from **Saved walks**.
+See [formats, limits, and phone acceptance checks](docs/IMPORT_EXPORT.md).

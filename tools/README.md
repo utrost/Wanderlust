@@ -8,9 +8,10 @@ on-device:
 2. **`<area>.streets.geojson`** — the walkable street network, fed into the Rust
    geo-core (`geo-ffi`'s GeoJSON loader) for map-matching.
 
-Both are build artifacts — **not committed**. A small hand-sketched sample lives
-at `geo-ffi/fixtures/kreuzberg-sample.geojson` for tests; this pipeline produces
-the real thing.
+The Bremen street snapshot and its reproducible OSM source are committed for
+offline tests; see [data/bremen](../data/bremen/README.md). PMTiles and regional
+PBF files remain generated artifacts. The [network contract](../docs/NETWORK_CONTRACT.md)
+defines segmentation, identity, topology, and pedestrian filtering.
 
 ## Prerequisites
 
@@ -35,6 +36,11 @@ Drop `kreuzberg.pmtiles` into the app's area storage and load
 "PMTiles + MapLibre render", Phase 1: "Area selection") for how these get wired
 into onboarding.
 
-> Status: pipeline scaffolded. The exact Planetiler profile (which layers,
-> zooms, and simplification) is a Phase 0 task to tune against real render tests
-> on-device.
+> The street-network path is implemented and tested. The Planetiler profile
+> and PMTiles/MapLibre basemap remain a separate unfinished integration.
+
+For the bundled Bremen network, use the standard-library-only rebuild in
+[data/bremen/README.md](../data/bremen/README.md). `extract_osm.py` needs
+`osmium==4.3.1` only when refreshing from a regional PBF. `evaluate_matching.py`
+uses the release Rust library through its real C ABI; no Python geo library is
+needed to evaluate the committed network.

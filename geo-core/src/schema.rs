@@ -1,10 +1,10 @@
 //! The local, on-device data model as SQLite DDL.
 //!
 //! Wanderlust is local-first (ADR-0004): everything lives in one SQLite file on
-//! the phone, always exportable, never synced by default. The core spike does
-//! not link a SQLite driver — the schema is kept here as the single source of
-//! truth so the Rust core, the Flutter surface, and the export tooling all
-//! agree on shape. The storage layer applies it verbatim.
+//! the phone, always exportable, never synced by default. This is a future
+//! area/notes schema sketch, not the currently applied database schema. The
+//! implemented recording/coverage schema and migrations live in
+//! app/lib/recording/walk_store.dart.
 
 /// Current schema version. Bump when `SCHEMA_SQL` changes; migrations key off it.
 pub const SCHEMA_VERSION: u32 = 1;

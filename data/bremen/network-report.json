@@ -1,0 +1,23 @@
+{
+  "edges": 7930,
+  "nodes": 6519,
+  "connected_components": 91,
+  "largest_component_nodes": 6254,
+  "largest_component_node_fraction": 0.9593,
+  "total_length_km": 247.719,
+  "median_edge_m": 20.274,
+  "max_edge_m": 393.867,
+  "edges_under_6m": 1143,
+  "excluded": {
+    "access": 462,
+    "area": 67,
+    "blocked_node_edges": 103,
+    "boundary_edges": 419,
+    "conditional": 25,
+    "foot": 324,
+    "foot_unspecified": 109,
+    "highway": 234,
+    "indoor": 91
+  },
+  "network_version": "33ad75389818034c7d5e9bc6cb2e6b3900aee5ed129f1b8ee8c98628256c940d"
+}

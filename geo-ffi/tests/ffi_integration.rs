@@ -22,7 +22,7 @@ fn expected_ids() -> Vec<u64> {
 #[test]
 fn safe_api_matches_walk_to_the_expected_streets() {
     let matcher = Matcher::from_geojson(GEOJSON).expect("load network");
-    let result = matcher.match_gpx(GPX, MatchConfig::default());
+    let result = matcher.match_gpx(GPX, MatchConfig::default()).unwrap();
     assert_eq!(matcher.walked_ids(&result), expected_ids());
     // A clean walk down connected streets: nothing should be rejected.
     assert_eq!(result.gaps_rejected, 0);
@@ -64,5 +64,21 @@ fn c_abi_is_null_safe() {
         // Freeing nulls must not crash.
         wanderlust_matcher_free(std::ptr::null_mut());
         wanderlust_string_free(std::ptr::null_mut());
+    }
+}
+
+#[test]
+fn malformed_gpx_returns_an_error_over_the_abi() {
+    unsafe {
+        let network = CString::new(GEOJSON).unwrap();
+        let matcher = wanderlust_matcher_from_geojson(network.as_ptr());
+        let input = CString::new("<gpx>").unwrap();
+        let out = wanderlust_match_gpx(matcher, input.as_ptr());
+        assert!(!out.is_null());
+        let json: serde_json::Value =
+            serde_json::from_str(CStr::from_ptr(out).to_str().unwrap()).unwrap();
+        assert!(json["error"].as_str().unwrap().contains("invalid GPX"));
+        wanderlust_string_free(out);
+        wanderlust_matcher_free(matcher);
     }
 }

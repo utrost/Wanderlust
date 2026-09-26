@@ -8,8 +8,10 @@ FFI. Android-first; iOS is a later veneer. See the ADRs
 
 > **Pre-alpha scaffold.** The geo-core map-matching spike, guardrail, FFI bridge,
 > Flutter filling-map surface, foreground walk recorder, and CI-built Android
-> debug APK exist. The app is not a walkable MVP until one real offline area,
-> persistent counts, GPX import/export, and background GPS are implemented. Track
+> debug APK exist. The app now bundles real Bremen street geometry and durable
+> per-walk coverage, GPX import/export, and JSON backup/restore. A richer offline
+> basemap, field validation,
+> and background GPS are still needed for a walkable MVP. Track
 > progress in [ROADMAP](docs/ROADMAP.md).
 
 ## Layout
@@ -21,7 +23,7 @@ FFI. Android-first; iOS is a later veneer. See the ADRs
 | [`app/`](app/) | Flutter surface. Scaffolded; analyzed, tested, and built as a debug APK in CI. |
 | [`design/mood-map/`](design/mood-map/) | The visual-direction prototype (runnable HTML). |
 | [`docs/`](docs/) | Design spec, architecture, roadmap, ADRs. |
-| [`tools/`](tools/) | Tile pipeline: OSM extract → PMTiles + street GeoJSON. Scaffolded; profile/tuning pending. |
+| [`tools/`](tools/) | Tested OSM → street GeoJSON pipeline and matching evaluation; PMTiles profile integration pending. |
 
 ## Current verification source
 
@@ -36,7 +38,8 @@ on every push and pull request:
 - `flutter pub get`
 - `flutter analyze`
 - `flutter test`
-- `flutter build apk --debug`
+- `flutter build apk --debug --target-platform android-arm64,android-x64`
+- verify both native architectures and the exact Bremen asset with `tools/verify_apk.py`
 - upload of `wanderlust-debug-apk`
 
 ## geo-core (Rust)
@@ -51,7 +54,7 @@ cargo fmt --check
 
 ## app (Flutter / Android)
 
-Needs the Flutter SDK, Android SDK/NDK, Rust Android targets, and `cargo-ndk`.
+Needs Flutter 3.41+ / Dart 3.11+, Android SDK/NDK, Rust Android targets, and `cargo-ndk`.
 Per-platform folders are generated on first setup. See [`app/README.md`](app/README.md).
 
 ```bash
@@ -102,12 +105,17 @@ Smoke-test checklist:
 
 - App launches.
 - Filling map renders.
-- Geo-core status chip reports a successful sample match, or calmly reports that
-  the native library is not loaded.
+- Geo-core status chip reports a successful sample match. A native library/ABI
+  failure is a failed APK smoke test; tap the chip for details.
 - `Start walk` asks for location permission.
 - Foreground recording starts when permission is granted.
 - Elapsed time, distance, and point count update.
 - `Stop` ends the recording without a crash.
+- `Saved walks` contains the walk and its timestamped GPX.
+- A saved walk within Bremen center paints matched streets. Refresh/restart does
+  not increment counts; a second distinct walk increments each matched edge once.
+- Restarting the app retains completed walks; an interrupted walk retains its
+  committed fixes. See [recording notes](docs/RECORDING.md).
 
 ## What can be built where
 

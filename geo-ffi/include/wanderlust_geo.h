@@ -27,7 +27,8 @@ void wanderlust_matcher_free(Matcher *matcher);
 /*
  * Match a GPX track against the network. Returns an owned JSON string:
  *   {"walked":[id,...],"gaps_filled":n,"gaps_rejected":n}
- * or NULL on error. Free with wanderlust_string_free.
+ * or {"error":"description"} for invalid GPX. NULL denotes invalid pointers
+ * or an internal failure. Free non-NULL strings with wanderlust_string_free.
  */
 char *wanderlust_match_gpx(Matcher *matcher, const char *gpx);
 

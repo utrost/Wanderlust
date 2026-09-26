@@ -14,11 +14,22 @@ use crate::geometry::{haversine_m, point_to_segment_m, LngLat};
 pub struct Segment {
     pub id: u64,
     pub polyline: Vec<LngLat>,
+    /// OSM topology when available; never merge distinct nodes by proximity.
+    pub node_ids: Option<[u64; 2]>,
 }
 
 impl Segment {
     pub fn new(id: u64, polyline: Vec<LngLat>) -> Self {
-        Self { id, polyline }
+        Self {
+            id,
+            polyline,
+            node_ids: None,
+        }
+    }
+
+    pub fn with_nodes(mut self, from: u64, to: u64) -> Self {
+        self.node_ids = Some([from, to]);
+        self
     }
 
     /// Length along the polyline, metres.
@@ -41,10 +52,14 @@ impl Segment {
 /// Quantised coordinate used to fuse coincident segment endpoints into one
 /// graph node. ~1e-5 degrees ≈ 1 m, which is the tolerance for "these two
 /// street ends are the same junction".
-type NodeKey = (i64, i64);
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum NodeKey {
+    Osm(u64),
+    Coordinate(i64, i64),
+}
 
 fn node_key(p: LngLat) -> NodeKey {
-    ((p.lng * 1e5).round() as i64, (p.lat * 1e5).round() as i64)
+    NodeKey::Coordinate((p.lng * 1e5).round() as i64, (p.lat * 1e5).round() as i64)
 }
 
 /// An undirected routing graph over a fixed set of segments.
@@ -58,7 +73,7 @@ pub struct Graph {
 }
 
 impl Graph {
-    /// Build the graph, fusing endpoints within ~1 m into shared nodes.
+    /// Build with explicit OSM topology, or coordinate keys for legacy fixtures.
     pub fn build(segments: Vec<Segment>) -> Self {
         let ref_lat_rad = if segments.is_empty() {
             0.0
@@ -88,8 +103,12 @@ impl Graph {
         };
 
         for (i, seg) in segments.iter().enumerate() {
-            let a = intern(node_key(seg.start()), &mut adjacency);
-            let b = intern(node_key(seg.end()), &mut adjacency);
+            let keys = seg
+                .node_ids
+                .map(|[a, b]| [NodeKey::Osm(a), NodeKey::Osm(b)])
+                .unwrap_or_else(|| [node_key(seg.start()), node_key(seg.end())]);
+            let a = intern(keys[0], &mut adjacency);
+            let b = intern(keys[1], &mut adjacency);
             let len = seg.length_m();
             seg_nodes.push((a, b));
             // Undirected: traversable either way.
@@ -137,6 +156,29 @@ impl Graph {
             }
         }
         best
+    }
+
+    /// Avoid painting either candidate when the nearest two streets are within
+    /// three metres of one another in snap distance (junctions/parallel paths).
+    pub fn nearest_unambiguous_segment(&self, p: LngLat, max_dist_m: f64) -> Option<(usize, f64)> {
+        if !p.lng.is_finite() || !p.lat.is_finite() || p.lng.abs() > 180.0 || p.lat.abs() > 90.0 {
+            return None;
+        }
+        let best = self.nearest_segment(p, max_dist_m)?;
+        for (i, seg) in self.segments.iter().enumerate() {
+            if i == best.0 {
+                continue;
+            }
+            let distance = seg
+                .polyline
+                .windows(2)
+                .map(|w| point_to_segment_m(p, w[0], w[1], self.ref_lat_rad))
+                .fold(f64::INFINITY, f64::min);
+            if distance <= best.1 + 3.0 {
+                return None;
+            }
+        }
+        Some(best)
     }
 
     /// Shortest connecting path between two segments, as the list of

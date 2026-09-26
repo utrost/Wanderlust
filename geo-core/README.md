@@ -15,7 +15,9 @@ FFI; nothing here knows about UI or platform.
   Dijkstra shortest path.
 - **Data model**: the on-device SQLite schema (`schema.rs`), local-first
   (ADR-0004).
-- **GPX**: a minimal track-point reader so real exports can be fed in.
+- **GPX**: XML parsing with coordinate/timestamp validation and separate track
+  segments. Timed interpolation stops across outages; untimed imports retain
+  direct observations only. See [matching behavior](../docs/RECORDING.md).
 
 Phase 0 exit criterion — *"GPX in → correct per-segment counts, no phantom
 streets"* — is encoded in [`tests/matching.rs`](tests/matching.rs).
@@ -32,5 +34,7 @@ cargo fmt --check
 
 - A spatial index (R-tree / grid) to replace the O(n) nearest-segment scan.
 - Bearing-aware snapping to resolve near-junction ambiguity.
-- The FFI bridge (leaning `flutter_rust_bridge`) and the SQLite storage layer.
-- Cross-compilation for Android (NDK targets) and iOS.
+- Validate thresholds on manually checked real walking GPS traces.
+- Improve short-edge coverage without reintroducing phantom streets.
+- The C ABI, Android cross-compilation, and app SQLite recording/coverage storage
+  already exist; the iOS adapter remains future work.

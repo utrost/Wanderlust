@@ -20,12 +20,19 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      - name: Rebuild and test street network
+        run: python3 -m unittest discover -s tools/tests -v
       - name: Format
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --workspace
+      - name: Evaluate real Bremen network with synthetic traces
+        run: |
+          cargo build --release -p geo-ffi
+          python3 tools/evaluate_matching.py --check
+          python3 tools/evaluate_matching.py --step-m 5 --check --output tools/out/evaluation-5m
 
   app:
     name: app (Flutter + native)
@@ -59,12 +66,20 @@ jobs:
       - name: Analyze
         working-directory: app
         run: flutter analyze
-      - name: Test
+      - name: Build host library for real FFI integration test
+        run: cargo build --release -p geo-ffi
+      - name: Test (including real Rust FFI and SQLite)
         working-directory: app
+        env:
+          WANDERLUST_NATIVE_TESTS: "1"
+          LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
         run: flutter test
       - name: Build debug APK
         working-directory: app
-        run: flutter build apk --debug
+        run: flutter build apk --debug --target-platform android-arm64,android-x64
+
+      - name: Verify APK native libraries and Bremen asset
+        run: python3 tools/verify_apk.py app/build/app/outputs/flutter-apk/app-debug.apk
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

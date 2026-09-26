@@ -44,22 +44,27 @@ class MatchResult {
   final int gapsRejected;
 
   factory MatchResult.fromJson(Map<String, dynamic> j) => MatchResult(
-        walked: (j['walked'] as List).cast<int>(),
-        gapsFilled: j['gaps_filled'] as int,
-        gapsRejected: j['gaps_rejected'] as int,
-      );
+    walked: (j['walked'] as List).cast<int>(),
+    gapsFilled: j['gaps_filled'] as int,
+    gapsRejected: j['gaps_rejected'] as int,
+  );
 }
 
 /// Loads the native library and exposes the geo-core entry points.
 class WanderlustGeo {
   WanderlustGeo._(DynamicLibrary lib)
-      : _fromGeoJson =
-            lib.lookupFunction<_FromGeoJsonNative, _FromGeoJson>('wanderlust_matcher_from_geojson'),
-        _matchGpx = lib.lookupFunction<_MatchGpxNative, _MatchGpx>('wanderlust_match_gpx'),
-        _freeMatcher =
-            lib.lookupFunction<_FreeMatcherNative, _FreeMatcher>('wanderlust_matcher_free'),
-        _freeString =
-            lib.lookupFunction<_FreeStringNative, _FreeString>('wanderlust_string_free');
+    : _fromGeoJson = lib.lookupFunction<_FromGeoJsonNative, _FromGeoJson>(
+        'wanderlust_matcher_from_geojson',
+      ),
+      _matchGpx = lib.lookupFunction<_MatchGpxNative, _MatchGpx>(
+        'wanderlust_match_gpx',
+      ),
+      _freeMatcher = lib.lookupFunction<_FreeMatcherNative, _FreeMatcher>(
+        'wanderlust_matcher_free',
+      ),
+      _freeString = lib.lookupFunction<_FreeStringNative, _FreeString>(
+        'wanderlust_string_free',
+      );
 
   final _FromGeoJson _fromGeoJson;
   final _MatchGpx _matchGpx;
@@ -108,7 +113,11 @@ class Matcher {
       out = _geo._matchGpx(_handle, gpxPtr);
       if (out == nullptr) throw const FormatException('match failed');
       final json = out.toDartString();
-      return MatchResult.fromJson(jsonDecode(json) as Map<String, dynamic>);
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+      if (decoded['error'] case final String message) {
+        throw FormatException(message);
+      }
+      return MatchResult.fromJson(decoded);
     } finally {
       malloc.free(gpxPtr);
       if (out != nullptr) _geo._freeString(out);

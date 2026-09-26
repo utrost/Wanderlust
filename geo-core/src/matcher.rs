@@ -54,12 +54,19 @@ pub fn match_track(graph: &Graph, points: &[LngLat], cfg: MatchConfig) -> MatchR
     // 1. Snap each point; keep the snapped point's position for gap sizing.
     //    Compress runs of the same segment so a slow walk down one street is a
     //    single entry, not hundreds.
-    let mut seq: Vec<(usize, LngLat)> = Vec::new();
+    let mut seq: Vec<Option<(usize, LngLat)>> = Vec::new();
     for &p in points {
-        if let Some((seg, _dist)) = graph.nearest_segment(p, cfg.snap_radius_m) {
-            if seq.last().is_none_or(|&(last, _)| last != seg) {
-                seq.push((seg, p));
+        if let Some((seg, _dist)) = graph.nearest_unambiguous_segment(p, cfg.snap_radius_m) {
+            if let Some(Some((last, position))) = seq.last_mut() {
+                if *last == seg {
+                    *position = p;
+                    continue;
+                }
             }
+            seq.push(Some((seg, p)));
+        } else {
+            // An off-network or ambiguous fix is a real break, never erase it.
+            seq.push(None);
         }
     }
 
@@ -69,14 +76,15 @@ pub fn match_track(graph: &Graph, points: &[LngLat], cfg: MatchConfig) -> MatchR
     }
 
     // 2. Every directly-observed segment is walked.
-    for &(seg, _) in &seq {
+    for &(seg, _) in seq.iter().flatten() {
         result.walked.insert(seg);
     }
 
     // 3. Bridge consecutive observations, guarding against phantom detours.
     for pair in seq.windows(2) {
-        let (a, pa) = pair[0];
-        let (b, pb) = pair[1];
+        let (Some((a, pa)), Some((b, pb))) = (pair[0], pair[1]) else {
+            continue;
+        };
         if a == b || graph.adjacent(a, b) {
             continue; // already connected; nothing to fill.
         }
@@ -110,4 +118,73 @@ pub fn walked_ids(graph: &Graph, result: &MatchResult) -> Vec<u64> {
         .collect();
     ids.sort_unstable();
     ids
+}
+
+/// Match separate GPX segments without bridging outages, backwards clocks, or
+/// implausible speed. Each directly painted edge needs consecutive supporting
+/// fixes. Untimed GPX remains usable, but receives no inferred fill.
+pub fn match_gpx_tracks(
+    graph: &Graph,
+    tracks: &[Vec<crate::gpx::TrackPoint>],
+    cfg: MatchConfig,
+) -> MatchResult {
+    let mut total = MatchResult::default();
+    for track in tracks {
+        // Snap once per fix. Single-fix excursions onto another street are
+        // common with walking GPS and must not become permanent coverage.
+        let snapped: Vec<_> = track
+            .iter()
+            .map(|p| graph.nearest_unambiguous_segment(p.pos, cfg.snap_radius_m))
+            .collect();
+        let mut confirmed = vec![false; track.len()];
+        for i in 1..track.len() {
+            if let (Some((a, _)), Some((b, _))) = (snapped[i - 1], snapped[i]) {
+                let consecutive = continuous_seconds(&track[i - 1], &track[i]).is_some()
+                    || (track[i - 1].time.is_none() && track[i].time.is_none());
+                if a == b && consecutive {
+                    confirmed[i - 1] = true;
+                    confirmed[i] = true;
+                }
+            }
+        }
+        for (i, observation) in snapped.iter().enumerate() {
+            if confirmed[i] {
+                if let Some((edge, _)) = observation {
+                    total.walked.insert(*edge);
+                }
+            }
+        }
+        for i in 1..track.len() {
+            if !confirmed[i - 1] || !confirmed[i] {
+                continue;
+            }
+            let (Some((a, _)), Some((b, _))) = (snapped[i - 1], snapped[i]) else {
+                continue;
+            };
+            if a == b || graph.adjacent(a, b) {
+                continue;
+            }
+            let Some(seconds) = continuous_seconds(&track[i - 1], &track[i]) else {
+                continue;
+            };
+            let gap = haversine_m(track[i - 1].pos, track[i].pos).max(1.0);
+            match graph.shortest_path(a, b) {
+                Some((intermediate, len))
+                    if len <= cfg.max_fill_len_m.min(seconds * 3.0)
+                        && len <= cfg.max_fill_detour_ratio * gap =>
+                {
+                    total.walked.extend(intermediate);
+                    total.gaps_filled += 1;
+                }
+                _ => total.gaps_rejected += 1,
+            }
+        }
+    }
+    total
+}
+
+fn continuous_seconds(a: &crate::gpx::TrackPoint, b: &crate::gpx::TrackPoint) -> Option<f64> {
+    let seconds = (b.time? - a.time?).num_milliseconds() as f64 / 1000.0;
+    (seconds > 0.0 && seconds <= 30.0 && haversine_m(a.pos, b.pos) <= seconds * 3.0)
+        .then_some(seconds)
 }

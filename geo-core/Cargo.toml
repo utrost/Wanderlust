@@ -6,11 +6,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-# Deliberately dependency-free for now. The Phase 0 spike (map-matching + the
-# guardrail) is pure Rust and hermetic so it builds and tests anywhere. Heavier
-# concerns — the SQLite binding, a real spatial index, the FFI bridge — arrive
-# as separate, opt-in pieces rather than being baked into the core spike.
 [dependencies]
+roxmltree = "0.21"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [lib]
 name = "geo_core"
