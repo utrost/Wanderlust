@@ -91,3 +91,23 @@ On the phone:
 5. Switch to Bremen center and back. Verify existing counts survive and are not
    added twice. Cancel a download and test a disconnected download: saved maps
    must remain available.
+
+## Android large-map loading fix
+
+Android's SQLite cursor window can reject a multi-megabyte result row even when
+SQLite successfully stored it. The previous `SELECT geojson` read could therefore
+save a download but fail to activate it, or fail to reopen it after restart.
+All cached-map reads now use `length` plus 128K-character `substr` chunks in one
+transaction, including the active-map startup path. Each row is at most 512 KiB
+of UTF-8 text. Existing stored maps need no migration or redownload for this fix.
+SQLite character offsets are used, preserving non-BMP Unicode across chunks.
+
+Validation: 68 Flutter tests passed (optional live endpoint test skipped), clean
+analysis, and a verified Android APK. On an Android API 35 emulator, the previous
+APK failed to open a 2.5 MB saved map; the fixed APK opened the identical database,
+selected the saved map and displayed both offline maps without a storage error.
+`tools/android/MapCursorProbe.java` independently reproduces the old
+`SQLiteBlobTooBigException` and verifies the chunked query with a large Unicode
+value. Compile against android.jar, convert with d8, push classes.dex, and run
+with `CLASSPATH=<device dex path> app_process /system/bin MapCursorProbe` on a test
+device. This probe uses an in-memory database and does not change app data.

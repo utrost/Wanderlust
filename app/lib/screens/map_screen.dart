@@ -394,11 +394,29 @@ class _MapScreenState extends State<MapScreen> {
           Text('${_coverage.counts.length} street segments walked'),
         if (_coverage.error case final error?)
           TextButton(
-            onPressed: () => _coverage.synchronize(_recorder.savedWalks),
-            child: Tooltip(
-              message: error.detail,
-              child: Text('${error.stage} · Retry'),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(error.stage),
+                content: SingleChildScrollView(
+                  child: SelectableText(error.detail),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      unawaited(_coverage.synchronize(_recorder.savedWalks));
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
+            child: Text('${error.stage} · Details'),
           ),
         TextButton(
           onPressed: () => showAboutDialog(

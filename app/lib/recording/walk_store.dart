@@ -97,24 +97,43 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
         .toList();
   }
 
-  @override
-  Future<String?> readArea(String version) async {
-    final rows = await (await _db).query(
-      'offline_area',
-      columns: ['geojson'],
-      where: 'version = ?',
-      whereArgs: [version],
+  // Android CursorWindow cannot return a multi-megabyte value in one row.
+  // Keep each result below 512 KiB even for four-byte Unicode code points.
+  static const _mapChunkCharacters = 128 * 1024;
+
+  Future<String?> _readArea(DatabaseExecutor db, String version) async {
+    final lengths = await db.rawQuery(
+      'SELECT length(geojson) AS characters FROM offline_area WHERE version = ?',
+      [version],
     );
-    return rows.isEmpty ? null : rows.single['geojson'] as String;
+    if (lengths.isEmpty) return null;
+    final length = lengths.single['characters'] as int;
+    final source = StringBuffer();
+    for (var start = 1; start <= length; start += _mapChunkCharacters) {
+      final rows = await db.rawQuery(
+        'SELECT substr(geojson, ?, ?) AS chunk FROM offline_area WHERE version = ?',
+        [start, _mapChunkCharacters, version],
+      );
+      source.write(rows.single['chunk'] as String);
+    }
+    return source.toString();
   }
 
   @override
-  Future<String?> readActiveArea() async {
-    final rows = await (await _db).rawQuery(
-      'SELECT geojson FROM offline_area JOIN offline_selection USING(version) WHERE offline_selection.id = 1',
-    );
-    return rows.isEmpty ? null : rows.single['geojson'] as String;
-  }
+  Future<String?> readArea(String version) async =>
+      (await _db).transaction((txn) => _readArea(txn, version));
+
+  @override
+  Future<String?> readActiveArea() async =>
+      (await _db).transaction((txn) async {
+        final rows = await txn.query(
+          'offline_selection',
+          columns: ['version'],
+          where: 'id = 1',
+        );
+        final version = rows.isEmpty ? null : rows.single['version'] as String?;
+        return version == null ? null : _readArea(txn, version);
+      });
 
   @override
   Future<void> saveArea(String geojson) async {

@@ -257,6 +257,53 @@ void main() {
   );
 
   test(
+    'large downloaded map reads in chunks, survives restart and activates with Unicode intact',
+    () async {
+      final dir = await Directory.systemTemp.createTemp(
+        'wanderlust-large-map-',
+      );
+      SqliteWalkStore open() => SqliteWalkStore(
+        factory: databaseFactoryFfi,
+        databasePath: '${dir.path}/walks.db',
+      );
+      var store = open();
+      final data = jsonDecode(smallNetwork()) as Map<String, dynamic>;
+      // Multi-byte characters straddle SQL substring boundaries. SQLite indexes
+      // code points, whereas Dart String.length counts UTF-16 code units.
+      data['test_padding'] = List.filled(400000, 'Straße🌍').join();
+      final source = jsonEncode(data);
+      expect(utf8.encode(source).length, greaterThan(4 * 1024 * 1024));
+      final area = AreaNetwork.parse(source);
+      CoverageController? controller;
+      try {
+        await store.saveArea(source);
+        await store.selectArea(area.version);
+        await store.close();
+        store = open();
+        expect(await store.readArea(area.version), source);
+        expect(await store.readActiveArea(), source);
+        expect(await store.readArea('missing'), isNull);
+        controller = CoverageController(
+          store: store,
+          loadNetwork: () async => (await store.readActiveArea())!,
+          loadSavedNetworks: () async => [
+            for (final a in await store.listAreas())
+              (await store.readArea(a.version))!,
+          ],
+        );
+        await controller.initialize();
+        expect(controller.error, isNull);
+        expect(controller.network!.version, area.version);
+        expect(controller.networks.single.geojson, source);
+      } finally {
+        controller?.dispose();
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
     'v3 walk database upgrades to offline-map storage without changing walks',
     () async {
       final dir = await Directory.systemTemp.createTemp('wanderlust-v3-');
