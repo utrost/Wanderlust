@@ -97,6 +97,12 @@ class AreaNetwork {
     );
   }
 
+  bool contains(Offset coordinate) =>
+      coordinate.dx >= bbox[0] &&
+      coordinate.dx <= bbox[2] &&
+      coordinate.dy >= bbox[1] &&
+      coordinate.dy <= bbox[3];
+
   /// Local equirectangular projection: north is up, aspect ratio is preserved.
   Offset project(Offset coordinate, Size size) {
     final cosine = math.cos((bbox[1] + bbox[3]) / 2 * math.pi / 180);

@@ -37,9 +37,9 @@ Prove the risky pieces in isolation, before any polished app.
   ([#6](https://github.com/utrost/Wanderlust/issues/6)).
 - 🔴 **PMTiles + MapLibre** render of one area, offline
   ([#8](https://github.com/utrost/Wanderlust/issues/8)).
-- 🔴 **Real-device debug APK smoke test**: CI produces a debug APK, but launch,
-  FFI load, foreground recording, and permission behavior still need to be
-  checked on an Android device
+- 🟡 **Real-device debug APK smoke test**: installation, launch, FFI load,
+  permission prompt, and an initial GPS fix confirmed on Android. Full outdoor
+  recording/coverage and updated location controls still need field validation
   ([#5](https://github.com/utrost/Wanderlust/issues/5)).
 
 **Exit criteria:** choose one real area, render it offline, feed a GPX file in →
@@ -58,7 +58,8 @@ The smallest thing that delivers the core joy: walk → map fills.
   durable counts and GPX imports are implemented for the bundled network
   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
 - 🟡 **Filling map**: persisted counts now drive real Bremen street color/width
-  after saving a walk. Continuous updates during recording and the richer
+  after saving a walk. Live location/accuracy marker, recenter, area reset, and
+  GPS HUD are implemented. Continuous updates during recording and the richer
   PMTiles basemap remain pending
   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
 - 🔴 **Area selection**: admin boundary or drawn rectangle; per-area PMTiles and

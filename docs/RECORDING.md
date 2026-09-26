@@ -21,6 +21,28 @@ If writing fails, recording stops and the in-memory trace remains available for
 uses the original walk and point keys so partially saved traces aren't duplicated.
 Uncommitted fixes cannot survive process death while storage remains unavailable.
 
+## Location on the map
+
+The blue dot shows the latest GPS fix, with a translucent horizontal-accuracy
+circle. Starting a walk centers the first fix automatically. **Center on me**
+recenters on the recording's latest fix, or requests a one-off location while
+idle without creating a walk. Panning remains manual after centering; subsequent
+fixes move the dot without pulling the map away from where you are looking.
+**Show Bremen area** returns to the full bundled street view.
+
+The compact GPS HUD shows coordinates, accuracy, and the age of the fix. It
+explicitly reports waiting for GPS and locations outside the offline Bremen
+bounds. Fixes older than 30 seconds use a gray marker and a last-fix label;
+recording uses a 5 m distance filter, so an aging fix can also mean you have not
+moved. Coverage remains restricted to the bundled network, even if you center
+on a position outside it. Stopping retains the last marker; idle centering can
+refresh it. The bundled geo-core diagnostic is now behind the info button.
+
+Phone follow-up: check initial positioning, accuracy-circle size, pan then
+recenter, area reset, and disabled GPS. Initial installation, permission prompt,
+and receiving a recording fix were confirmed by the tester on 2026-09-26; a
+complete outdoor recording/coverage test remains open.
+
 ## Storage boundary
 
 `app/lib/recording/walk_store.dart` owns database schema version 3 in

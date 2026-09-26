@@ -1,0 +1,87 @@
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+
+import '../data/area_network.dart';
+import '../theme/wanderlust_theme.dart';
+
+Duration fixAge(Position point, DateTime now) {
+  final age = now.toUtc().difference(point.timestamp.toUtc());
+  return age.isNegative ? Duration.zero : age;
+}
+
+bool isOldFix(Position point, DateTime now) =>
+    fixAge(point, now).inSeconds > 30;
+
+class GpsHud extends StatelessWidget {
+  const GpsHud({
+    super.key,
+    required this.position,
+    required this.now,
+    required this.recording,
+    required this.locating,
+    this.network,
+    this.error,
+  });
+  final Position? position;
+  final DateTime now;
+  final bool recording;
+  final bool locating;
+  final AreaNetwork? network;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final point = position;
+    final old = point != null && isOldFix(point, now);
+    final outside =
+        point != null &&
+        network != null &&
+        !network!.contains(Offset(point.longitude, point.latitude));
+    final age = point == null ? 0 : fixAge(point, now).inSeconds;
+    final ageLabel = age < 60 ? '${age}s ago' : '${age ~/ 60}m ago';
+    final title = point == null
+        ? (recording || locating
+              ? 'Waiting for GPS…'
+              : 'GPS · tap Center on me')
+        : '${old || !recording ? 'Last fix' : 'GPS'} · ${point.accuracy > 0 ? '±${point.accuracy.round()} m' : 'accuracy unavailable'} · $ageLabel';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: WanderlustColors.paperCard.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            if (point != null)
+              Text(
+                '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}',
+                style: const TextStyle(fontSize: 11),
+              ),
+            if (outside)
+              const Text(
+                'Outside offline Bremen map',
+                style: TextStyle(fontSize: 11),
+              ),
+            if (old && recording)
+              const Text(
+                'No recent fix · waiting for an update',
+                style: TextStyle(fontSize: 11),
+              ),
+            if (locating && point != null)
+              const Text('Refreshing GPS…', style: TextStyle(fontSize: 11)),
+            if (error != null)
+              Text(error!, style: const TextStyle(fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+}

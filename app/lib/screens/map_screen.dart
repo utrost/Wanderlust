@@ -3,6 +3,9 @@ import 'dart:async';
 import 'walk_library_screen.dart';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+
+import '../widgets/gps_hud.dart';
 
 import '../coverage/coverage_controller.dart';
 import '../recording/walk_store.dart';
@@ -27,16 +30,98 @@ class _MapScreenState extends State<MapScreen> {
   late final WalkRecorder _recorder = WalkRecorder(store: _store);
   late final CoverageController _coverage = CoverageController(store: _store);
 
+  Position? _previewPosition;
+  bool _locating = false;
+  String? _gpsError;
+  int _centerRequest = 0;
+  int _areaRequest = 0;
+  Timer? _gpsClock;
+
+  Position? get _currentFix {
+    final recorded = _recorder.latestPosition;
+    if (_recorder.isRecording) return recorded;
+    if (recorded == null) return _previewPosition;
+    if (_previewPosition == null ||
+        recorded.timestamp.isAfter(_previewPosition!.timestamp)) {
+      return recorded;
+    }
+    return _previewPosition;
+  }
+
+  Future<void> _centerOnMe() async {
+    if (_locating) return;
+    if (_recorder.isRecording) {
+      setState(() {
+        _centerRequest++;
+        _gpsError = null;
+      });
+      return;
+    }
+    setState(() {
+      _locating = true;
+      _gpsError = null;
+    });
+    try {
+      final error = await DeviceLocationSource().authorize();
+      if (!mounted) return;
+      if (error != null) {
+        setState(
+          () => _gpsError = error == RecorderError.locationServiceDisabled
+              ? 'Turn on location to find your position.'
+              : 'Allow location access in Android settings to show your position.',
+        );
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      if (!position.latitude.isFinite ||
+          !position.longitude.isFinite ||
+          position.latitude.abs() > 90 ||
+          position.longitude.abs() > 180 ||
+          !position.accuracy.isFinite ||
+          position.accuracy < 0) {
+        throw const FormatException('Invalid location fix');
+      }
+      if (!mounted) return;
+      setState(() {
+        _previewPosition = position;
+        _centerRequest++;
+      });
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _gpsError = 'No GPS fix yet. Try again outdoors.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _gpsError = 'Location unavailable. Check GPS and permissions.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _recorder.addListener(_walkChanged);
     _coverage.initialize();
     _recorder.initialize();
+    _gpsClock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && !_recorder.isRecording && _currentFix != null) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
+    _gpsClock?.cancel();
     _recorder.removeListener(_walkChanged);
     // Finish pending coverage work before the recorder closes the shared DB.
     _coverage.dispose();
@@ -45,6 +130,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _walkChanged() {
+    if (mounted) setState(() {});
     if (!_recorder.isRecording &&
         !_recorder.isBusy &&
         !_recorder.needsSaveRetry) {
@@ -66,6 +152,12 @@ class _MapScreenState extends State<MapScreen> {
                 : AreaMap(
                     network: _coverage.network!,
                     counts: _coverage.counts,
+                    position: _currentFix,
+                    stale:
+                        _currentFix != null &&
+                        isOldFix(_currentFix!, DateTime.now()),
+                    centerRequest: _centerRequest,
+                    areaRequest: _areaRequest,
                   ),
           ),
           SafeArea(
@@ -74,9 +166,42 @@ class _MapScreenState extends State<MapScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _areaChip(),
+                  Row(
+                    children: [
+                      Expanded(child: _areaChip()),
+                      _geoStatusChip(),
+                      IconButton.filledTonal(
+                        tooltip: 'Show Bremen area',
+                        onPressed: () => setState(() => _areaRequest++),
+                        icon: const Icon(Icons.map_outlined),
+                      ),
+                      IconButton.filledTonal(
+                        tooltip: 'Center on me',
+                        onPressed: _locating ? null : _centerOnMe,
+                        icon: _locating
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.my_location),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
-                  _geoStatusChip(),
+                  ListenableBuilder(
+                    listenable: _coverage,
+                    builder: (context, _) => GpsHud(
+                      position: _currentFix,
+                      now: DateTime.now(),
+                      recording: _recorder.isRecording,
+                      locating: _locating,
+                      network: _coverage.network,
+                      error: _gpsError,
+                    ),
+                  ),
                   const Spacer(),
                   ListenableBuilder(
                     listenable: _recorder,
@@ -154,43 +279,29 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  /// Small on-device readout of the native geo-core matching the bundled
-  /// sample walk over FFI. Confirms the Rust `.so` loaded and ran.
-  Widget _geoStatusChip() {
-    return FutureBuilder<GeoDiagnostic>(
-      future: _liveMatch,
-      builder: (context, snap) {
-        final String label;
-        if (snap.connectionState != ConnectionState.done) {
-          label = 'geo-core · matching…';
-        } else if (snap.data case final r?) {
-          label = r.label;
-        } else {
-          label = 'geo-core · diagnostics unavailable';
-        }
-        return Tooltip(
-          message: snap.data?.detail ?? 'Bundled sample diagnostic',
-          triggerMode: TooltipTriggerMode.tap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: WanderlustColors.paperCard.withValues(alpha: 0.86),
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: WanderlustColors.inkMuted,
-              ),
-            ),
+  Widget _geoStatusChip() => IconButton(
+    tooltip: 'Geo-core diagnostic',
+    icon: const Icon(Icons.info_outline, size: 20),
+    onPressed: () async {
+      final result = await _liveMatch;
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Bundled sample diagnostic'),
+          content: Text(
+            '${result.label}\n${result.detail ?? 'This checks a bundled sample walk.'}',
           ),
-        );
-      },
-    );
-  }
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 
   Widget _coverageStatus() => ListenableBuilder(
     listenable: _coverage,
@@ -230,7 +341,14 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _onStartWalk() async {
     final ok = await _recorder.start();
-    if (ok || !mounted) return;
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _centerRequest++;
+        _gpsError = null;
+      });
+      return;
+    }
     if (_recorder.lastError == null) return;
     final message = _errorMessage(_recorder.lastError!);
     ScaffoldMessenger.of(

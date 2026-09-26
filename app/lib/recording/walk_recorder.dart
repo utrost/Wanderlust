@@ -80,6 +80,7 @@ class WalkRecorder extends ChangeNotifier {
   bool get isBusy =>
       state == RecorderState.starting || state == RecorderState.stopping;
   int get pointCount => _points.length;
+  Position? get latestPosition => _points.isEmpty ? null : _points.last;
   double get distanceMeters => _distance;
   Duration get elapsed => _startedAt == null
       ? Duration.zero
