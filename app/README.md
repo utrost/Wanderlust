@@ -14,9 +14,10 @@ is linked via FFI.
 > recording remain open. See [coverage evaluation](../docs/BREMEN_SLICE.md).
 > See [recording and matching behavior](../docs/RECORDING.md).
 
-CI publishes a **debug APK** artifact (`wanderlust-debug-apk`) on every run —
-download it from the run's Summary page to sideload on Android without a local
-Flutter setup.
+The Test APK workflow publishes a **debug APK** as a GitHub prerelease on every
+push to `main`. Download the `.apk` from [Releases](https://github.com/utrost/Wanderlust/releases)
+to sideload on Android without a local Flutter setup. The workflow summary also
+links to the release.
 
 Requires Flutter 3.41+ / Dart 3.11+ for the document-picker and XML dependencies.
 

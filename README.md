@@ -39,11 +39,11 @@ Implemented, with automated checks configured in CI:
 - **Matching safeguards**: GPX segment/time boundaries, conservative ambiguity
   handling, and explicit native diagnostics. See [recording notes](docs/RECORDING.md).
 - **CI** (`.github/workflows/ci.yml`) for Rust format/clippy/tests plus Flutter
-  analyze/test/debug APK build. The debug APK is uploaded as the
-  `wanderlust-debug-apk` artifact on successful CI runs. A dedicated
-  [Test APK](.github/workflows/test-apk.yml) workflow also builds tester-friendly
-  APK artifacts on `main` and can publish prerelease APKs from manual runs or
-  `test-apk-*` tags.
+  analyze/test/debug APK build. The dedicated
+  [Test APK](.github/workflows/test-apk.yml) workflow publishes a downloadable
+  prerelease APK on `main`, manual runs, and `test-apk-*` tags. Get the APK from
+  [Releases](https://github.com/utrost/Wanderlust/releases); downloads do not
+  depend on Actions artifact storage.
 
 **Bremen coverage slice:** a reproducible OSM network, versioned/idempotent street
 counts, and an offline pan/zoom street view driven by saved walks now exist.

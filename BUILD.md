@@ -40,7 +40,7 @@ on every push and pull request:
 - `flutter test`
 - `flutter build apk --debug --target-platform android-arm64,android-x64`
 - verify both native architectures and the exact Bremen asset with `tools/verify_apk.py`
-- upload of `wanderlust-debug-apk`
+- the separate Test APK workflow publishes a prerelease APK for testers
 
 ## geo-core (Rust)
 
@@ -84,22 +84,20 @@ It runs automatically on:
 - tags named `test-apk-*`
 
 It can also be started manually from GitHub Actions with **Run workflow**.
-Manual runs have an optional `release_tag` field. If set, the workflow publishes
-or updates a GitHub prerelease with the APK attached.
+Every successful run publishes a GitHub prerelease with an APK asset. Manual
+runs have an optional `release_tag` field; tagged runs use their `test-apk-*`
+tag. Other runs use `test-apk-<short-sha>`.
 
-Outputs:
-
-- A workflow artifact named like `wanderlust-test-<short-sha>.apk` on every run.
-- A prerelease APK asset when run with `release_tag` or from a `test-apk-*` tag.
-
-Use artifacts for quick internal checks. Use prereleases when you want to send a
-more stable link to non-technical testers.
+The asset is named `wanderlust-test-<short-sha>.apk`. Download it directly from
+[Releases](https://github.com/utrost/Wanderlust/releases), or follow the link in
+the workflow summary. No Actions-artifact ZIP extraction is needed on the phone.
 
 ## Debug APK from CI
 
-Every successful CI run uploads a `wanderlust-debug-apk` artifact. Use that for
-real-device smoke tests when the local Android toolchain is not installed. The
-Test APK workflow above is the preferred path for builds intended for testers.
+CI analyzes, tests, builds, and verifies the APK. The Test APK workflow handles
+distribution through release assets. Neither workflow uploads an Actions
+artifact: that shared storage quota previously blocked uploads even after
+successful builds. Existing artifacts and releases are left intact.
 
 Smoke-test checklist:
 
