@@ -19,11 +19,13 @@ class AreaMap extends StatefulWidget {
     super.key,
     required this.network,
     required this.counts,
+    this.networks = const [],
     this.position,
     this.stale = false,
     this.centerRequest = 0,
     this.areaRequest = 0,
   });
+  final List<AreaNetwork> networks;
   final AreaNetwork network;
   final Map<int, int> counts;
   final Position? position;
@@ -103,12 +105,17 @@ class _AreaMapState extends State<AreaMap> {
             minScale: 1,
             maxScale: 12,
             onInteractionStart: (_) => _pendingCenter = false,
-            child: RepaintBoundary(
-              child: CustomPaint(
-                size: bounds.biggest,
+            child: const SizedBox.expand(),
+          ),
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _transform,
+              builder: (context, _) => CustomPaint(
                 painter: AreaMapPainter(
                   network: widget.network,
+                  networks: widget.networks,
                   counts: widget.counts,
+                  transform: _transform.value.clone(),
                 ),
               ),
             ),
@@ -197,7 +204,14 @@ class LocationMarkerPainter extends CustomPainter {
 }
 
 class AreaMapPainter extends CustomPainter {
-  AreaMapPainter({required this.network, required this.counts});
+  AreaMapPainter({
+    required this.network,
+    required this.counts,
+    this.networks = const [],
+    this.transform,
+  });
+  final List<AreaNetwork> networks;
+  final Matrix4? transform;
   final AreaNetwork network;
   final Map<int, int> counts;
 
@@ -206,6 +220,8 @@ class AreaMapPainter extends CustomPainter {
     // Leave space for map controls without shifting geographic coordinates.
     final mapSize = mapDrawingSize(size);
     canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    if (transform != null) canvas.transform(transform!.storage);
     canvas.translate(12, 80);
     final stroke = Paint()
       ..style = PaintingStyle.stroke
@@ -226,11 +242,17 @@ class AreaMapPainter extends CustomPainter {
       canvas.drawPath(path, stroke);
     }
 
-    for (final edge in network.edges) {
+    final edges = <int, AreaEdge>{};
+    for (final map in [network, ...networks]) {
+      for (final edge in map.edges) {
+        edges.putIfAbsent(edge.id, () => edge);
+      }
+    }
+    for (final edge in edges.values) {
       draw(edge, 0);
     }
     final painted =
-        network.edges.where((edge) => (counts[edge.id] ?? 0) > 0).toList()
+        edges.values.where((edge) => (counts[edge.id] ?? 0) > 0).toList()
           ..sort((a, b) => counts[a.id]!.compareTo(counts[b.id]!));
     for (final edge in painted) {
       draw(edge, counts[edge.id]!);
@@ -240,5 +262,8 @@ class AreaMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(AreaMapPainter oldDelegate) =>
-      oldDelegate.network != network || oldDelegate.counts != counts;
+      oldDelegate.network != network ||
+      oldDelegate.counts != counts ||
+      oldDelegate.networks != networks ||
+      oldDelegate.transform != transform;
 }

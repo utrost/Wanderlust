@@ -406,6 +406,18 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
   }
 
   @override
+  Future<Map<int, int>> readCombinedCounts(List<String> versions) async {
+    if (versions.isEmpty) return {};
+    final placeholders = List.filled(versions.length, '?').join(',');
+    final rows = await (await _db).rawQuery(
+      'SELECT edge_id, COUNT(DISTINCT walk_id) AS count FROM walk_edge '
+      'WHERE network_version IN ($placeholders) GROUP BY edge_id',
+      versions,
+    );
+    return {for (final row in rows) row['edge_id'] as int: row['count'] as int};
+  }
+
+  @override
   Future<Map<int, int>> readCounts(String networkVersion) async {
     final rows = await (await _db).rawQuery(
       'SELECT edge_id, COUNT(*) AS count FROM walk_edge WHERE network_version = ? GROUP BY edge_id',

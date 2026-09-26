@@ -84,6 +84,8 @@ Turn the heatmap into a keepsake.
 - 🔴 **Finds**: collectible POIs from OSM.
 - 🔴 **Notes & photos** pinned to positions / finds (local only).
 - 🟡 **Multiple areas**: eight downloadable street maps plus the bundled map;
+  seamless combined display, distinct-walk overlap counts and a 500 m outer-edge
+  warning are implemented;
   the richer "passport" experience remains open.
 
 ## Phase 3 — iOS 🔴

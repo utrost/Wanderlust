@@ -143,7 +143,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Save a roughly 4 × 4 km street map for offline walking and coverage. Internet is needed only for the download.',
+                    'Save a roughly 4 × 4 km street map for offline walking and coverage. Saved maps appear together automatically. Internet is needed only for the download.',
                   ),
                   const SizedBox(height: 8),
                   if (widget.position case final p?)
@@ -198,7 +198,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
               ),
             ),
             const Divider(),
-            const ListTile(title: Text('Maps saved on this phone')),
+            const ListTile(title: Text('Saved maps · tap to focus')),
             ListTile(
               title: const Text('Bremen center'),
               subtitle: const Text('Bundled · available offline'),

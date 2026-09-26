@@ -9,5 +9,6 @@ abstract class CoverageStore {
     String fingerprint,
     Set<int> edges,
   );
+  Future<Map<int, int>> readCombinedCounts(List<String> versions);
   Future<Map<int, int>> readCounts(String networkVersion);
 }

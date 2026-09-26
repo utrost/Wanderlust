@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../data/area_network.dart';
+import '../maps/map_extent.dart';
 import '../theme/wanderlust_theme.dart';
 
 Duration fixAge(Position point, DateTime now) {
@@ -20,6 +21,7 @@ class GpsHud extends StatelessWidget {
     required this.recording,
     required this.locating,
     this.network,
+    this.networks = const [],
     this.error,
   });
   final Position? position;
@@ -27,16 +29,25 @@ class GpsHud extends StatelessWidget {
   final bool recording;
   final bool locating;
   final AreaNetwork? network;
+  final List<AreaNetwork> networks;
   final String? error;
 
   @override
   Widget build(BuildContext context) {
     final point = position;
     final old = point != null && isOldFix(point, now);
+    final maps = networks.isNotEmpty
+        ? networks
+        : [if (network != null) network!];
+    final extent = MapExtent(maps);
+    final coordinate = point == null
+        ? null
+        : Offset(point.longitude, point.latitude);
     final outside =
-        point != null &&
-        network != null &&
-        !network!.contains(Offset(point.longitude, point.latitude));
+        coordinate != null && maps.isNotEmpty && !extent.contains(coordinate);
+    final distance = coordinate == null || maps.isEmpty
+        ? double.infinity
+        : extent.distanceToBoundary(coordinate);
     final age = point == null ? 0 : fixAge(point, now).inSeconds;
     final ageLabel = age < 60 ? '${age}s ago' : '${age ~/ 60}m ago';
     final title = point == null
@@ -67,8 +78,13 @@ class GpsHud extends StatelessWidget {
               ),
             if (outside)
               const Text(
-                'Outside selected offline map',
+                'Outside saved maps · recording can continue',
                 style: TextStyle(fontSize: 11),
+              ),
+            if (!outside && !old && distance <= 500)
+              Text(
+                'Offline map edge ~${(distance / 50).round() * 50} m away',
+                style: const TextStyle(fontSize: 11),
               ),
             if (old && recording)
               const Text(

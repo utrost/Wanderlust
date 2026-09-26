@@ -2,9 +2,16 @@
 
 **Offline maps → Download nearby map** saves a roughly 4 × 4 km square centered
 on the current/last GPS fix. The map screen also offers **Download a map here**
-when that fix is outside the selected map. Tap the area name to choose between
+when that fix is outside all saved maps. Within roughly 500 metres of the outer
+edge, a fresh GPS fix shows an edge warning and **Download more streets**.
+Internal seams covered by another saved map do not trigger a warning. Tap the area name to choose between
 the bundled Bremen center and previously downloaded maps. **Show map area**
 returns to the extent of the selected map; **Center on me** still centers GPS.
+All saved maps and the bundled map render together using the same camera;
+crossing into a saved neighbouring area needs no selection or internet. The
+selected map controls the initial view, not which streets can be displayed.
+Downloads remain manual. Outside saved areas, recording continues and coverage
+can be recovered after saving the walk and downloading the missing streets.
 
 This first slice downloads **street geometry**, including the pedestrian graph
 used for matching. It does not yet add a detailed tiled basemap, terrain,
@@ -24,8 +31,9 @@ without introducing a separate map whose streets cannot receive walk coverage.
 - Complete, validated GeoJSON is stored in SQLite. The selected map survives app
   restart; opening a downloaded map needs no internet. Interrupted, cancelled,
   malformed, and failed downloads leave existing maps and raw walks intact.
-- Selecting a new area reprocesses saved walks against that network. Coverage is
-  scoped to the selected map version. A queued match always finishes against its
+- Saved walks are processed against every saved network. Coverage remains
+  scoped to each map version in storage. Display counts use distinct walk IDs
+  per street across all loaded maps, so overlaps never count a walk twice. A queued match always finishes against its
   original network before another network can become active.
 - Walk recording may continue while downloading. The active walk contributes
   coverage after it is saved, as before. Downloads use the GPS fix displayed when
@@ -50,7 +58,12 @@ Polar regions and date-line-crossing downloads are not supported in this slice.
 
 ## Evaluation and phone checks
 
-Local validation: **61 tests passed**, including native downloaded-map coverage
+Boundary update validation: **67 tests passed**, with the optional live endpoint
+evaluation skipped. Includes a real Rust walk spanning two overlapping maps,
+union boundaries (overlap, touching edges, gaps and corners), stale GPS warnings,
+camera continuity and distinct-walk aggregation.
+
+Original download validation: **61 tests passed**, including native downloaded-map coverage
 and the optional live-data evaluation. `flutter analyze` is clean.
 
 A live download for a **public Bremen-Vegesack example area** (bbox

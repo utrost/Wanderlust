@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../widgets/gps_hud.dart';
+import '../maps/map_extent.dart';
 
 import '../coverage/coverage_controller.dart';
 import '../recording/walk_store.dart';
@@ -32,6 +33,11 @@ class _MapScreenState extends State<MapScreen> {
   late final WalkRecorder _recorder = WalkRecorder(store: _store);
   late final CoverageController _coverage = CoverageController(
     store: _store,
+    loadSavedNetworks: () async => [
+      await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
+      for (final area in await _store.listAreas())
+        if (await _store.readArea(area.version) case final source?) source,
+    ],
     loadNetwork: () async =>
         await _store.readActiveArea() ??
         await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
@@ -133,6 +139,8 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ),
     );
+    await _coverage.refreshMaps();
+    await _coverage.synchronize(_recorder.savedWalks);
   }
 
   @override
@@ -180,6 +188,7 @@ class _MapScreenState extends State<MapScreen> {
                 ? const Center(child: Text('Loading saved streets…'))
                 : AreaMap(
                     network: _coverage.network!,
+                    networks: _coverage.networks,
                     counts: _coverage.counts,
                     position: _currentFix,
                     stale:
@@ -234,6 +243,7 @@ class _MapScreenState extends State<MapScreen> {
                       recording: _recorder.isRecording,
                       locating: _locating,
                       network: _coverage.network,
+                      networks: _coverage.networks,
                       error: _gpsError,
                     ),
                   ),
@@ -241,24 +251,32 @@ class _MapScreenState extends State<MapScreen> {
                     listenable: _coverage,
                     builder: (context, _) {
                       final p = _currentFix;
+                      final extent = MapExtent(_coverage.networks);
+                      final coordinate = p == null
+                          ? null
+                          : Offset(p.longitude, p.latitude);
                       final outside =
-                          p != null &&
-                          _coverage.network != null &&
-                          !_coverage.network!.contains(
-                            Offset(p.longitude, p.latitude),
-                          );
+                          coordinate != null && !extent.contains(coordinate);
+                      final nearEdge =
+                          coordinate != null &&
+                          !isOldFix(p!, DateTime.now()) &&
+                          extent.distanceToBoundary(coordinate) <= 500;
                       return Align(
                         alignment: Alignment.centerLeft,
                         child: TextButton.icon(
                           onPressed: _showMaps,
                           icon: Icon(
-                            outside
+                            outside || nearEdge
                                 ? Icons.download_outlined
                                 : Icons.map_outlined,
                             size: 18,
                           ),
                           label: Text(
-                            outside ? 'Download a map here' : 'Offline maps',
+                            outside
+                                ? 'Download a map here'
+                                : nearEdge
+                                ? 'Download more streets'
+                                : 'Offline maps',
                           ),
                         ),
                       );
@@ -333,7 +351,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           Text(
-            'offline · tap to choose map',
+            '${_coverage.networks.length} offline maps · tap to manage',
             style: TextStyle(fontSize: 10.5, color: WanderlustColors.inkMuted),
           ),
         ],

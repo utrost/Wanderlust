@@ -56,6 +56,7 @@ class CoverageController extends ChangeNotifier {
     required CoverageStore store,
     Future<String> Function()? loadNetwork,
     MatchBatch? match,
+    this.loadSavedNetworks,
   }) : _store = store,
        _loadNetwork =
            loadNetwork ??
@@ -63,6 +64,8 @@ class CoverageController extends ChangeNotifier {
              'assets/geo/bremen-center.streets.geojson',
            )),
        _match = match ?? matchBatchInBackground;
+  final Future<List<String>> Function()? loadSavedNetworks;
+  List<AreaNetwork> networks = const [];
   final CoverageStore _store;
   final Future<String> Function() _loadNetwork;
   final MatchBatch _match;
@@ -88,7 +91,7 @@ class CoverageController extends ChangeNotifier {
     try {
       network ??= AreaNetwork.parse(await _loadNetwork());
       await _store.registerNetwork(network!);
-      counts = Map.unmodifiable(await _store.readCounts(network!.version));
+      await _loadMaps(network!);
       error = null;
     } catch (e) {
       error = CoverageFailure(
@@ -99,6 +102,46 @@ class CoverageController extends ChangeNotifier {
       );
     }
     _notify();
+  }
+
+  Future<(List<AreaNetwork>, Map<int, int>)> _readMaps(
+    AreaNetwork selected,
+  ) async {
+    final maps = <String, AreaNetwork>{selected.version: selected};
+    for (final source in await loadSavedNetworks?.call() ?? <String>[]) {
+      final map = AreaNetwork.parse(source);
+      maps.putIfAbsent(map.version, () => map);
+    }
+    for (final map in maps.values) {
+      await _store.registerNetwork(map);
+    }
+    return (
+      List<AreaNetwork>.unmodifiable(maps.values),
+      Map<int, int>.unmodifiable(
+        await _store.readCombinedCounts(maps.keys.toList()),
+      ),
+    );
+  }
+
+  Future<void> _loadMaps(AreaNetwork selected) async {
+    final loaded = await _readMaps(selected);
+    networks = loaded.$1;
+    counts = loaded.$2;
+  }
+
+  Future<void> refreshMaps() async {
+    _queue = _queue.then((_) async {
+      if (_disposed) return;
+      try {
+        await initialize();
+        if (network != null) await _loadMaps(network!);
+        error = null;
+      } catch (e) {
+        error = CoverageFailure('Could not load saved maps', e.toString());
+      }
+      _notify();
+    });
+    await _queue;
   }
 
   /// Queue area changes with matching: an in-flight result is always committed
@@ -115,11 +158,11 @@ class CoverageController extends ChangeNotifier {
       try {
         await initialize();
         final area = AreaNetwork.parse(source);
-        await _store.registerNetwork(area);
-        final savedCounts = await _store.readCounts(area.version);
+        final loaded = await _readMaps(area);
         if (persistSelection != null) await persistSelection();
+        networks = loaded.$1;
+        counts = loaded.$2;
         network = area;
-        counts = Map.unmodifiable(savedCounts);
         error = null;
         _initializing = Future.value();
         success = true;
@@ -153,44 +196,49 @@ class CoverageController extends ChangeNotifier {
         await initialize();
       }
       if (network == null || error != null) return;
-      final area = network!;
-      final pending = <(SavedWalk, String, String)>[];
-      for (final walk in walks) {
-        if (walk.status == 'recording') continue;
-        final gpx = WalkCodec.exportGpx(walk);
-        final fingerprint = sha256
-            .convert(utf8.encode('$matchingRevision\n$gpx'))
-            .toString();
-        if (await _store.matchFingerprint(walk.id, area.version) !=
-            fingerprint) {
-          pending.add((walk, gpx, fingerprint));
+      for (final area in networks) {
+        final pending = <(SavedWalk, String, String)>[];
+        for (final walk in walks) {
+          if (walk.status == 'recording') continue;
+          final gpx = WalkCodec.exportGpx(walk);
+          final fingerprint = sha256
+              .convert(utf8.encode('$matchingRevision\n$gpx'))
+              .toString();
+          if (await _store.matchFingerprint(walk.id, area.version) !=
+              fingerprint) {
+            pending.add((walk, gpx, fingerprint));
+          }
+        }
+        // Do not send empty GPX to a parser which correctly rejects empty tracks.
+        final nonempty = pending.where((p) => p.$1.points.isNotEmpty).toList();
+        final results = nonempty.isEmpty
+            ? <MatchResult>[]
+            : await _match(area.geojson, nonempty.map((p) => p.$2).toList());
+        if (results.length != nonempty.length) {
+          throw StateError('Matcher returned an incomplete batch');
+        }
+        final matched = <int, Set<int>>{};
+        for (var i = 0; i < nonempty.length; i++) {
+          final edges = results[i].walked.toSet();
+          if (!area.edgeIds.containsAll(edges)) {
+            throw StateError('Matcher returned unknown street ids');
+          }
+          matched[nonempty[i].$1.id] = edges;
+        }
+        for (final p in pending) {
+          await _store.replaceWalkMatch(
+            p.$1.id,
+            area.version,
+            p.$3,
+            matched[p.$1.id] ?? {},
+          );
         }
       }
-      // Do not send empty GPX to a parser which correctly rejects empty tracks.
-      final nonempty = pending.where((p) => p.$1.points.isNotEmpty).toList();
-      final results = nonempty.isEmpty
-          ? <MatchResult>[]
-          : await _match(area.geojson, nonempty.map((p) => p.$2).toList());
-      if (results.length != nonempty.length) {
-        throw StateError('Matcher returned an incomplete batch');
-      }
-      final matched = <int, Set<int>>{};
-      for (var i = 0; i < nonempty.length; i++) {
-        final edges = results[i].walked.toSet();
-        if (!area.edgeIds.containsAll(edges)) {
-          throw StateError('Matcher returned unknown street ids');
-        }
-        matched[nonempty[i].$1.id] = edges;
-      }
-      for (final p in pending) {
-        await _store.replaceWalkMatch(
-          p.$1.id,
-          area.version,
-          p.$3,
-          matched[p.$1.id] ?? {},
-        );
-      }
-      counts = Map.unmodifiable(await _store.readCounts(area.version));
+      counts = Map<int, int>.unmodifiable(
+        await _store.readCombinedCounts(
+          networks.map((map) => map.version).toList(),
+        ),
+      );
       processedWalks = walks.where((w) => w.status != 'recording').length;
       error = null;
     } catch (e) {

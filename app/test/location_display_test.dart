@@ -66,7 +66,10 @@ void main() {
       );
       final outside = Position.fromMap({...fix(1).toJson(), 'latitude': 52.0});
       await show(outside);
-      expect(find.text('Outside selected offline map'), findsOneWidget);
+      expect(
+        find.text('Outside saved maps · recording can continue'),
+        findsOneWidget,
+      );
       expect(fixAge(fix(1), fix(0).timestamp), Duration.zero);
     },
   );
