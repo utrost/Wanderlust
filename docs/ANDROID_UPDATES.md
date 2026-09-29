@@ -33,10 +33,10 @@ Stop and save any active walk before installing an update.
 
 ## Provisioning status
 
-The stable key is prepared locally. Upload to the repository Actions secret is
-pending explicit approval because automatic approval review blocked exporting
-the private credential. The publication workflow intentionally fails closed
-until that secret is provisioned.
+The persistent test key is provisioned in the repository Actions secret. Its
+public certificate matches the committed pin. A private local backup remains
+in the ignored signing directory; neither the key nor its base64 encoding is
+part of the repository.
 
 ## Local upgrade validation
 

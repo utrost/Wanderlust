@@ -57,7 +57,8 @@ Still open:
 - Continuous recording after OS process termination (committed fixes recover).
 
 Test APKs now have a persistent-signing build path and increasing version codes.
-Credential provisioning is awaiting approval; see [Android updates](docs/ANDROID_UPDATES.md).
+The signing credential is provisioned; see [Android updates](docs/ANDROID_UPDATES.md)
+for the one-time transition from older builds.
 
 ---
 

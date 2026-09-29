@@ -10,8 +10,8 @@ Current status: **Android pre-alpha in field testing**. The core walk → street
 colour loop has been confirmed on the tester's phone. Offline maps, GPS controls,
 live colouring, parks/water, calm settings, adjustable line width and 1–25 km
 map sides are implemented. GPX import/export and raw-walk backup/restore exist.
-Screen-off recording and persistent APK signing are implemented; signing-secret
-provisioning awaits approval and actual-phone battery testing remains open.
+Screen-off recording and persistent APK signing are implemented, and the signing
+credential is provisioned. Actual-phone battery testing remains open.
 See [screen-off recording](SCREEN_OFF_RECORDING.md), [Android updates](ANDROID_UPDATES.md)
 and [nearby maps](NEARBY_MAPS.md).
 
@@ -54,9 +54,9 @@ The smallest thing that delivers the core joy: walk → map fills.
   Hidden display/matching work is deferred until return. Real-phone battery and
   long-walk trace acceptance remain open; process death recovers committed fixes
   rather than silently restarting. See [recording](SCREEN_OFF_RECORDING.md).
-- 🟡 **Reliable APK updates** — persistent certificate, fail-closed credential
-  loading, increasing build numbers and signature checks implemented. Secret
-  provisioning awaits explicit approval. See [updates](ANDROID_UPDATES.md).
+- 🟢 **Reliable APK updates** — persistent certificate, fail-closed credential
+  loading, increasing build numbers and signature checks implemented. Signing
+  credential provisioned; in-place upgrade tested. See [updates](ANDROID_UPDATES.md).
 - 🟡 **Persistent walk state**: raw walks now use a SQLite recording journal
   with interruption recovery and save retries. Per-walk edge memberships and
   durable counts and GPX imports are implemented across bundled and downloaded networks
@@ -107,9 +107,9 @@ The one routing-adjacent feature, deliberately last.
 
 ## Immediate next steps
 
-1. **Finish persistent signing provisioning** — approve upload of the prepared
-   private test key to the repository's Actions secret; then publish the first
-   persistent-key APK. Existing temporary-key installs need one final migration.
+1. **Migrate to the persistent-key APK** — existing temporary-key installs need
+   one final backup/reinstall/restore. Subsequent builds update in place; do not
+   uninstall between them. See [Android updates](ANDROID_UPDATES.md).
 2. **Validate pocket recording on the real phone** — screen locked and another
    app open, then Stop, force-stop recovery, notification refusal and GPS disabled.
    Target a one-hour walk with no unexplained moving gaps over 30 seconds and
