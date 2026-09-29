@@ -16,9 +16,12 @@ production signing/distribution setup.
 The public certificate SHA-256 is pinned in
 `tools/android/test-signing.sha256`. `tools/install_test_signing.py` refuses
 missing credentials and certificates that differ from the pin. There is no
-fallback to a random key. Before publication, `tools/verify_android_release.py`
-verifies the APK signature, certificate, application ID and version code. The
-runner's key is removed in an always-run cleanup step.
+fallback to a random key. The credential is installed in the runner's temporary
+directory, separate from Gradle's default debug keystores. After compilation,
+`tools/sign_test_apk.py` explicitly signs the finished APK and uses
+`tools/verify_android_release.py` to verify its signature, pinned certificate,
+application ID and version code before replacing the build output. The runner's
+key is removed in an always-run cleanup step.
 
 ## One-time transition
 

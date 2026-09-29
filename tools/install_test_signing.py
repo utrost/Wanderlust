@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Install the CI test signing key only if its public certificate matches."""
 import base64
+import argparse
 import hashlib
 import os
 from pathlib import Path
@@ -38,10 +39,13 @@ def install(encoded, destination, expected):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--destination', required=True, type=Path)
+    args = parser.parse_args()
     try:
         install(
             os.environ.get('WANDERLUST_TEST_KEYSTORE', ''),
-            Path.home() / '.android/debug.keystore',
+            args.destination,
             (Path(__file__).parent / 'android/test-signing.sha256').read_text(),
         )
     except (ValueError, subprocess.CalledProcessError) as error:

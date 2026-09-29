@@ -29,7 +29,7 @@ jobs:
       - name: Install persistent test signing key
         env:
           WANDERLUST_TEST_KEYSTORE: ${{ secrets.WANDERLUST_TEST_KEYSTORE }}
-        run: python3 tools/install_test_signing.py
+        run: python3 tools/install_test_signing.py --destination "$RUNNER_TEMP/wanderlust-test.keystore"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -74,8 +74,8 @@ jobs:
       - name: Verify APK native libraries and Bremen asset
         run: python3 tools/verify_apk.py app/build/app/outputs/flutter-apk/app-debug.apk
 
-      - name: Verify update signing and version
-        run: python3 tools/verify_android_release.py app/build/app/outputs/flutter-apk/app-debug.apk --version "$((1000 + GITHUB_RUN_NUMBER))"
+      - name: Sign APK and verify update certificate and version
+        run: python3 tools/sign_test_apk.py app/build/app/outputs/flutter-apk/app-debug.apk --keystore "$RUNNER_TEMP/wanderlust-test.keystore" --version "$((1000 + GITHUB_RUN_NUMBER))"
 
       - name: Name APK for testers
         id: package
@@ -126,4 +126,4 @@ jobs:
 
       - name: Remove runner signing key
         if: always()
-        run: rm -f "$HOME/.android/debug.keystore"
+        run: rm -f "$RUNNER_TEMP/wanderlust-test.keystore"

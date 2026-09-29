@@ -7,6 +7,11 @@ import re
 import subprocess
 
 
+def find_build_tools():
+    sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
+    return sorted((sdk / 'build-tools').glob('*'))[-1]
+
+
 def verify(apk, build_tools, expected_version, expected_certificate):
     certificates = subprocess.run(
         [str(build_tools / 'apksigner'), 'verify', '--print-certs', str(apk)],
@@ -32,7 +37,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     build_tools = args.build_tools
     if build_tools is None:
-        sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
-        build_tools = sorted((sdk / 'build-tools').glob('*'))[-1]
+        build_tools = find_build_tools()
     verify(args.apk, build_tools, args.version,
            (Path(__file__).parent / 'android/test-signing.sha256').read_text())
