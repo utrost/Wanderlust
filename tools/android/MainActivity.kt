@@ -13,6 +13,18 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/about")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "version") {
+                    @Suppress("DEPRECATION")
+                    val info = packageManager.getPackageInfo(packageName, 0)
+                    @Suppress("DEPRECATION")
+                    val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+                    result.success("${info.versionName} (build $code)")
+                } else {
+                    result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/walking")
             .setMethodCallHandler { call, result ->
                 if (call.method != "prepareRecording") {

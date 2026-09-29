@@ -3,6 +3,7 @@ import 'dart:async';
 import 'walk_library_screen.dart';
 import 'offline_maps_screen.dart';
 import 'settings_screen.dart';
+import 'about_screen.dart';
 import '../settings/walk_preferences.dart';
 
 import 'package:flutter/material.dart';
@@ -604,15 +605,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             child: Text('${error.stage} · Details'),
           ),
         TextButton(
-          onPressed: () => showAboutDialog(
-            context: context,
-            applicationName: 'Wanderlust',
-            children: [
-              const SelectableText(
-                'Map data © OpenStreetMap contributors, ODbL 1.0\nhttps://www.openstreetmap.org/copyright\nOffline street view. Tap the area name to download or choose maps. Pinch to zoom. Streets colour as you walk and are confirmed when you save.',
-              ),
-            ],
-          ),
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const AboutScreen())),
           child: const Text(
             '© OpenStreetMap contributors · ODbL',
             style: TextStyle(fontSize: 10),

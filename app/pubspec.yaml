@@ -36,6 +36,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/legal/AGPL-3.0.txt
+    - assets/legal/rust-licenses.json
     # Sample street network + walk, matched live through the Rust geo-core on
     # device to prove the FFI path (see lib/geo/live_match.dart).
     - assets/geo/bremen-center.streets.geojson

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'about_screen.dart';
 import '../settings/walk_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -155,6 +156,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: Text(
             'Quiet landmarks for orientation. They do not add to walked coverage. Refresh older maps in Offline maps to include them.',
           ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('About Wanderlust'),
+          subtitle: const Text('Creator, source code and licences'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => const AboutScreen())),
         ),
         ListTile(
           title: const Text('Geo-core diagnostic'),

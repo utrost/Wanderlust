@@ -146,3 +146,13 @@ outages remain unfilled. See [matching evidence](docs/MATCHING_EVIDENCE.md).
 and dashed inferred gaps. Preview gap filling there without changing your saved
 coverage. Street labels work with existing maps; refresh downloaded maps to add
 place labels and clearer area names. See [walk review](docs/WALK_REVIEW.md).
+
+### About and acknowledgements
+
+**Settings → About Wanderlust** shows the creator, installed Android version and
+build number, source-code address, current app licence, and OpenStreetMap
+attribution. The app licence and open-source library notices are readable offline.
+Flutter supplies its dependency notices; `tools/generate_licenses.py` bundles
+licences from the enabled Rust dependency sources and copies the repository
+licence. Android preparation regenerates these assets after compiling the native
+matcher; run it when updating Cargo dependencies.
