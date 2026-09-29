@@ -45,6 +45,58 @@ class MemoryAreas implements AreaStore {
 
 void main() {
   testWidgets(
+    'setup location failure is retryable and never downloads automatically',
+    (tester) async {
+      var attempts = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: OfflineMapsScreen(
+            store: MemoryAreas(),
+            position: null,
+            activeVersion: null,
+            locate: () async {
+              attempts++;
+              if (attempts == 1) {
+                throw const FormatException('Location permission denied');
+              }
+              return fix(1);
+            },
+            fetch: (_) async {
+              fail('Location lookup must not download');
+            },
+            onSelect: (_, __) async => true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(attempts, 0);
+      await tester.tap(find.text('Find my location'));
+      await tester.pumpAndSettle();
+      expect(find.text('Location permission denied'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Download nearby map'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.text('Find my location'));
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(find.text('Refresh my location'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Download nearby map'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+
+  testWidgets(
     'download is saved then selected, and the library closes on success',
     (tester) async {
       final store = MemoryAreas();

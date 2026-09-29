@@ -114,6 +114,18 @@ class AreaNetwork {
     );
   }
 
+  factory AreaNetwork.emptyViewport() => AreaNetwork._(
+    '',
+    'no-map',
+    'No downloaded map',
+    'no-map',
+    [-1, -1, 1, 1],
+    [],
+    '',
+    [],
+    [],
+  );
+
   /// Projection-only bounds for reviewing a trace; source geometry stays intact.
   AreaNetwork withViewport(List<double> bounds) => AreaNetwork._(
     geojson,

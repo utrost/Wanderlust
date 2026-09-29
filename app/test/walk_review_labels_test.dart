@@ -15,6 +15,27 @@ import 'gap_interpolation_test.dart' show gapNetwork, gapGpx;
 import 'nearby_maps_test.dart' show smallOsm;
 
 void main() {
+  testWidgets(
+    'walks can be reviewed without any downloaded map or Bremen fallback',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WalkReviewScreen(walk: WalkCodec.importGpx(gapGpx())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final map = tester.widget<AreaMap>(find.byType(AreaMap));
+      expect(map.network.edges, isEmpty);
+      expect(map.networks, isEmpty);
+      expect(map.trace, isNotEmpty);
+      expect(
+        find.text('Part of this trace is outside your saved street maps.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('could not load'), findsNothing);
+    },
+  );
+
   test(
     'native review distinguishes all inferred edges without mutating the walk',
     () async {

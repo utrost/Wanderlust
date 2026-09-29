@@ -31,7 +31,7 @@ Future<WalkReviewResult> matchWalkReview(
   List<String> networks,
   SavedWalk walk,
   bool fill,
-) => walk.points.isEmpty
+) => walk.points.isEmpty || networks.isEmpty
     ? Future.value(const WalkReviewResult({}, {}))
     : compute(_matchReview, (networks, WalkCodec.exportGpx(walk), fill));
 

@@ -8,9 +8,9 @@ its original bounds. The map screen also offers **Download a map here**
 when that fix is outside all saved maps. Within roughly 500 metres of the outer
 edge, a fresh GPS fix shows an edge warning and **Download more streets**.
 Internal seams covered by another saved map do not trigger a warning. Tap the area name to choose between
-the bundled Bremen center and previously downloaded maps. **Show map area**
+previously downloaded maps. **Show map area**
 returns to the extent of the selected map; **Center on me** still centers GPS.
-All saved maps and the bundled map render together using the same camera;
+All downloaded maps render together using the same camera;
 crossing into a saved neighbouring area needs no selection or internet. The
 selected map controls the initial view, not which streets can be displayed.
 Downloads remain manual. Outside saved areas, recording continues and coverage
@@ -42,14 +42,15 @@ without introducing a separate map whose streets cannot receive walk coverage.
   saved coverage is confirmed when the walk is saved. Downloads use the GPS fix displayed when
   the map picker was opened, not a moving request boundary.
 - Up to eight downloaded maps can be kept, each at most 16 MiB. Remove unused
-  downloads in the picker. Removing the selected download returns to the bundled
-  map; raw walks and existing derived coverage records are retained.
+  downloads in the picker. Removing the selected download selects another saved map,
+  or returns to setup when none remain; raw walks and derived coverage records are retained.
 - A walk backup contains the raw walks, not downloaded maps. After reinstalling,
   restore the walks and download the desired areas again to rebuild coverage.
 
 Schema v4 adds `offline_area` and `offline_selection`. The foreign key prevents
 selection of missing maps and clears selection when the selected cache is removed.
-The bundled network remains an asset and requires no download.
+The Bremen asset remains a development/test fixture; it is not automatically
+selected, shown in the map picker, or included in displayed coverage.
 
 Downloads have a 15-second connection timeout and 75-second total timeout, a
 bounded response size, and a Cancel control. No background retries or bulk
@@ -91,7 +92,7 @@ On the phone:
    still appear. Map selection itself must not require a connection.
 4. Record and save a short walk, or restore/import an existing nearby trace.
    Check that its coverage appears in the selected area.
-5. Switch to Bremen center and back. Verify existing counts survive and are not
+5. Switch between downloaded maps. Verify existing counts survive and are not
    added twice. Cancel a download and test a disconnected download: saved maps
    must remain available.
 
@@ -123,3 +124,24 @@ timeout, 16 MiB response/cache limits, and normalization limits. A large dense
 city area may need a smaller selection. Failed or cancelled downloads preserve
 existing maps and selection. Date-line-crossing footprints are rejected before
 network access. The selector makes the large-area caveat visible from 10 km up.
+
+## First launch and no-map state
+
+A fresh installation opens a welcome screen, not Bremen. Choose **Set up my map**,
+then **Find my location**. Permission and a one-off GPS fix are requested only on
+that tap. Choose a square size (4 km per side by default) and explicitly tap
+**Download nearby map**. The surrounding-area disclosure appears before download.
+Only a fully saved and successfully selected map opens the walking screen.
+Location failures, denied permission and failed/cancelled downloads leave setup
+retryable. Refresh my location is also available for later downloads.
+
+No onboarding-completed flag is needed: the downloaded-map catalogue determines
+whether setup is necessary. Existing selected downloads open normally; if selection
+is missing, an available download is used. No existing walks, map files or derived
+coverage are deleted by this change. Users who previously relied only on the
+bundled map get setup and can download their area; their walks remain accessible.
+
+Saved walks, import and Settings remain accessible before setup. Review without
+maps shows the raw GPS trace on an empty background. Removing all maps during a
+walk keeps Stop and save-retry controls available. Deleting a map never deletes
+raw recordings. Download the area again to recalculate its coverage.

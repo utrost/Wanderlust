@@ -125,8 +125,9 @@ client that never talks to a server; see
 GPX import/export and local backup/restore are available from **Saved walks**.
 See [formats, limits, and phone acceptance checks](docs/IMPORT_EXPORT.md).
 
-Outside the bundled city-center map? Use **Offline maps → Download nearby map**
-to save a square street map around your GPS fix, with local coverage. Choose
+On first launch, choose **Set up my map → Find my location → Download nearby map**.
+No city map is selected automatically. Returning users open their downloaded maps
+offline; add more through **Offline maps**. Choose
 1–25 km per side (4 × 4 km by default); large, dense areas may require a smaller
 size. Walked-line thickness is adjustable in Settings.
 See [download behavior and phone checks](docs/NEARBY_MAPS.md).

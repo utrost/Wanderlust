@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'dart:async';
+import '../recording/walk_recorder.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../data/area_network.dart';
@@ -17,6 +18,8 @@ class OfflineMapsScreen extends StatefulWidget {
     this.fetch,
     this.initialSizeKm = 4,
     this.onSizeChanged,
+    this.locate,
+    this.onMapsChanged,
   });
   final AreaStore store;
   final Position? position;
@@ -25,6 +28,8 @@ class OfflineMapsScreen extends StatefulWidget {
   final FetchMap? fetch;
   final int initialSizeKm;
   final Future<void> Function(int)? onSizeChanged;
+  final Future<Position> Function()? locate;
+  final Future<void> Function()? onMapsChanged;
 
   @override
   State<OfflineMapsScreen> createState() => _OfflineMapsScreenState();
@@ -42,6 +47,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
   late int _sizeKm = widget.initialSizeKm.clamp(1, 25);
   int? _previewSizeKm;
   String _progress = 'Loading saved maps…';
+  late Position? _position = widget.position;
 
   @override
   void initState() {
@@ -97,7 +103,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
   }
 
   Future<void> _nearby() async {
-    final p = widget.position;
+    final p = _position;
     if (p == null) return;
     _progress = 'Downloading nearby streets…';
     final area = NearbyArea.around(p.latitude, p.longitude, sizeKm: _sizeKm);
@@ -139,17 +145,67 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
     _close();
   }
 
-  Future<void> _bundled() async {
-    await _select(
-      await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
-      null,
-    );
+  Future<void> _locate() async {
+    _progress = 'Finding your location…';
+    setState(() {});
+    try {
+      Position p;
+      if (widget.locate != null) {
+        p = await widget.locate!();
+      } else {
+        final error = await DeviceLocationSource(
+          forRecording: false,
+        ).authorize();
+        if (error != null) {
+          throw FormatException(
+            error == RecorderError.locationServiceDisabled
+                ? 'Turn on location, then try again.'
+                : 'Allow location access to find nearby streets. You can retry when ready.',
+          );
+        }
+        p = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 20),
+          ),
+        );
+      }
+      if (!p.latitude.isFinite ||
+          !p.longitude.isFinite ||
+          p.latitude.abs() > 80 ||
+          p.longitude.abs() > 180 ||
+          !p.accuracy.isFinite ||
+          p.accuracy < 0) {
+        throw const FormatException(
+          'A usable location was not found. Try again outdoors.',
+        );
+      }
+      if (mounted) _position = p;
+    } on TimeoutException {
+      throw const FormatException('No GPS fix yet. Try again outdoors.');
+    } on FormatException {
+      rethrow;
+    } catch (_) {
+      throw const FormatException(
+        'Location unavailable. Check GPS and permissions, then retry.',
+      );
+    }
   }
 
   Future<void> _remove(OfflineArea area) async {
-    if (_active == area.version) await _bundled();
+    final wasActive = _active == area.version;
+    if (wasActive) await widget.store.selectArea(null);
     await widget.store.deleteArea(area.version);
     await _load();
+    if (wasActive) {
+      _active = null;
+      if (_areas.isNotEmpty) {
+        final next = _areas.first;
+        final source = await widget.store.readArea(next.version);
+        if (source != null) await _select(source, next.version);
+      }
+    }
+    await widget.onMapsChanged?.call();
   }
 
   @override
@@ -212,14 +268,23 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                       'Large areas take longer and may be too detailed to download. If a download fails, choose a smaller size.',
                     ),
                   const SizedBox(height: 8),
-                  if (widget.position case final p?)
+                  if (_position case final p?)
                     Text(
                       'Around ${p.latitude.toStringAsFixed(3)}, ${p.longitude.toStringAsFixed(3)} · GPS fix ${fixAge(p, DateTime.now()).inSeconds}s ago',
                     )
                   else
                     const Text(
-                      'Return to the map and tap Center on me to get a GPS fix first.',
+                      'Find your location to choose the streets around you.',
                     ),
+                  TextButton.icon(
+                    onPressed: _busy ? null : () => _run(_locate),
+                    icon: const Icon(Icons.my_location),
+                    label: Text(
+                      _position == null
+                          ? 'Find my location'
+                          : 'Refresh my location',
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   const Text(
                     'Download sends this surrounding map area to OpenStreetMap’s Overpass service. Your recorded walks stay on your phone.',
@@ -230,7 +295,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                     onPressed:
                         _busy ||
                             !_loaded ||
-                            widget.position == null ||
+                            _position == null ||
                             _areas.length >= 8
                         ? null
                         : () => _run(_nearby),
@@ -267,20 +332,16 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
             const ListTile(
               title: Text('Saved maps · tap to focus'),
               subtitle: Text(
-                'Refresh older maps to add parks and water. Refresh sends the saved map area to Overpass and needs internet.',
+                'Refresh older maps to add place names, parks and water. Refresh sends the saved map area to Overpass and needs internet.',
               ),
             ),
-            ListTile(
-              title: const Text('Bremen center'),
-              subtitle: const Text('Bundled · available offline'),
-              leading: const Icon(Icons.map_outlined),
-              onTap: _busy
-                  ? null
-                  : () => _run(() async {
-                      await _bundled();
-                      _close();
-                    }),
-            ),
+            if (_loaded && _areas.isEmpty)
+              const ListTile(
+                title: Text('No downloaded maps yet'),
+                subtitle: Text(
+                  'Your first map will appear here. Saved walks are kept even if you remove a map.',
+                ),
+              ),
             for (final area in _areas)
               ListTile(
                 title: Text(area.name),

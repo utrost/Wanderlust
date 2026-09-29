@@ -6,11 +6,11 @@ import 'settings_screen.dart';
 import '../settings/walk_preferences.dart';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../widgets/gps_hud.dart';
 import '../maps/map_extent.dart';
+import '../maps/map_download.dart';
 
 import '../coverage/coverage_controller.dart';
 import '../recording/walk_store.dart';
@@ -19,9 +19,19 @@ import '../recording/walk_recorder.dart';
 import '../theme/wanderlust_theme.dart';
 import '../widgets/area_map.dart';
 
-/// Real offline Bremen streets painted from persisted per-walk coverage.
+/// User-selected offline streets painted from persisted per-walk coverage.
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({
+    super.key,
+    this.store,
+    this.fetchMap,
+    this.locate,
+    this.location,
+  });
+  final FetchMap? fetchMap;
+  final LocationSource? location;
+  final Future<Position> Function()? locate;
+  final SqliteWalkStore? store;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -31,21 +41,25 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // Proves the native geo-core loads and matches on the device.
   late final Future<GeoDiagnostic> _liveMatch = runSampleMatch();
 
-  final SqliteWalkStore _store = SqliteWalkStore();
+  late final SqliteWalkStore _store = widget.store ?? SqliteWalkStore();
   late final WalkRecorder _recorder = WalkRecorder(
     store: _store,
-    location: DeviceLocationSource(detailedGps: () => _preferences.detailedGps),
+    location:
+        widget.location ??
+        DeviceLocationSource(detailedGps: () => _preferences.detailedGps),
   );
   late final CoverageController _coverage = CoverageController(
     store: _store,
     loadSavedNetworks: () async => [
-      await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
       for (final area in await _store.listAreas())
         if (await _store.readArea(area.version) case final source?) source,
     ],
-    loadNetwork: () async =>
-        await _store.readActiveArea() ??
-        await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
+    loadNetwork: () async {
+      final selected = await _store.readActiveArea();
+      if (selected != null) return selected;
+      final maps = await _store.listAreas();
+      return maps.isEmpty ? null : _store.readArea(maps.first.version);
+    },
   );
 
   WalkPreferences _preferences = const WalkPreferences();
@@ -131,6 +145,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       MaterialPageRoute<void>(
         builder: (_) => OfflineMapsScreen(
           store: _store,
+          fetch: widget.fetchMap,
+          locate: widget.locate,
           position: _currentFix,
           initialSizeKm: _preferences.mapSizeKm,
           onSizeChanged: (size) async {
@@ -139,6 +155,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             if (mounted) setState(() => _preferences = value);
           },
           activeVersion: _coverage.network?.version,
+          onMapsChanged: () => _coverage.refreshMaps(),
           onSelect: (source, version) async {
             final ok = await _coverage.useNetwork(
               source,
@@ -258,162 +275,241 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: WanderlustColors.paperBg,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          ListenableBuilder(
-            listenable: _coverage,
-            builder: (context, _) => _coverage.network == null
-                ? const Center(child: Text('Loading saved streets…'))
-                : AreaMap(
-                    network: _coverage.network!,
-                    networks: _coverage.networks,
-                    counts: _coverage.displayCounts,
-                    walkedLineWidth: _preferences.walkedLineWidth,
-                    position: _currentFix,
-                    stale:
-                        _currentFix != null &&
-                        isOldFix(_currentFix!, DateTime.now()),
-                    centerRequest: _centerRequest,
-                    areaRequest: _areaRequest,
-                  ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: ListenableBuilder(
+        listenable: _coverage,
+        builder: (context, _) => _coverage.network == null
+            ? _welcome()
+            : Stack(
+                fit: StackFit.expand,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ListenableBuilder(
-                          listenable: _coverage,
-                          builder: (context, _) =>
-                              InkWell(onTap: _showMaps, child: _areaChip()),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Settings',
-                        onPressed: _showSettings,
-                        icon: const Icon(Icons.settings_outlined),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: 'Show map area',
-                        onPressed: () => setState(() => _areaRequest++),
-                        icon: const Icon(Icons.map_outlined),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: 'Center on me',
-                        onPressed: _locating ? null : _centerOnMe,
-                        icon: _locating
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.my_location),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
                   ListenableBuilder(
                     listenable: _coverage,
-                    builder: (context, _) => GpsHud(
-                      position: _currentFix,
-                      now: DateTime.now(),
-                      recording: _recorder.isRecording,
-                      locating: _locating,
-                      network: _coverage.network,
-                      networks: _coverage.networks,
-                      error: _gpsError,
-                      details: _preferences.showGps,
-                    ),
+                    builder: (context, _) => _coverage.network == null
+                        ? const Center(child: Text('Loading saved streets…'))
+                        : AreaMap(
+                            network: _coverage.network!,
+                            networks: _coverage.networks,
+                            counts: _coverage.displayCounts,
+                            walkedLineWidth: _preferences.walkedLineWidth,
+                            position: _currentFix,
+                            stale:
+                                _currentFix != null &&
+                                isOldFix(_currentFix!, DateTime.now()),
+                            centerRequest: _centerRequest,
+                            areaRequest: _areaRequest,
+                          ),
                   ),
-                  ListenableBuilder(
-                    listenable: _coverage,
-                    builder: (context, _) {
-                      final p = _currentFix;
-                      final extent = MapExtent(_coverage.networks);
-                      final coordinate = p == null
-                          ? null
-                          : Offset(p.longitude, p.latitude);
-                      final outside =
-                          coordinate != null && !extent.contains(coordinate);
-                      final nearEdge =
-                          coordinate != null &&
-                          !isOldFix(p!, DateTime.now()) &&
-                          extent.distanceToBoundary(coordinate) <= 500;
-                      return Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: _showMaps,
-                          icon: Icon(
-                            outside || nearEdge
-                                ? Icons.download_outlined
-                                : Icons.map_outlined,
-                            size: 18,
-                          ),
-                          label: Text(
-                            outside
-                                ? 'Download a map here'
-                                : nearEdge
-                                ? 'Download more streets'
-                                : 'Offline maps',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const Spacer(),
-                  ListenableBuilder(
-                    listenable: _recorder,
-                    builder: (context, _) => Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _coverageStatus(),
-                        if (_recorder.lastError != null)
-                          Text(
-                            _errorMessage(_recorder.lastError!),
-                            textAlign: TextAlign.center,
-                          ),
-                        TextButton(
-                          onPressed:
-                              _recorder.isRecording ||
-                                  _recorder.isBusy ||
-                                  _recorder.needsSaveRetry
-                              ? null
-                              : _showSavedWalks,
-                          child: Text(
-                            'Saved walks (${_recorder.savedWalks.length})',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: _recorder.isBusy
-                              ? const CircularProgressIndicator()
-                              : _recorder.isRecording
-                              ? _recordingPanel()
-                              : GestureDetector(
-                                  onTap: _recorder.needsSaveRetry
-                                      ? _recorder.retrySave
-                                      : _onStartWalk,
-                                  child: _startWalkPill(),
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ListenableBuilder(
+                                  listenable: _coverage,
+                                  builder: (context, _) => InkWell(
+                                    onTap: _showMaps,
+                                    child: _areaChip(),
+                                  ),
                                 ),
-                        ),
-                      ],
+                              ),
+                              IconButton(
+                                tooltip: 'Settings',
+                                onPressed: _showSettings,
+                                icon: const Icon(Icons.settings_outlined),
+                              ),
+                              IconButton.filledTonal(
+                                tooltip: 'Show map area',
+                                onPressed: () => setState(() => _areaRequest++),
+                                icon: const Icon(Icons.map_outlined),
+                              ),
+                              IconButton.filledTonal(
+                                tooltip: 'Center on me',
+                                onPressed: _locating ? null : _centerOnMe,
+                                icon: _locating
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.my_location),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ListenableBuilder(
+                            listenable: _coverage,
+                            builder: (context, _) => GpsHud(
+                              position: _currentFix,
+                              now: DateTime.now(),
+                              recording: _recorder.isRecording,
+                              locating: _locating,
+                              network: _coverage.network,
+                              networks: _coverage.networks,
+                              error: _gpsError,
+                              details: _preferences.showGps,
+                            ),
+                          ),
+                          ListenableBuilder(
+                            listenable: _coverage,
+                            builder: (context, _) {
+                              final p = _currentFix;
+                              final extent = MapExtent(_coverage.networks);
+                              final coordinate = p == null
+                                  ? null
+                                  : Offset(p.longitude, p.latitude);
+                              final outside =
+                                  coordinate != null &&
+                                  !extent.contains(coordinate);
+                              final nearEdge =
+                                  coordinate != null &&
+                                  !isOldFix(p!, DateTime.now()) &&
+                                  extent.distanceToBoundary(coordinate) <= 500;
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: _showMaps,
+                                  icon: Icon(
+                                    outside || nearEdge
+                                        ? Icons.download_outlined
+                                        : Icons.map_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    outside
+                                        ? 'Download a map here'
+                                        : nearEdge
+                                        ? 'Download more streets'
+                                        : 'Offline maps',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const Spacer(),
+                          ListenableBuilder(
+                            listenable: _recorder,
+                            builder: (context, _) => Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _coverageStatus(),
+                                if (_recorder.lastError != null)
+                                  Text(
+                                    _errorMessage(_recorder.lastError!),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                TextButton(
+                                  onPressed:
+                                      _recorder.isRecording ||
+                                          _recorder.isBusy ||
+                                          _recorder.needsSaveRetry
+                                      ? null
+                                      : _showSavedWalks,
+                                  child: Text(
+                                    'Saved walks (${_recorder.savedWalks.length})',
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Center(
+                                  child: _recorder.isBusy
+                                      ? const CircularProgressIndicator()
+                                      : _recorder.isRecording
+                                      ? _recordingPanel()
+                                      : GestureDetector(
+                                          onTap: _recorder.needsSaveRetry
+                                              ? _recorder.retrySave
+                                              : _onStartWalk,
+                                          child: _startWalkPill(),
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
       ),
     );
   }
+
+  Widget _welcome() => SafeArea(
+    child: Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.explore_outlined, size: 56),
+              const SizedBox(height: 24),
+              const Text(
+                'Your walks, your neighbourhood',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 26),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Start by downloading streets around your location. Then put your phone away and explore at your own pace.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Maps and walks stay on your phone. You only need internet to download a map.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              if (!_coverage.initialized)
+                const CircularProgressIndicator()
+              else ...[
+                FilledButton.icon(
+                  onPressed: _showMaps,
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('Set up my map'),
+                ),
+                if (_coverage.error != null) ...[
+                  const Text(
+                    'Could not load your saved maps. Your walks have not been removed.',
+                    textAlign: TextAlign.center,
+                  ),
+                  TextButton(
+                    onPressed: () => _coverage.refreshMaps(),
+                    child: const Text('Retry loading maps'),
+                  ),
+                ],
+                TextButton(
+                  onPressed: _showSettings,
+                  child: const Text('Settings'),
+                ),
+                if (_recorder.isBusy)
+                  const CircularProgressIndicator()
+                else if (_recorder.isRecording)
+                  _recordingPanel()
+                else if (_recorder.needsSaveRetry)
+                  TextButton(
+                    onPressed: _recorder.retrySave,
+                    child: const Text('Retry saving walk'),
+                  )
+                else
+                  TextButton(
+                    onPressed: _showSavedWalks,
+                    child: const Text('Saved walks and import'),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 
   Widget _areaChip() {
     return Container(
@@ -428,7 +524,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            _coverage.network?.name ?? 'Bremen center',
+            _coverage.network?.name ?? 'No downloaded map',
             style: WanderlustTheme.serif.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w500,

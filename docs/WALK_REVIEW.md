@@ -15,7 +15,8 @@ only. It never writes preferences, raw walks or coverage. Matching runs in a
 worker isolate across saved maps; direct support takes precedence over inference
 when maps or GPX segments overlap. The main coverage colours/counts are unchanged.
 If matching fails, the raw trace remains available and Retry reruns matching.
-Areas outside saved maps retain their GPS trace and show a notice. Empty walks
+Areas outside saved maps retain their GPS trace and show a notice. With no
+downloaded maps, review uses an empty background rather than a Bremen fallback. Empty walks
 show an explicit message. GPX export remains beside each saved walk.
 
 ## Offline labels

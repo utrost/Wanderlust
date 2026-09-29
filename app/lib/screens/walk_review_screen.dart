@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../data/area_network.dart';
 import '../recording/saved_walk.dart';
 import '../review/walk_review.dart';
@@ -51,22 +50,14 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
     });
     try {
       if (maps.isEmpty) {
-        maps = widget.networks.isEmpty
-            ? [
-                AreaNetwork.parse(
-                  await rootBundle.loadString(
-                    'assets/geo/bremen-center.streets.geojson',
-                  ),
-                ),
-              ]
-            : widget.networks;
-        viewport = maps.first;
+        maps = widget.networks;
+        viewport = maps.firstOrNull ?? AreaNetwork.emptyViewport();
         if (coordinates.isNotEmpty) {
           final xs = coordinates.map((p) => p.dx).toList()..sort(),
               ys = coordinates.map((p) => p.dy).toList()..sort();
           final dx = math.max(xs.last - xs.first, 0.002),
               dy = math.max(ys.last - ys.first, 0.002);
-          viewport = maps.first.withViewport([
+          viewport = viewport!.withViewport([
             (xs.first - dx * .1).clamp(-180, 180).toDouble(),
             (ys.first - dy * .1).clamp(-90, 90).toDouble(),
             (xs.last + dx * .1).clamp(-180, 180).toDouble(),

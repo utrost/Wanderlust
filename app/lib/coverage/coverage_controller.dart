@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import '../data/area_network.dart';
 import '../geo/geo_core_ffi.dart';
@@ -61,16 +60,12 @@ Future<List<MatchResult>> matchBatchInBackground(
 class CoverageController extends ChangeNotifier {
   CoverageController({
     required CoverageStore store,
-    Future<String> Function()? loadNetwork,
+    Future<String?> Function()? loadNetwork,
     MatchBatch? match,
     this.loadSavedNetworks,
     this.liveInterval = const Duration(seconds: 2),
   }) : _store = store,
-       _loadNetwork =
-           loadNetwork ??
-           (() => rootBundle.loadString(
-             'assets/geo/bremen-center.streets.geojson',
-           )),
+       _loadNetwork = loadNetwork ?? (() async => null),
        _match = match;
   final Duration liveInterval;
   final Future<List<String>> Function()? loadSavedNetworks;
@@ -175,7 +170,7 @@ class CoverageController extends ChangeNotifier {
 
   List<AreaNetwork> networks = const [];
   final CoverageStore _store;
-  final Future<String> Function() _loadNetwork;
+  final Future<String?> Function() _loadNetwork;
   final MatchBatch? _match;
   bool _fillSmallGaps = false;
 
@@ -203,6 +198,7 @@ class CoverageController extends ChangeNotifier {
   AreaNetwork? network;
   Map<int, int> counts = const {};
   bool busy = false;
+  bool initialized = false;
   CoverageFailure? error;
   int processedWalks = 0;
   bool _disposed = false;
@@ -220,9 +216,8 @@ class CoverageController extends ChangeNotifier {
   Future<void> initialize() => _initializing ??= _initialize();
   Future<void> _initialize() async {
     try {
-      network ??= AreaNetwork.parse(await _loadNetwork());
-      await _store.registerNetwork(network!);
-      await _loadMaps(network!);
+      final source = await _loadNetwork();
+      await _loadMaps(source == null ? null : AreaNetwork.parse(source));
       error = null;
     } catch (e) {
       error = CoverageFailure(
@@ -232,13 +227,16 @@ class CoverageController extends ChangeNotifier {
         e.toString(),
       );
     }
+    initialized = true;
     _notify();
   }
 
   Future<(List<AreaNetwork>, Map<int, int>)> _readMaps(
-    AreaNetwork selected,
+    AreaNetwork? selected,
   ) async {
-    final maps = <String, AreaNetwork>{selected.version: selected};
+    final maps = <String, AreaNetwork>{
+      if (selected != null) selected.version: selected,
+    };
     for (final source in await loadSavedNetworks?.call() ?? <String>[]) {
       final map = AreaNetwork.parse(source);
       maps.putIfAbsent(map.version, () => map);
@@ -254,9 +252,10 @@ class CoverageController extends ChangeNotifier {
     );
   }
 
-  Future<void> _loadMaps(AreaNetwork selected) async {
+  Future<void> _loadMaps(AreaNetwork? selected) async {
     final loaded = await _readMaps(selected);
     networks = loaded.$1;
+    network = selected ?? networks.firstOrNull;
     counts = loaded.$2;
     _resetLiveMaps();
   }
@@ -266,7 +265,8 @@ class CoverageController extends ChangeNotifier {
       if (_disposed) return;
       try {
         await initialize();
-        if (network != null) await _loadMaps(network!);
+        final source = await _loadNetwork();
+        await _loadMaps(source == null ? null : AreaNetwork.parse(source));
         error = null;
       } catch (e) {
         error = CoverageFailure('Could not load saved maps', e.toString());
@@ -328,7 +328,7 @@ class CoverageController extends ChangeNotifier {
         _initializing = null;
         await initialize();
       }
-      if (network == null || error != null) return;
+      if (error != null) return;
       for (final area in networks) {
         final pending = <(SavedWalk, String, String)>[];
         for (final walk in walks) {

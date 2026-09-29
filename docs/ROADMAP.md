@@ -59,7 +59,7 @@ The smallest thing that delivers the core joy: walk → map fills.
   credential provisioned; in-place upgrade tested. See [updates](ANDROID_UPDATES.md).
 - 🟡 **Persistent walk state**: raw walks now use a SQLite recording journal
   with interruption recovery and save retries. Per-walk edge memberships and
-  durable counts and GPX imports are implemented across bundled and downloaded networks
+  durable counts and GPX imports are implemented across downloaded networks
   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
 - 🟢 **Filling street map**: live provisional colour/section counts, saved counts,
   GPS marker/recenter, calm optional details and adjustable line thickness exist.
@@ -86,7 +86,7 @@ Turn the heatmap into a keepsake.
   "claimed" seal. Depends on resolving the *completeness denominator* question.
 - 🔴 **Finds**: collectible POIs from OSM.
 - 🔴 **Notes & photos** pinned to positions / finds (local only).
-- 🟡 **Multiple areas**: eight downloadable street maps plus the bundled map;
+- 🟡 **Multiple areas**: eight downloadable street maps;
   seamless combined display, distinct-walk overlap counts and a 500 m outer-edge
   warning are implemented;
   the richer "passport" experience remains open.
@@ -139,7 +139,8 @@ Tracked here until decided; each blocks the phase noted.
 
 - **Screen-off field result** — sustained trace quality and battery consumption
   on the actual Android phone. Initial foreground smoke testing is complete. *(Phase 1)*
-- **Onboarding flow** — area selection + the optional GPX-import step. *(Phase 1)*
+- **Onboarding field check** — local map setup and optional pre-setup GPX import
+  are implemented; verify the permission/download flow on new users’ phones. *(Phase 1)*
 - **The completeness denominator** — what counts as "walkable" in an area (both
   sides of a divided road? park paths absent from OSM? private roads?). Directly
   shapes the completeness %. *(Phase 2)*
@@ -183,3 +184,11 @@ data; new/refreshed downloads add place and landmark names and readable area
 names. See [WALK_REVIEW.md](WALK_REVIEW.md). Next: use exported phone traces and
 this review screen to identify remaining matching errors; validate label density
 and readability on the actual phone.
+
+### Location-based first launch (implemented)
+
+Fresh installs start with local map setup. Bremen is no longer selected or shown
+as a default map. Existing downloaded maps open offline, with saved walks retained.
+Location permission, map size and download are explicit steps; map-free review,
+import, deletion recovery and ongoing Stop/save controls remain available.
+See [NEARBY_MAPS.md](NEARBY_MAPS.md#first-launch-and-no-map-state).
