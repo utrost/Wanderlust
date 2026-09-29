@@ -278,9 +278,11 @@ fn gpx_breaks_and_outages_never_fill() {
             let first = track.first().unwrap().clone();
             let last = track.last().unwrap().clone();
             let mut before = first.clone();
-            before.time = first.time.map(|t| t - chrono::Duration::seconds(1));
+            before.pos.lng -= dlng(10.0, 0.0);
+            before.time = first.time.map(|t| t - chrono::Duration::seconds(5));
             let mut after = last.clone();
-            after.time = last.time.map(|t| t + chrono::Duration::seconds(1));
+            after.pos.lng += dlng(10.0, 0.0);
+            after.time = last.time.map(|t| t + chrono::Duration::seconds(5));
             let mut points = vec![before];
             points.extend(track.clone());
             points.push(after);
@@ -329,12 +331,13 @@ fn a_single_gps_excursion_does_not_paint_a_side_street() {
     use geo_core::{gpx::TrackPoint, matcher::match_gpx_tracks};
     let graph = gap_graph();
     let origin = chrono::DateTime::parse_from_rfc3339("2026-09-26T09:00:00Z").unwrap();
-    let track: Vec<_> = [8.0, 10.0, 30.0, 12.0, 14.0]
+    let track: Vec<_> = [4.0, 14.0, 30.0, 6.0, 16.0]
         .iter()
         .enumerate()
         .map(|(i, metres)| TrackPoint {
             pos: LngLat::new(dlng(*metres, 0.0), 0.0),
             time: Some(origin + chrono::Duration::seconds(i as i64 * 10)),
+            accuracy_m: None,
         })
         .collect();
     let result = match_gpx_tracks(&graph, &[track], MatchConfig::default());

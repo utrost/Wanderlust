@@ -32,7 +32,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   late final Future<GeoDiagnostic> _liveMatch = runSampleMatch();
 
   final SqliteWalkStore _store = SqliteWalkStore();
-  late final WalkRecorder _recorder = WalkRecorder(store: _store);
+  late final WalkRecorder _recorder = WalkRecorder(
+    store: _store,
+    location: DeviceLocationSource(detailedGps: () => _preferences.detailedGps),
+  );
   late final CoverageController _coverage = CoverageController(
     store: _store,
     loadSavedNetworks: () async => [

@@ -117,7 +117,11 @@ The one routing-adjacent feature, deliberately last.
    [acceptance protocol](SCREEN_OFF_RECORDING.md).
 3. **Field matching quality** — evaluate parallel streets, crossings, park paths
    and weak GPS against actual walks. Preserve uncertain gaps rather than falsely
-   colouring neighbouring streets.
+   colouring neighbouring streets. Motion/direction confirmation, poor-accuracy
+   rejection and configurable Detailed GPS are implemented; the junction
+   regression and synthetic Bremen results are documented in
+   [matching evidence](MATCHING_EVIDENCE.md). Actual exported phone traces remain
+   the next validation step.
 4. **Map download reliability** — large/dense areas, clear progress/failure handling
    and an explicit fresh-location option before selecting download bounds.
 5. **Backup completeness and phone dialogs** — include settings and optionally

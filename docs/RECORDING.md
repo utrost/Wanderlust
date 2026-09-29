@@ -64,7 +64,10 @@ persisted area selection. Version 5 adds local display preferences. Paging remai
   in-range coordinates and RFC3339 timestamps. Malformed/empty GPX is an error.
 - Each GPX track segment is independent. Missing times, non-increasing times,
   gaps over 30 seconds, or displacement above 3 metres/second prohibit fill
-  between those fixes. Direct observations require two consecutive unambiguous supporting fixes.
+  between those fixes. Direct observations require consecutive unambiguous
+  support, along-street movement and a compatible travel direction. Fixes with
+  known horizontal accuracy worse than 25 m remain recorded but do not confirm
+  streets. See [matching evidence and evaluation](MATCHING_EVIDENCE.md).
 - Inferred path length is also capped by elapsed time at 3 metres/second, in
   addition to the existing detour and absolute-distance limits.
 - Off-network fixes break continuity instead of being dropped and bridged over.
@@ -75,7 +78,8 @@ persisted area selection. Version 5 adds local display preferences. Paging remai
   fill. The lower-level positions-only Rust API retains distance-based fill.
 
 These initial thresholds need validation on real walking traces. The Bremen pipeline now splits at junctions and bounds chain length where
-OSM nodes permit it; nearest-street matching remains a linear scan. Measured GPS accuracy is preserved for future matching improvements.
+OSM nodes permit it; nearest-street matching remains a linear scan. Measured GPS
+accuracy is preserved, and the matcher reads Wanderlust's accuracy extension.
 
 ## Tester diagnostics
 

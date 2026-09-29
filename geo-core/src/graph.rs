@@ -40,6 +40,33 @@ impl Segment {
             .sum()
     }
 
+    /// Closest projection: along-edge metres and local unit tangent. Endpoint
+    /// clamping is intentional: moving past a junction is not travel up a spur.
+    pub fn project(&self, point: LngLat) -> Option<(f64, (f64, f64))> {
+        let reference = self.polyline.first()?.lat.to_radians();
+        let (px, py) = point.to_xy(reference);
+        let mut best_distance = f64::INFINITY;
+        let mut best = None;
+        let mut along = 0.0;
+        for pair in self.polyline.windows(2) {
+            let (ax, ay) = pair[0].to_xy(reference);
+            let (bx, by) = pair[1].to_xy(reference);
+            let (dx, dy) = (bx - ax, by - ay);
+            let length = dx.hypot(dy);
+            if length <= f64::EPSILON {
+                continue;
+            }
+            let t = (((px - ax) * dx + (py - ay) * dy) / length.powi(2)).clamp(0.0, 1.0);
+            let distance = (px - ax - t * dx).hypot(py - ay - t * dy);
+            if distance < best_distance {
+                best_distance = distance;
+                best = Some((along + t * length, (dx / length, dy / length)));
+            }
+            along += length;
+        }
+        best
+    }
+
     fn start(&self) -> LngLat {
         self.polyline[0]
     }

@@ -117,6 +117,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (error != null)
           Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
         const Divider(),
+        SwitchListTile(
+          title: const Text('Detailed GPS'),
+          subtitle: const Text(
+            'Request readings every 2 seconds / 2 metres instead of 5 seconds / 5 metres. Uses more battery. Applies to the next walk; actual updates depend on your phone.',
+          ),
+          value: value.detailedGps,
+          onChanged: busy
+              ? null
+              : (v) => change(value.copyWith(detailedGps: v)),
+        ),
+        const Divider(),
         const ListTile(
           title: Text('Walking with the screen off'),
           subtitle: Text(
@@ -126,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const ListTile(
           title: Text('What are street sections?'),
           subtitle: Text(
-            'Small pieces of walkable street or path, split at junctions and along longer streets. They are not whole named streets or a score. A section colours when consecutive GPS readings confirm it; uncertain readings may take longer.',
+            'Small pieces of walkable street or path, split at junctions and along longer streets. They are not whole named streets or a score. A section colours when readings show movement along it in a compatible direction; uncertain readings may take longer.',
           ),
         ),
         const ListTile(

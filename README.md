@@ -130,3 +130,8 @@ to save a square street map around your GPS fix, with local coverage. Choose
 1–25 km per side (4 × 4 km by default); large, dense areas may require a smaller
 size. Walked-line thickness is adjustable in Settings.
 See [download behavior and phone checks](docs/NEARBY_MAPS.md).
+
+**Settings → Detailed GPS** requests updates every 2 seconds / 2 metres instead
+of 5 seconds / 5 metres, starting with the next walk. It uses more battery.
+Street colouring now requires movement along the street in a compatible direction;
+see [matching changes, regression tests and limits](docs/MATCHING_EVIDENCE.md).

@@ -5,6 +5,9 @@ use crate::geometry::LngLat;
 pub struct TrackPoint {
     pub pos: LngLat,
     pub time: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// Horizontal metres, only from Wanderlust's explicit accuracy extension.
+    /// GPX hdop is unitless and must not be mistaken for metres.
+    pub accuracy_m: Option<f64>,
 }
 
 /// Reject malformed documents and invalid fixes instead of silently joining
@@ -43,9 +46,32 @@ pub fn parse_tracks(xml: &str) -> Result<Vec<Vec<TrackPoint>>, String> {
                         .map_err(|_| "invalid GPX timestamp".to_string())
                 })
                 .transpose()?;
+            let accuracy_m = node
+                .children()
+                .filter(|n| n.is_element() && n.tag_name().name() == "extensions")
+                .flat_map(|n| n.children())
+                .find(|n| {
+                    n.is_element()
+                        && n.tag_name().name() == "accuracy"
+                        && n.tag_name().namespace() == Some("https://wanderlust.local/gpx/1")
+                })
+                .map(|n| {
+                    let value: f64 = n
+                        .text()
+                        .unwrap_or("")
+                        .trim()
+                        .parse()
+                        .map_err(|_| "invalid horizontal accuracy".to_string())?;
+                    if !value.is_finite() || value < 0.0 {
+                        return Err("invalid horizontal accuracy".to_string());
+                    }
+                    Ok(value)
+                })
+                .transpose()?;
             points.push(TrackPoint {
                 pos: LngLat::new(coord("lon", 180.0)?, coord("lat", 90.0)?),
                 time,
+                accuracy_m,
             });
         }
         if !points.is_empty() {
@@ -61,6 +87,26 @@ pub fn parse_tracks(xml: &str) -> Result<Vec<Vec<TrackPoint>>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reads_horizontal_accuracy_without_treating_hdop_as_metres() {
+        let parse = |value: &str| {
+            parse_tracks(&format!(
+            "<gpx xmlns:wl='https://wanderlust.local/gpx/1'><trk><trkseg><trkpt lat='53' lon='8'><hdop>99</hdop>{value}</trkpt></trkseg></trk></gpx>"
+        ))
+        };
+        assert_eq!(parse("").unwrap()[0][0].accuracy_m, None);
+        assert_eq!(
+            parse("<extensions><wl:accuracy>9.5</wl:accuracy></extensions>").unwrap()[0][0]
+                .accuracy_m,
+            Some(9.5)
+        );
+        for bad in ["NaN", "-1", "infinity", "unknown"] {
+            assert!(parse(&format!(
+                "<extensions><wl:accuracy>{bad}</wl:accuracy></extensions>"
+            ))
+            .is_err());
+        }
+    }
     #[test]
     fn preserves_segments_namespaces_and_optional_time() {
         let tracks = parse_tracks(r#"<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk>

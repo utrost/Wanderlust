@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:crypto/crypto.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:wanderlust/coverage/coverage_controller.dart';
@@ -180,8 +181,34 @@ void main() {
         reason: 'No phantom streets on clean fixture',
       );
       expect(counts.values.every((count) => count == 1), isTrue);
+      // Upgrading matching rules replaces earlier phantom coverage, preserving
+      // the raw walk. A new algorithm must not leave v3 counts cached forever.
+      final savedWalk = recorder.savedWalks.single;
+      final oldFingerprint = sha256
+          .convert(
+            utf8.encode(
+              'consecutive-observations-osm-v3\n${WalkCodec.exportGpx(savedWalk)}',
+            ),
+          )
+          .toString();
+      final phantom = coverage.network!.edgeIds.firstWhere(
+        (id) => !expected.contains(id),
+      );
+      await store.replaceWalkMatch(
+        savedWalk.id,
+        coverage.network!.version,
+        oldFingerprint,
+        {...counts.keys, phantom},
+      );
+      expect(
+        (await store.readCounts(
+          coverage.network!.version,
+        )).containsKey(phantom),
+        isTrue,
+      );
       await coverage.synchronize(recorder.savedWalks);
       expect(coverage.counts, counts);
+      expect((await store.listSaved()).single.points.length, points.length);
       // A second distinct walk increments once; no per-GPS-fix counting.
       await recorder.start();
       for (final point in points) {

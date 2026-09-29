@@ -81,6 +81,7 @@ void main() {
       expect(old.showTime, isTrue);
       expect(old.walkedLineWidth, 3);
       expect(old.mapSizeKm, 4);
+      expect(old.detailedGps, isFalse);
       final corrupt = WalkPreferences.fromJson({
         'walkedLineWidth': double.nan,
         'mapSizeKm': 25.5,
@@ -97,7 +98,7 @@ void main() {
       var store = open();
       try {
         await store.savePreferences(
-          old.copyWith(walkedLineWidth: 1.5, mapSizeKm: 25),
+          old.copyWith(walkedLineWidth: 1.5, mapSizeKm: 25, detailedGps: true),
         );
         await store.close();
         store = open();
@@ -105,12 +106,55 @@ void main() {
         expect(saved.showTime, isTrue);
         expect(saved.walkedLineWidth, 1.5);
         expect(saved.mapSizeKm, 25);
+        expect(saved.detailedGps, isTrue);
+        expect(saved.copyWith(showGps: true).detailedGps, isTrue);
         expect(saved.copyWith(showGps: true).mapSizeKm, 25);
         expect(saved.copyWith(showSamples: true).walkedLineWidth, 1.5);
       } finally {
         await store.close();
         await dir.delete(recursive: true);
       }
+    },
+  );
+  testWidgets(
+    'Detailed GPS preserves other settings and rolls back failed writes',
+    (tester) async {
+      WalkPreferences? saved;
+      var fail = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            initial: const WalkPreferences(
+              showTime: true,
+              walkedLineWidth: 2,
+              mapSizeKm: 6,
+            ),
+            diagnostic: const SizedBox(),
+            save: (value) async {
+              if (fail) throw StateError('storage unavailable');
+              saved = value;
+            },
+          ),
+        ),
+      );
+      await tester.scrollUntilVisible(find.text('Detailed GPS'), 250);
+      await tester.tap(find.text('Detailed GPS'));
+      await tester.pumpAndSettle();
+      expect(saved!.detailedGps, isTrue);
+      expect(saved!.showTime, isTrue);
+      expect(saved!.walkedLineWidth, 2);
+      expect(saved!.mapSizeKm, 6);
+      fail = true;
+      await tester.tap(find.text('Detailed GPS'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.widgetWithText(SwitchListTile, 'Detailed GPS'),
+            )
+            .value,
+        isTrue,
+      );
     },
   );
   testWidgets(

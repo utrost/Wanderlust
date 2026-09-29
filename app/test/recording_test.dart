@@ -81,6 +81,15 @@ void main() {
       expect(settings.foregroundNotificationConfig!.enableWakeLock, isTrue);
       expect(settings.foregroundNotificationConfig!.enableWifiLock, isFalse);
       expect(settings.foregroundNotificationConfig!.setOngoing, isTrue);
+      final detailed =
+          DeviceLocationSource.settingsFor(
+                TargetPlatform.android,
+                detailed: true,
+              )
+              as AndroidSettings;
+      expect(detailed.intervalDuration, const Duration(seconds: 2));
+      expect(detailed.distanceFilter, 2);
+      expect(detailed.foregroundNotificationConfig!.enableWakeLock, isTrue);
       expect(
         DeviceLocationSource.settingsFor(TargetPlatform.iOS),
         isNot(isA<AndroidSettings>()),

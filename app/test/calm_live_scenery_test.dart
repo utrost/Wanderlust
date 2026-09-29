@@ -128,6 +128,7 @@ void main() {
           'showTime': true,
           'showSamples': true,
           'showGps': false,
+          'detailedGps': false,
           'walkedLineWidth': 3.0,
           'mapSizeKm': 4,
         });
@@ -434,7 +435,7 @@ void main() {
       );
       try {
         final walk = WalkCodec.importGpx(
-          '<gpx><trk><trkseg><trkpt lat="53.1" lon="8.80005"><time>2026-09-29T09:00:00Z</time></trkpt><trkpt lat="53.1" lon="8.80006"><time>2026-09-29T09:00:05Z</time></trkpt></trkseg></trk></gpx>',
+          '<gpx><trk><trkseg><trkpt lat="53.1" lon="8.80001"><time>2026-09-29T09:00:00Z</time></trkpt><trkpt lat="53.1" lon="8.80013"><time>2026-09-29T09:00:05Z</time></trkpt></trkseg></trk></gpx>',
         );
         controller.updateLive(walk);
         await Future<void>.delayed(const Duration(milliseconds: 20));

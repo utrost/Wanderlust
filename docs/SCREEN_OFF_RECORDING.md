@@ -17,7 +17,9 @@ or start a recording service.
 ## Work and battery budget
 
 - High-accuracy location requests use a five-second desired interval and a
-  five-metre distance filter. Actual delivery depends on the location provider.
+  five-metre distance filter by default. Settings → Detailed GPS requests two
+  seconds / two metres for the next walk, with higher battery use. Actual
+  delivery depends on the location provider.
 - No Wi-Fi lock, network upload, screen wake lock or constant notification update.
 - Display clocks and live map matching pause while hidden. On return, matching
   catches up with every unseen fix, retaining overlap for consecutive evidence.

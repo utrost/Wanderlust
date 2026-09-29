@@ -12,7 +12,7 @@ import '../recording/walk_store.dart';
 import 'coverage_store.dart';
 
 // Bump when matching rules change: old saved traces are then reprocessed once.
-const matchingRevision = 'consecutive-observations-osm-v3';
+const matchingRevision = 'motion-evidence-osm-v4';
 typedef MatchBatch = Future<List<MatchResult>> Function(String, List<String>);
 
 class CoverageFailure implements Exception {

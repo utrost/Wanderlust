@@ -3,12 +3,14 @@ class WalkPreferences {
     this.showTime = false,
     this.showSamples = false,
     this.showGps = false,
+    this.detailedGps = false,
     this.walkedLineWidth = 3,
     this.mapSizeKm = 4,
   });
   final bool showTime;
   final bool showSamples;
   final bool showGps;
+  final bool detailedGps;
 
   /// Maximum screen-space stroke width; keeps zoomed-in coverage legible.
   final double walkedLineWidth;
@@ -18,12 +20,14 @@ class WalkPreferences {
     bool? showTime,
     bool? showSamples,
     bool? showGps,
+    bool? detailedGps,
     double? walkedLineWidth,
     int? mapSizeKm,
   }) => WalkPreferences(
     showTime: showTime ?? this.showTime,
     showSamples: showSamples ?? this.showSamples,
     showGps: showGps ?? this.showGps,
+    detailedGps: detailedGps ?? this.detailedGps,
     walkedLineWidth: walkedLineWidth ?? this.walkedLineWidth,
     mapSizeKm: mapSizeKm ?? this.mapSizeKm,
   );
@@ -32,6 +36,7 @@ class WalkPreferences {
     'showTime': showTime,
     'showSamples': showSamples,
     'showGps': showGps,
+    'detailedGps': detailedGps,
     'walkedLineWidth': walkedLineWidth,
     'mapSizeKm': mapSizeKm,
   };
@@ -42,6 +47,7 @@ class WalkPreferences {
       showTime: json['showTime'] == true,
       showSamples: json['showSamples'] == true,
       showGps: json['showGps'] == true,
+      detailedGps: json['detailedGps'] == true,
       walkedLineWidth:
           width is num && width.isFinite && width >= 1 && width <= 6
           ? width.toDouble()

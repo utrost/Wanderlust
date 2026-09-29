@@ -122,7 +122,8 @@ pub fn walked_ids(graph: &Graph, result: &MatchResult) -> Vec<u64> {
 
 /// Match separate GPX segments without bridging outages, backwards clocks, or
 /// implausible speed. Each directly painted edge needs consecutive supporting
-/// fixes. Untimed GPX remains usable, but receives no inferred fill.
+/// fixes, along-edge movement and compatible travel direction. Untimed GPX
+/// remains usable, but receives no inferred fill.
 pub fn match_gpx_tracks(
     graph: &Graph,
     tracks: &[Vec<crate::gpx::TrackPoint>],
@@ -134,18 +135,49 @@ pub fn match_gpx_tracks(
         // common with walking GPS and must not become permanent coverage.
         let snapped: Vec<_> = track
             .iter()
-            .map(|p| graph.nearest_unambiguous_segment(p.pos, cfg.snap_radius_m))
+            .map(|p| {
+                if reliable(p) {
+                    graph.nearest_unambiguous_segment(p.pos, cfg.snap_radius_m)
+                } else {
+                    None
+                }
+            })
             .collect();
         let mut confirmed = vec![false; track.len()];
-        for i in 1..track.len() {
-            if let (Some((a, _)), Some((b, _))) = (snapped[i - 1], snapped[i]) {
-                let consecutive = continuous_seconds(&track[i - 1], &track[i]).is_some()
-                    || (track[i - 1].time.is_none() && track[i].time.is_none());
-                if a == b && consecutive {
-                    confirmed[i - 1] = true;
-                    confirmed[i] = true;
+        let mut start = 0;
+        while start < track.len() {
+            let Some((edge, _)) = snapped[start] else {
+                start += 1;
+                continue;
+            };
+            let mut end = start + 1;
+            while end < track.len()
+                && snapped[end].is_some_and(|(e, _)| e == edge)
+                && continuous(&track[end - 1], &track[end])
+            {
+                end += 1;
+            }
+            let segment = graph.segment(edge);
+            let required_progress = (segment.length_m() * 0.2).clamp(2.0, 4.0);
+            let mut low = f64::INFINITY;
+            let mut high = f64::NEG_INFINITY;
+            let mut supported = false;
+            for i in start..end {
+                if let Some((along, tangent)) = segment.project(track[i].pos) {
+                    low = low.min(along);
+                    high = high.max(along);
+                    if i > start
+                        && high - low >= required_progress
+                        && direction_supports(track, i, segment, tangent)
+                    {
+                        supported = true;
+                    }
                 }
             }
+            if supported {
+                confirmed[start..end].fill(true);
+            }
+            start = end;
         }
         for (i, observation) in snapped.iter().enumerate() {
             if confirmed[i] {
@@ -181,6 +213,66 @@ pub fn match_gpx_tracks(
         }
     }
     total
+}
+
+fn reliable(point: &crate::gpx::TrackPoint) -> bool {
+    point.accuracy_m.is_none_or(|metres| metres <= 25.0)
+}
+
+fn continuous(a: &crate::gpx::TrackPoint, b: &crate::gpx::TrackPoint) -> bool {
+    reliable(a)
+        && reliable(b)
+        && (continuous_seconds(a, b).is_some() || (a.time.is_none() && b.time.is_none()))
+}
+
+/// Estimate direction from spatial separation, not consecutive sample count.
+/// This remains conservative when Detailed GPS produces many nearby readings.
+/// Backward-only context gives the same decision during live and saved matching.
+fn direction_supports(
+    track: &[crate::gpx::TrackPoint],
+    i: usize,
+    segment: &crate::graph::Segment,
+    tangent: (f64, f64),
+) -> bool {
+    let baseline = (segment.length_m() * 0.5).clamp(4.0, 12.0);
+    let reference = segment.polyline[0].lat.to_radians();
+    let (x, y) = track[i].pos.to_xy(reference);
+    for j in (0..i).rev() {
+        // Small sample-to-sample jumps can be GPS noise. Direction uses a wider
+        // baseline; preserve time breaks and reject gross jumps, while direct
+        // confirmation and gap filling retain their stricter speed checks.
+        if !reliable(&track[j]) || !reliable(&track[j + 1]) {
+            break;
+        }
+        if track[j].time.is_some()
+            && track[j + 1].time.is_some()
+            && haversine_m(track[j].pos, track[j + 1].pos) > 50.0
+        {
+            break;
+        }
+        match (track[j].time, track[j + 1].time) {
+            (Some(a), Some(b)) if b <= a || (b - a).num_milliseconds() > 30_000 => break,
+            (None, Some(_)) | (Some(_), None) => break,
+            _ => (),
+        }
+        if let (Some(a), Some(b)) = (track[j].time, track[i].time) {
+            if (b - a).num_seconds() > 60 {
+                break;
+            }
+        }
+        let (ax, ay) = track[j].pos.to_xy(reference);
+        let (dx, dy) = (x - ax, y - ay);
+        let length = dx.hypot(dy);
+        if length + 1e-6 >= baseline {
+            // Undirected streets support walking either way, but not across them.
+            return ((dx * tangent.0 + dy * tangent.1) / length).abs() >= 0.707;
+        }
+        // Bound untimed imports too; dense recorded traces normally use time.
+        if i - j >= 60 {
+            break;
+        }
+    }
+    false
 }
 
 fn continuous_seconds(a: &crate::gpx::TrackPoint, b: &crate::gpx::TrackPoint) -> Option<f64> {
