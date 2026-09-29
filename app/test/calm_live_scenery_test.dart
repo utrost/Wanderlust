@@ -55,10 +55,7 @@ void main() {
           SqliteWalkStore(factory: databaseFactoryFfi, databasePath: path);
       var store = open();
       try {
-        expect(
-          (await store.readPreferences()).toJson().values.every((v) => !v),
-          isTrue,
-        );
+        expect((await store.readPreferences()).showTime, isFalse);
         await store.close();
         final db = await databaseFactoryFfi.openDatabase(path);
         await db.execute('DROP TABLE walk_preferences');
@@ -75,6 +72,8 @@ void main() {
           'showTime': true,
           'showSamples': true,
           'showGps': false,
+          'walkedLineWidth': 3.0,
+          'mapSizeKm': 4,
         });
       } finally {
         await store.close();

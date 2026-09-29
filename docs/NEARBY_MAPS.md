@@ -1,7 +1,10 @@
 # Downloadable nearby street maps
 
-**Offline maps → Download nearby map** saves a roughly 4 × 4 km square centered
-on the current/last GPS fix. The map screen also offers **Download a map here**
+**Offline maps → Download nearby map** saves a square centered on the current/last
+GPS fix. Choose **1–25 km per side**, in 1 km steps; the default is 4 × 4 km.
+The picker displays dimensions and total area (25 × 25 km = 625 km²) and remembers
+the choice. New map names include dimensions. Refreshing an existing map keeps
+its original bounds. The map screen also offers **Download a map here**
 when that fix is outside all saved maps. Within roughly 500 metres of the outer
 edge, a fresh GPS fix shows an edge warning and **Download more streets**.
 Internal seams covered by another saved map do not trigger a warning. Tap the area name to choose between
@@ -111,3 +114,12 @@ selected the saved map and displayed both offline maps without a storage error.
 value. Compile against android.jar, convert with d8, push classes.dex, and run
 with `CLASSPATH=<device dex path> app_process /system/bin MapCursorProbe` on a test
 device. This probe uses an in-memory database and does not change app data.
+
+## Download size limits
+
+The size selector changes the requested footprint; it does not guarantee that
+every 25 km square will fit. Downloads retain the existing bounded request,
+timeout, 16 MiB response/cache limits, and normalization limits. A large dense
+city area may need a smaller selection. Failed or cancelled downloads preserve
+existing maps and selection. Date-line-crossing footprints are rejected before
+network access. The selector makes the large-area caveat visible from 10 km up.

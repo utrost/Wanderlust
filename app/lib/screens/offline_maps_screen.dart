@@ -15,12 +15,16 @@ class OfflineMapsScreen extends StatefulWidget {
     required this.activeVersion,
     required this.onSelect,
     this.fetch,
+    this.initialSizeKm = 4,
+    this.onSizeChanged,
   });
   final AreaStore store;
   final Position? position;
   final String? activeVersion;
   final Future<bool> Function(String geojson, String? savedVersion) onSelect;
   final FetchMap? fetch;
+  final int initialSizeKm;
+  final Future<void> Function(int)? onSizeChanged;
 
   @override
   State<OfflineMapsScreen> createState() => _OfflineMapsScreenState();
@@ -35,6 +39,8 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
   bool _cancelRequested = false;
   String? _error;
   String? _active;
+  late int _sizeKm = widget.initialSizeKm.clamp(1, 25);
+  int? _previewSizeKm;
   String _progress = 'Loading saved maps…';
 
   @override
@@ -94,7 +100,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
     final p = widget.position;
     if (p == null) return;
     _progress = 'Downloading nearby streets…';
-    final area = NearbyArea.around(p.latitude, p.longitude);
+    final area = NearbyArea.around(p.latitude, p.longitude, sizeKm: _sizeKm);
     _cancelRequested = false;
     setState(() => _fetching = true);
     late final String source;
@@ -165,8 +171,46 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Save a roughly 4 × 4 km street map for offline walking and coverage. Parks and water are included for orientation. Saved maps appear together automatically. Internet is needed only for the download.',
+                    'Choose a square street map centred on your GPS fix for offline walking and coverage. Parks and water are included for orientation. Saved maps appear together automatically. Internet is needed only for the download.',
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${_previewSizeKm ?? _sizeKm} × ${_previewSizeKm ?? _sizeKm} km · ${(_previewSizeKm ?? _sizeKm) * (_previewSizeKm ?? _sizeKm)} km²',
+                    key: const Key('map-size-label'),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Slider(
+                    key: const Key('map-size'),
+                    min: 1,
+                    max: 25,
+                    divisions: 24,
+                    value: (_previewSizeKm ?? _sizeKm).toDouble(),
+                    label: '${_previewSizeKm ?? _sizeKm} km per side',
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() => _previewSizeKm = v.round()),
+                    onChangeEnd: _busy
+                        ? null
+                        : (v) {
+                            _progress = 'Saving map size…';
+                            _run(() async {
+                              try {
+                                await widget.onSizeChanged?.call(v.round());
+                                _sizeKm = v.round();
+                              } finally {
+                                _previewSizeKm = null;
+                              }
+                            });
+                          },
+                  ),
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [Text('1 km'), Text('25 km')],
+                  ),
+                  if ((_previewSizeKm ?? _sizeKm) >= 10)
+                    const Text(
+                      'Large areas take longer and may be too detailed to download. If a download fails, choose a smaller size.',
+                    ),
                   const SizedBox(height: 8),
                   if (widget.position case final p?)
                     Text(

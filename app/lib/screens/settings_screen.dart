@@ -18,6 +18,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late WalkPreferences value = widget.initial;
   bool busy = false;
+  double? _previewWidth;
   String? error;
   Future<void> change(WalkPreferences next) async {
     setState(() {
@@ -50,15 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SwitchListTile(
           title: const Text('Show elapsed time'),
           value: value.showTime,
-          onChanged: busy
-              ? null
-              : (v) => change(
-                  WalkPreferences(
-                    showTime: v,
-                    showSamples: value.showSamples,
-                    showGps: value.showGps,
-                  ),
-                ),
+          onChanged: busy ? null : (v) => change(value.copyWith(showTime: v)),
         ),
         SwitchListTile(
           title: const Text('Show GPS sample count'),
@@ -68,13 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: value.showSamples,
           onChanged: busy
               ? null
-              : (v) => change(
-                  WalkPreferences(
-                    showTime: value.showTime,
-                    showSamples: v,
-                    showGps: value.showGps,
-                  ),
-                ),
+              : (v) => change(value.copyWith(showSamples: v)),
         ),
         SwitchListTile(
           title: const Text('Show GPS details'),
@@ -82,15 +69,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'Coordinates, accuracy and time since the last fix.',
           ),
           value: value.showGps,
-          onChanged: busy
-              ? null
-              : (v) => change(
-                  WalkPreferences(
-                    showTime: value.showTime,
-                    showSamples: value.showSamples,
-                    showGps: v,
+          onChanged: busy ? null : (v) => change(value.copyWith(showGps: v)),
+        ),
+        const Divider(),
+        const ListTile(
+          title: Text('Walked line thickness'),
+          subtitle: Text('Make coloured streets finer or bolder.'),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            children: [
+              Semantics(
+                label: 'Walked line preview',
+                child: Container(
+                  height: _previewWidth ?? value.walkedLineWidth,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC4A080),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
+              ),
+              Slider(
+                key: const Key('walked-line-width'),
+                min: 1,
+                max: 6,
+                divisions: 10,
+                value: _previewWidth ?? value.walkedLineWidth,
+                onChanged: busy
+                    ? null
+                    : (v) => setState(() => _previewWidth = v),
+                onChangeEnd: busy
+                    ? null
+                    : (v) async {
+                        await change(value.copyWith(walkedLineWidth: v));
+                        if (mounted) setState(() => _previewWidth = null);
+                      },
+              ),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [Text('Fine'), Text('Bold')],
+              ),
+            ],
+          ),
         ),
         if (error != null)
           Padding(padding: const EdgeInsets.all(16), child: Text(error!)),

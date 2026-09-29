@@ -11,30 +11,52 @@ import 'osm_network.dart';
 class NearbyArea {
   NearbyArea(this.bbox);
   final List<double> bbox; // west, south, east, north
-  factory NearbyArea.around(double latitude, double longitude) {
+  factory NearbyArea.around(
+    double latitude,
+    double longitude, {
+    int sizeKm = 4,
+  }) {
+    if (sizeKm < 1 || sizeKm > 25) {
+      throw const FormatException(
+        'Choose a map size between 1 and 25 km per side.',
+      );
+    }
     if (!latitude.isFinite ||
         !longitude.isFinite ||
         latitude.abs() > 80 ||
-        longitude.abs() > 179.8) {
+        longitude.abs() > 180) {
       throw const FormatException(
         'Nearby downloads are not available at the poles or date line yet.',
       );
     }
-    const latRadius = 2000 / 111320;
+    final latRadius = sizeKm * 500 / 111320;
     final lonRadius = latRadius / math.cos(latitude * math.pi / 180);
     // Coarse bounds, not a precise GPS fix, go to the map service.
     double floor(double n) => (n * 10000).floor() / 10000;
     double ceil(double n) => (n * 10000).ceil() / 10000;
-    return NearbyArea([
+    final bbox = <double>[
       floor(longitude - lonRadius),
       floor(latitude - latRadius),
       ceil(longitude + lonRadius),
       ceil(latitude + latRadius),
-    ]);
+    ];
+    if (bbox[0] < -180 || bbox[2] > 180 || bbox[1] < -90 || bbox[3] > 90) {
+      throw const FormatException(
+        'This map would cross the date line or a pole. Choose a smaller size.',
+      );
+    }
+    return NearbyArea(bbox);
   }
   String get id => 'nearby-${bbox.join(',')}';
-  String get name =>
-      'Near ${((bbox[1] + bbox[3]) / 2).toStringAsFixed(3)}, ${((bbox[0] + bbox[2]) / 2).toStringAsFixed(3)}';
+  String get name {
+    final latitude = (bbox[1] + bbox[3]) / 2;
+    final width =
+        (OsmNetwork.metres([bbox[0], latitude], [bbox[2], latitude]) / 1000)
+            .round();
+    final height = ((bbox[3] - bbox[1]) * 111320 / 1000).round();
+    return 'Near ${latitude.toStringAsFixed(3)}, ${((bbox[0] + bbox[2]) / 2).toStringAsFixed(3)} · $width × $height km';
+  }
+
   String get query {
     final bounds = '${bbox[1]},${bbox[0]},${bbox[3]},${bbox[2]}';
     final scenery = [
@@ -80,7 +102,7 @@ class MapDownload {
       return await _fetch(client, area).timeout(const Duration(seconds: 75));
     } on TimeoutException {
       throw const FormatException(
-        'Map download timed out. Your saved maps are unchanged. Try again later.',
+        'Map download timed out. Your saved maps are unchanged. Choose a smaller size or retry later.',
       );
     } on SocketException {
       if (_cancelled) throw const FormatException('Map download cancelled.');
@@ -121,13 +143,17 @@ class MapDownload {
     }
     const maxBytes = 16 * 1024 * 1024;
     if (response.contentLength > maxBytes) {
-      throw const FormatException('Map download exceeds 16 MiB.');
+      throw const FormatException(
+        'This area is too detailed to download. Choose a smaller map size.',
+      );
     }
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in response) {
       if (_cancelled) throw const FormatException('Map download cancelled.');
       if (bytes.length + chunk.length > maxBytes) {
-        throw const FormatException('Map download exceeds 16 MiB.');
+        throw const FormatException(
+          'This area is too detailed to download. Choose a smaller map size.',
+        );
       }
       bytes.add(chunk);
     }

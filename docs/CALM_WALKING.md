@@ -1,59 +1,141 @@
-# Calm walking, live coverage and map scenery
+# Downloadable nearby street maps
 
-The walking screen hides elapsed time, GPS sample count, and technical GPS
-readings by default. Settings lets the user enable each separately. Preferences
-stay on the phone (SQLite schema v5); existing walks and maps are retained during
-migration. Distance, a quiet recording indicator, Stop, and useful location/map
-warnings remain visible. The former “pts” were raw GPS samples, never a score.
+**Offline maps → Download nearby map** saves a square centered on the current/last
+GPS fix. Choose **1–25 km per side**, in 1 km steps; the default is 4 × 4 km.
+The picker displays dimensions and total area (25 × 25 km = 625 km²) and remembers
+the choice. New map names include dimensions. Refreshing an existing map keeps
+its original bounds. The map screen also offers **Download a map here**
+when that fix is outside all saved maps. Within roughly 500 metres of the outer
+edge, a fresh GPS fix shows an edge warning and **Download more streets**.
+Internal seams covered by another saved map do not trigger a warning. Tap the area name to choose between
+the bundled Bremen center and previously downloaded maps. **Show map area**
+returns to the extent of the selected map; **Center on me** still centers GPS.
+All saved maps and the bundled map render together using the same camera;
+crossing into a saved neighbouring area needs no selection or internet. The
+selected map controls the initial view, not which streets can be displayed.
+Downloads remain manual. Outside saved areas, recording continues and coverage
+can be recovered after saving the walk and downloading the missing streets.
 
-“Street sections explored” replaces “street segments walked”. A section is a
-piece of the pedestrian graph split at junctions, map limits, and approximately
-60 metres along longer ways when an existing OSM node is available. It is not a
-whole named street or a goal. The Settings screen explains the distinction.
+Downloads include **street geometry** for matching plus decorative parks and
+water. Refresh older downloaded maps to add this scenery. Terrain, buildings
+and satellite imagery remain out of scope. See [calm walking](CALM_WALKING.md). This resolves coverage outside Bremen center
+without introducing a separate map whose streets cannot receive walk coverage.
 
-## Live colour
+## Data and offline behavior
 
-New GPS observations schedule a coalesced background match, normally within two
-seconds plus processing time. Repeated clock ticks do not schedule extra work.
-The most recent 80 observations use the same conservative native matcher as
-saved walks; confirmed preview sections accumulate for the current walk. The
-preview is provisional, stays in memory, and contributes at most one additional
-visit per section even where downloaded maps overlap. Ambiguous GPS observations
-may delay colouring. Saving matches the full recorded trace and replaces the
-preview with persisted counts without counting it twice. Temporary preview
-failures do not interrupt recording. This does not add background recording.
+- Downloads are explicitly initiated by the user. There is no automatic map
+  request on startup, GPS updates, or area selection.
+- A rounded bounding box goes to `https://overpass-api.de/api/interpreter`.
+  Recorded walks and the precise GPS fix are not sent. The screen explains this
+  before the download button. OSM attribution and ODbL information remain visible.
+- The downloaded OSM XML is normalized on a worker isolate with the same access
+  policy, junction rules, and 52-bit OSM way/node-chain edge IDs as the Python
+  builder. Distinct OSM nodes are never connected just because they are nearby.
+- Complete, validated GeoJSON is stored in SQLite. The selected map survives app
+  restart; opening a downloaded map needs no internet. Interrupted, cancelled,
+  malformed, and failed downloads leave existing maps and raw walks intact.
+- Saved walks are processed against every saved network. Coverage remains
+  scoped to each map version in storage. Display counts use distinct walk IDs
+  per street across all loaded maps, so overlaps never count a walk twice. A queued match always finishes against its
+  original network before another network can become active.
+- Walk recording may continue while downloading. The active walk shows provisional live colour;
+  saved coverage is confirmed when the walk is saved. Downloads use the GPS fix displayed when
+  the map picker was opened, not a moving request boundary.
+- Up to eight downloaded maps can be kept, each at most 16 MiB. Remove unused
+  downloads in the picker. Removing the selected download returns to the bundled
+  map; raw walks and existing derived coverage records are retained.
+- A walk backup contains the raw walks, not downloaded maps. After reinstalling,
+  restore the walks and download the desired areas again to rebuild coverage.
 
-## Parks and water
+Schema v4 adds `offline_area` and `offline_selection`. The foreign key prevents
+selection of missing maps and clears selection when the selected cache is removed.
+The bundled network remains an asset and requires no download.
 
-New nearby downloads include parks, gardens, green areas, woods, water areas and
-river/stream/canal lines. Offline maps offers **Refresh map with parks and water**
-for older downloads; it uses that saved area's bounds, requires internet and does
-not require a GPS fix. Refresh sends the saved area to the same Overpass service.
-The bundled legacy Bremen map remains usable; download a nearby area for scenery.
+Downloads have a 15-second connection timeout and 75-second total timeout, a
+bounded response size, and a Cancel control. No background retries or bulk
+requests are made. The current small personal-testing use relies on a public
+Overpass instance, whose availability is not guaranteed. Public rollout needs a
+hosted extraction service or prepared region packages; see the provider's
+[resource-sharing guidance](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html).
+Polar regions and date-line-crossing downloads are not supported in this slice.
 
-Decorative geometry lives in `wanderlust_scenery`, separately from street graph
-features. Multipolygon pieces join by OSM node identity, island holes remain
-holes, and incomplete rings are omitted rather than closed across missing data.
-The painter clips scenery to each downloaded area and paints it underneath the
-streets. No park, lake or river contributes to walked counts or graph connections.
-Old map files without scenery still work. Streets keep their existing identities
-when only scenery changes. Stroke widths are limited at high zoom for legibility.
+## Evaluation and phone checks
 
-## Validation
+Boundary update validation: **67 tests passed**, with the optional live endpoint
+evaluation skipped. Includes a real Rust walk spanning two overlapping maps,
+union boundaries (overlap, touching edges, gaps and corners), stale GPS warnings,
+camera continuity and distinct-walk aggregation.
 
-77 tests passed locally with native matching and the optional scenery evaluation;
-analysis is clean. Tests cover calm defaults and settings migration/persistence,
-failed preference saves, live matching before save, coalesced updates, late results
-from a previous walk, failure recovery, save idempotency, geometry identity,
-multipolygon joining and holes, actual rendered pixels, and refreshing without GPS.
+Original download validation: **61 tests passed**, including native downloaded-map coverage
+and the optional live-data evaluation. `flutter analyze` is clean.
 
-The public Bremen-Vegesack example response was 2,635,954 bytes. It normalized to
-5,234 street sections and 448 scenery features (1,795,248 bytes), accepted by the
-native matcher. This is public test data, not the user's recorded route.
+A live download for a **public Bremen-Vegesack example area** (bbox
+`8.58,53.15,8.64,53.186`, not the tester's location) returned 1,788,846 bytes of OSM
+XML. Mobile normalization produced **5,234 edges / 1,544,436 bytes** of GeoJSON,
+accepted by the actual Rust matcher. This checks the network path and graph
+contract; it is not a field evaluation of GPS accuracy in Vegesack.
 
-Android API 35 emulator validation with the real Vegesack map: a simulated walk
-showed one explored section while recording was active, then retained exactly
-one after Stop/save. The default panel showed distance and Stop without elapsed
-time or sample count. All optional details fit on the 360 logical-pixel-wide
-screen, and all three preferences survived a process restart. Parks and the river
-were visually inspected in the actual offline Android view.
+The mobile builder reproduces all **7,930 edge IDs and geometries** of the bundled
+Bremen network from its original OSM snapshot. Automated tests also cover invalid
+responses, access restrictions, real local HTTP request/response handling, a busy
+server, offline persistence after restart, schema migration, serialized area
+switches, preserved old counts, UI cancellation, and failed selection/downloads.
+
+On the phone:
+
+1. Tap **Center on me** and verify the fix/coordinates. If outside the current
+   map, tap **Download a map here**.
+2. Tap **Download nearby map** with internet enabled. Confirm local streets appear
+   and the selected-area title changes.
+3. Turn on airplane mode, restart Wanderlust, and confirm the downloaded streets
+   still appear. Map selection itself must not require a connection.
+4. Record and save a short walk, or restore/import an existing nearby trace.
+   Check that its coverage appears in the selected area.
+5. Switch to Bremen center and back. Verify existing counts survive and are not
+   added twice. Cancel a download and test a disconnected download: saved maps
+   must remain available.
+
+## Android large-map loading fix
+
+Android's SQLite cursor window can reject a multi-megabyte result row even when
+SQLite successfully stored it. The previous `SELECT geojson` read could therefore
+save a download but fail to activate it, or fail to reopen it after restart.
+All cached-map reads now use `length` plus 128K-character `substr` chunks in one
+transaction, including the active-map startup path. Each row is at most 512 KiB
+of UTF-8 text. Existing stored maps need no migration or redownload for this fix.
+SQLite character offsets are used, preserving non-BMP Unicode across chunks.
+
+Validation: 68 Flutter tests passed (optional live endpoint test skipped), clean
+analysis, and a verified Android APK. On an Android API 35 emulator, the previous
+APK failed to open a 2.5 MB saved map; the fixed APK opened the identical database,
+selected the saved map and displayed both offline maps without a storage error.
+`tools/android/MapCursorProbe.java` independently reproduces the old
+`SQLiteBlobTooBigException` and verifies the chunked query with a large Unicode
+value. Compile against android.jar, convert with d8, push classes.dex, and run
+with `CLASSPATH=<device dex path> app_process /system/bin MapCursorProbe` on a test
+device. This probe uses an in-memory database and does not change app data.
+
+## Download size limits
+
+The size selector changes the requested footprint; it does not guarantee that
+every 25 km square will fit. Downloads retain the existing bounded request,
+timeout, 16 MiB response/cache limits, and normalization limits. A large dense
+city area may need a smaller selection. Failed or cancelled downloads preserve
+existing maps and selection. Date-line-crossing footprints are rejected before
+network access. The selector makes the large-area caveat visible from 10 km up.
+
+## Adjustable map controls
+
+Settings now offers a Fine–Bold walked-line thickness slider with a stroke
+preview. The new default is one-third thinner than the previous version (3
+rather than 4.5 logical pixels at the high-zoom cap); the adjustable cap is 1–6.
+Unwalked streets, water, matching and coverage counts are unchanged. Changes
+preserve the current camera. Preferences also remember the download side length
+from the Offline maps picker; old preference JSON uses the thinner default and
+the existing 4 km map size without a schema migration.
+
+Validation for this update: 82 regression tests passed with native matching
+enabled (two optional live-data evaluations skipped), clean analysis, and
+focused tests for actual rendered stroke pixels, persisted controls, legacy and
+invalid settings, dimensions at 1/4/10/25 km, date-line handling, failed preference
+saves and preservation of existing maps after failed large downloads.

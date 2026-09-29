@@ -20,12 +20,14 @@ class AreaMap extends StatefulWidget {
     required this.network,
     required this.counts,
     this.networks = const [],
+    this.walkedLineWidth = 3,
     this.position,
     this.stale = false,
     this.centerRequest = 0,
     this.areaRequest = 0,
   });
   final List<AreaNetwork> networks;
+  final double walkedLineWidth;
   final AreaNetwork network;
   final Map<int, int> counts;
   final Position? position;
@@ -115,6 +117,7 @@ class _AreaMapState extends State<AreaMap> {
                   network: widget.network,
                   networks: widget.networks,
                   counts: widget.counts,
+                  walkedLineWidth: widget.walkedLineWidth,
                   transform: _transform.value.clone(),
                 ),
               ),
@@ -208,9 +211,11 @@ class AreaMapPainter extends CustomPainter {
     required this.network,
     required this.counts,
     this.networks = const [],
+    this.walkedLineWidth = 3,
     this.transform,
   });
   final List<AreaNetwork> networks;
+  final double walkedLineWidth;
   final Matrix4? transform;
   final AreaNetwork network;
   final Map<int, int> counts;
@@ -271,7 +276,13 @@ class AreaMapPainter extends CustomPainter {
         ..strokeWidth =
             (count == 0
                 ? math.min(1.5, 0.65 * math.sqrt(zoom))
-                : math.min(4.5, HeatRamp.width(count) * math.sqrt(zoom))) /
+                : math.min(
+                    walkedLineWidth,
+                    HeatRamp.width(count) *
+                        math.sqrt(zoom) *
+                        walkedLineWidth /
+                        4.5,
+                  )) /
             zoom;
       final path = Path();
       for (var i = 0; i < edge.points.length; i++) {
@@ -308,5 +319,6 @@ class AreaMapPainter extends CustomPainter {
       oldDelegate.network != network ||
       oldDelegate.counts != counts ||
       oldDelegate.networks != networks ||
+      oldDelegate.walkedLineWidth != walkedLineWidth ||
       oldDelegate.transform != transform;
 }

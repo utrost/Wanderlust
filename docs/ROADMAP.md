@@ -62,7 +62,7 @@ The smallest thing that delivers the core joy: walk → map fills.
   GPS HUD are implemented. Continuous updates during recording and the richer
   PMTiles basemap remain pending
   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
-- 🟡 **Area selection**: GPS-centered 4 × 4 km street downloads, persistent
+- 🟡 **Area selection**: GPS-centered 1–25 km-per-side street downloads (4 km default), persistent
   offline map picker, and per-area coverage implemented. Admin boundaries, drawn
   rectangles, and per-area PMTiles remain open. See [nearby maps](NEARBY_MAPS.md).
 - 🟢 **GPX import** — document picker, strict validation, segment/time preservation,

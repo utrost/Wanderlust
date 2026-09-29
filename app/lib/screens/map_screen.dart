@@ -128,6 +128,12 @@ class _MapScreenState extends State<MapScreen> {
         builder: (_) => OfflineMapsScreen(
           store: _store,
           position: _currentFix,
+          initialSizeKm: _preferences.mapSizeKm,
+          onSizeChanged: (size) async {
+            final value = _preferences.copyWith(mapSizeKm: size);
+            await _store.savePreferences(value);
+            if (mounted) setState(() => _preferences = value);
+          },
           activeVersion: _coverage.network?.version,
           onSelect: (source, version) async {
             final ok = await _coverage.useNetwork(
@@ -222,6 +228,7 @@ class _MapScreenState extends State<MapScreen> {
                     network: _coverage.network!,
                     networks: _coverage.networks,
                     counts: _coverage.displayCounts,
+                    walkedLineWidth: _preferences.walkedLineWidth,
                     position: _currentFix,
                     stale:
                         _currentFix != null &&

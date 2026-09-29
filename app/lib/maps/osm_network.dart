@@ -93,7 +93,9 @@ class OsmNetwork {
     required String name,
   }) {
     if (utf8.encode(xml).length > 16 * 1024 * 1024) {
-      throw const FormatException('Map response is too large.');
+      throw const FormatException(
+        'This area is too detailed to download. Choose a smaller map size.',
+      );
     }
     if (bbox.length != 4 ||
         bbox.any((v) => !v.isFinite) ||
@@ -111,7 +113,7 @@ class OsmNetwork {
         root.findAllElements('remark').isNotEmpty ||
         doc.children.any((n) => n is XmlDoctype)) {
       throw const FormatException(
-        'Map server returned incomplete data. Try again later.',
+        'Map server returned incomplete data. Choose a smaller size or retry later.',
       );
     }
     Map<String, String> tags(XmlElement e) => {

@@ -161,8 +161,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.ensureVisible(
+      await tester.scrollUntilVisible(
         find.byTooltip('Refresh map with parks and water'),
+        200,
       );
       await tester.tap(find.byTooltip('Refresh map with parks and water'));
       await tester.pumpAndSettle();
@@ -204,6 +205,7 @@ void main() {
           .onPressed,
       isNull,
     );
+    await tester.scrollUntilVisible(find.text('Example area'), 200);
     await tester.tap(find.text('Example area'));
     await tester.pumpAndSettle();
     expect(selected, isTrue);
