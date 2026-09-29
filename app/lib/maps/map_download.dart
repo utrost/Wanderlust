@@ -69,6 +69,7 @@ class NearbyArea {
     ].join();
     return '[out:xml][timeout:45][maxsize:33554432];('
         'way["highway"]($bounds);'
+        'node["place"~"^(city|town|village|hamlet|suburb|quarter|neighbourhood)\$"]($bounds);'
         'way["waterway"~"^(river|stream|canal|drain|riverbank)\$"]($bounds);'
         '$scenery);(._;>>;);out body;';
   }

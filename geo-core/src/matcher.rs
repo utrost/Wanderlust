@@ -44,6 +44,8 @@ impl Default for MatchConfig {
 #[derive(Debug, Default, Clone)]
 pub struct MatchResult {
     pub walked: HashSet<usize>,
+    /// Walked edges supported only by route inference, not direct observations.
+    pub inferred: HashSet<usize>,
     pub gaps_filled: usize,
     pub gaps_rejected: usize,
 }
@@ -133,6 +135,7 @@ pub fn match_gpx_tracks(
     cfg: MatchConfig,
 ) -> MatchResult {
     let mut total = MatchResult::default();
+    let mut direct = HashSet::new();
     for track in tracks {
         // Snap once per fix. Single-fix excursions onto another street are
         // common with walking GPS and must not become permanent coverage.
@@ -186,6 +189,7 @@ pub fn match_gpx_tracks(
             if confirmed[i] {
                 if let Some((edge, _)) = observation {
                     total.walked.insert(*edge);
+                    direct.insert(*edge);
                 }
             }
         }
@@ -218,6 +222,7 @@ pub fn match_gpx_tracks(
             }
         }
     }
+    total.inferred = total.walked.difference(&direct).copied().collect();
     total
 }
 

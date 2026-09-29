@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../recording/walk_store.dart';
+import '../data/area_network.dart';
+import 'walk_review_screen.dart';
 import '../transfer/walk_codec.dart';
 import '../transfer/walk_files.dart';
 
@@ -23,11 +25,15 @@ class WalkLibraryScreen extends StatefulWidget {
     required this.onChanged,
     this.files,
     this.showSamples = false,
+    this.networks = const [],
+    this.fillSmallGaps = false,
   });
   final SqliteWalkStore store;
   final Future<void> Function() onChanged;
   final WalkFiles? files;
   final bool showSamples;
+  final List<AreaNetwork> networks;
+  final bool fillSmallGaps;
 
   @override
   State<WalkLibraryScreen> createState() => _WalkLibraryScreenState();
@@ -171,6 +177,18 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                     itemBuilder: (context, index) {
                       final walk = _walks[index];
                       return ListTile(
+                        onTap: _busy
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => WalkReviewScreen(
+                                    walk: walk,
+                                    networks: widget.networks,
+                                    fillSmallGaps: widget.fillSmallGaps,
+                                  ),
+                                ),
+                              ),
+                        leading: const Icon(Icons.route_outlined),
                         title: Text(
                           walk.untimed.length == walk.points.length &&
                                   walk.points.isNotEmpty
@@ -182,7 +200,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                     .first,
                         ),
                         subtitle: Text(
-                          '${walk.status}${widget.showSamples ? ' · ${walk.points.length} GPS samples' : ''}',
+                          '${walk.status} · Tap to review${widget.showSamples ? ' · ${walk.points.length} GPS samples' : ''}',
                         ),
                         trailing: IconButton(
                           tooltip: 'Export GPX',

@@ -91,8 +91,13 @@ pub unsafe extern "C" fn wanderlust_match_gpx_options(
             Err(message) => return serde_json::json!({"error": message}).to_string(),
         };
         let ids = matcher.walked_ids(&result);
+        let inferred = matcher.walked_ids(&geo_core::MatchResult {
+            walked: result.inferred.clone(),
+            ..Default::default()
+        });
         serde_json::json!({
             "walked": ids,
+            "inferred": inferred,
             "gaps_filled": result.gaps_filled,
             "gaps_rejected": result.gaps_rejected,
         })

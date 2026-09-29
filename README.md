@@ -140,3 +140,8 @@ see [matching changes, regression tests and limits](docs/MATCHING_EVIDENCE.md).
 between confidently matched parts of a walk. It updates both live and saved
 walks; switch it off to remove the extra estimates. Ambiguous routes and long GPS
 outages remain unfilled. See [matching evidence](docs/MATCHING_EVIDENCE.md).
+
+**Saved walks → tap a walk** opens a read-only review with GPS, matched streets
+and dashed inferred gaps. Preview gap filling there without changing your saved
+coverage. Street labels work with existing maps; refresh downloaded maps to add
+place labels and clearer area names. See [walk review](docs/WALK_REVIEW.md).

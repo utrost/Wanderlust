@@ -132,3 +132,26 @@ fn off_route_excursion_does_not_become_a_straight_connection() {
     }
     assert_eq!(ids(&graph, &[points], true), vec![1, 3]);
 }
+
+#[test]
+fn review_provenance_distinguishes_inference_and_direct_evidence_across_segments() {
+    let graph = network(false);
+    let config = MatchConfig {
+        fill_small_gaps: true,
+        ..MatchConfig::default()
+    };
+    let result = match_gpx_tracks(&graph, &[track()], config);
+    assert_eq!(result.inferred, [1usize].into_iter().collect());
+    assert!(result.inferred.is_subset(&result.walked));
+    let mut sparse = track();
+    sparse.remove(3);
+    let default_fill = match_gpx_tracks(&graph, &[sparse], MatchConfig::default());
+    assert_eq!(default_fill.inferred, [1usize].into_iter().collect());
+    // Later direct observations of the middle street override its earlier inference.
+    let mut middle = track();
+    for (i, p) in middle.iter_mut().enumerate() {
+        p.pos = pos(34. + i as f64 * 3., 0.);
+    }
+    let result = match_gpx_tracks(&graph, &[track(), middle], config);
+    assert!(result.inferred.is_empty());
+}

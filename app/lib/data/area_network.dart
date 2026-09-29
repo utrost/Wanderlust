@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'map_scenery.dart';
+import 'map_place.dart';
 
 class AreaEdge {
   const AreaEdge(this.id, this.points, this.name);
@@ -21,6 +22,7 @@ class AreaNetwork {
     this.edges,
     this.attribution,
     this.scenery,
+    this.places,
   );
   final String geojson;
   final String areaId;
@@ -30,6 +32,7 @@ class AreaNetwork {
   final List<AreaEdge> edges;
   final String attribution;
   final List<MapScenery> scenery;
+  final List<MapPlace> places;
   late final Set<int> edgeIds = edges.map((e) => e.id).toSet();
 
   factory AreaNetwork.parse(String source) {
@@ -101,8 +104,28 @@ class AreaNetwork {
         for (final s in json['wanderlust_scenery'] as List? ?? [])
           MapScenery.parse(s as Map<String, dynamic>),
       ],
+      [
+        for (final p
+            in json['wanderlust_places'] is List
+                ? json['wanderlust_places'] as List
+                : [])
+          if (MapPlace.tryParse(p) case final place?) place,
+      ],
     );
   }
+
+  /// Projection-only bounds for reviewing a trace; source geometry stays intact.
+  AreaNetwork withViewport(List<double> bounds) => AreaNetwork._(
+    geojson,
+    areaId,
+    name,
+    version,
+    bounds,
+    edges,
+    attribution,
+    scenery,
+    places,
+  );
 
   bool contains(Offset coordinate) =>
       coordinate.dx >= bbox[0] &&

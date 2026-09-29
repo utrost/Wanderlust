@@ -31,12 +31,14 @@ typedef _FreeString = void Function(Pointer<Utf8>);
 class MatchResult {
   const MatchResult({
     required this.walked,
+    this.inferred = const [],
     required this.gapsFilled,
     required this.gapsRejected,
   });
 
   /// Segment ids the walker plausibly traversed.
   final List<int> walked;
+  final List<int> inferred;
 
   /// Gaps the guardrail bridged with a shortest path.
   final int gapsFilled;
@@ -46,6 +48,7 @@ class MatchResult {
 
   factory MatchResult.fromJson(Map<String, dynamic> j) => MatchResult(
     walked: (j['walked'] as List).cast<int>(),
+    inferred: (j['inferred'] as List? ?? []).cast<int>(),
     gapsFilled: j['gaps_filled'] as int,
     gapsRejected: j['gaps_rejected'] as int,
   );

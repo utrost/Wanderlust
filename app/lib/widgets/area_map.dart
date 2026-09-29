@@ -5,6 +5,8 @@ import 'package:geolocator/geolocator.dart';
 
 import '../data/area_network.dart';
 import '../theme/heat_ramp.dart';
+import 'map_labels.dart';
+import 'walk_overlay.dart';
 
 /// Offline street geometry, with exactly the ids and coordinates used by Rust.
 /// This is a street coverage view; the richer PMTiles basemap is still pending.
@@ -15,13 +17,16 @@ Offset mapPoint(AreaNetwork network, Offset coordinate, Size size) =>
     network.project(coordinate, mapDrawingSize(size)) + const Offset(12, 80);
 
 // Preserve walking-scale zoom as downloaded footprints grow beyond 4 km.
-double mapZoomFactor(AreaNetwork network) {
+double mapSpanKm(AreaNetwork network) {
   final b = network.bbox;
   final width =
       (b[2] - b[0]) * math.cos((b[1] + b[3]) / 2 * math.pi / 180) * 111320;
   final height = (b[3] - b[1]) * 111320;
-  return math.max(1, math.max(width, height) / 4000);
+  return math.max(width, height) / 1000;
 }
+
+double mapZoomFactor(AreaNetwork network) =>
+    math.max(1, mapSpanKm(network) / 4);
 
 class AreaMap extends StatefulWidget {
   const AreaMap({
@@ -30,19 +35,27 @@ class AreaMap extends StatefulWidget {
     required this.counts,
     this.networks = const [],
     this.walkedLineWidth = 3,
+    this.coverageScreenWidth,
     this.position,
     this.stale = false,
     this.centerRequest = 0,
     this.areaRequest = 0,
+    this.trace = const [],
+    this.inferred = const {},
+    this.fitCoordinates = const [],
   });
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
+  final double? coverageScreenWidth;
   final AreaNetwork network;
   final Map<int, int> counts;
   final Position? position;
   final bool stale;
   final int centerRequest;
   final int areaRequest;
+  final List<List<Offset>> trace;
+  final Set<int> inferred;
+  final List<Offset> fitCoordinates;
 
   @override
   State<AreaMap> createState() => _AreaMapState();
@@ -52,6 +65,7 @@ class _AreaMapState extends State<AreaMap> {
   final _transform = TransformationController();
   Size? _size;
   bool _pendingCenter = false;
+  bool _pendingFit = true;
 
   @override
   void initState() {
@@ -66,6 +80,7 @@ class _AreaMapState extends State<AreaMap> {
         widget.network.version != oldWidget.network.version) {
       _pendingCenter = false;
       _transform.value = Matrix4.identity();
+      _pendingFit = true;
     } else if (widget.centerRequest != oldWidget.centerRequest) {
       _pendingCenter = true;
     }
@@ -107,6 +122,30 @@ class _AreaMapState extends State<AreaMap> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, bounds) {
       _size = bounds.biggest;
+      if (_pendingFit && widget.fitCoordinates.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_pendingFit) return;
+          final points = widget.fitCoordinates
+              .map((p) => mapPoint(widget.network, p, _size!))
+              .toList();
+          final xs = points.map((p) => p.dx).toList()..sort();
+          final ys = points.map((p) => p.dy).toList()..sort();
+          final rect = Rect.fromLTRB(xs.first, ys.first, xs.last, ys.last);
+          final scale = math
+              .min(
+                (_size!.width - 48) / math.max(rect.width, 1),
+                (_size!.height - 48) / math.max(rect.height, 1),
+              )
+              .clamp(1.0, 12 * mapZoomFactor(widget.network));
+          _transform.value = Matrix4.diagonal3Values(scale, scale, 1)
+            ..setTranslationRaw(
+              _size!.width / 2 - rect.center.dx * scale,
+              _size!.height / 2 - rect.center.dy * scale,
+              0,
+            );
+          _pendingFit = false;
+        });
+      }
       if (_pendingCenter) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _centerIfReady());
       }
@@ -130,7 +169,11 @@ class _AreaMapState extends State<AreaMap> {
                   networks: widget.networks,
                   counts: widget.counts,
                   walkedLineWidth: widget.walkedLineWidth,
+                  coverageScreenWidth: widget.coverageScreenWidth,
                   transform: _transform.value.clone(),
+                  trace: widget.trace,
+                  inferred: widget.inferred,
+                  textScale: MediaQuery.textScalerOf(context).scale(12) / 12,
                 ),
               ),
             ),
@@ -224,13 +267,21 @@ class AreaMapPainter extends CustomPainter {
     required this.counts,
     this.networks = const [],
     this.walkedLineWidth = 3,
+    this.coverageScreenWidth,
     this.transform,
+    this.trace = const [],
+    this.inferred = const {},
+    this.textScale = 1,
   });
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
+  final double? coverageScreenWidth;
   final Matrix4? transform;
   final AreaNetwork network;
   final Map<int, int> counts;
+  final List<List<Offset>> trace;
+  final Set<int> inferred;
+  final double textScale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -288,13 +339,14 @@ class AreaMapPainter extends CustomPainter {
         ..strokeWidth =
             (count == 0
                 ? math.min(1.5, 0.65 * math.sqrt(zoom))
-                : math.min(
-                    walkedLineWidth,
-                    HeatRamp.width(count) *
-                        math.sqrt(zoom) *
-                        walkedLineWidth /
-                        4.5,
-                  )) /
+                : coverageScreenWidth ??
+                      math.min(
+                        walkedLineWidth,
+                        HeatRamp.width(count) *
+                            math.sqrt(zoom) *
+                            walkedLineWidth /
+                            4.5,
+                      )) /
             zoom;
       final path = Path();
       for (var i = 0; i < edge.points.length; i++) {
@@ -324,6 +376,25 @@ class AreaMapPainter extends CustomPainter {
       draw(edge, counts[edge.id]!);
     }
     canvas.restore();
+    Offset project(Offset p) => MatrixUtils.transformPoint(
+      transform ?? Matrix4.identity(),
+      mapPoint(network, p, size),
+    );
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    paintMapLabels(
+      canvas,
+      layoutMapLabels(
+        maps.toList(),
+        size,
+        project,
+        streets: mapSpanKm(network) / zoom <= 2,
+        textScale: textScale,
+      ),
+      textScale,
+    );
+    paintWalkOverlay(canvas, maps.toList(), inferred, trace, project);
+    canvas.restore();
   }
 
   @override
@@ -332,5 +403,9 @@ class AreaMapPainter extends CustomPainter {
       oldDelegate.counts != counts ||
       oldDelegate.networks != networks ||
       oldDelegate.walkedLineWidth != walkedLineWidth ||
+      oldDelegate.coverageScreenWidth != coverageScreenWidth ||
+      oldDelegate.trace != trace ||
+      oldDelegate.inferred != inferred ||
+      oldDelegate.textScale != textScale ||
       oldDelegate.transform != transform;
 }

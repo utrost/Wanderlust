@@ -63,7 +63,8 @@ The smallest thing that delivers the core joy: walk → map fills.
   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
 - 🟢 **Filling street map**: live provisional colour/section counts, saved counts,
   GPS marker/recenter, calm optional details and adjustable line thickness exist.
-  Parks and water render offline; labels and richer basemap styling remain open.
+  Parks and water render offline; restrained street/place labels are implemented.
+  Richer basemap styling remains open.
 - 🟡 **Area selection**: GPS-centered 1–25 km-per-side street downloads (4 km default), persistent
   offline map picker, and per-area coverage implemented. Admin boundaries, drawn
   rectangles, and per-area PMTiles remain open. See [nearby maps](NEARBY_MAPS.md).
@@ -126,7 +127,8 @@ The one routing-adjacent feature, deliberately last.
    and an explicit fresh-location option before selecting download bounds.
 5. **Backup completeness and phone dialogs** — include settings and optionally
    offline maps; exercise Android import/export/restore selectors on device.
-6. **Map presentation** — street/place labels and clearer area names; evaluate
+6. **Map presentation** — street/place labels and clearer area names are implemented.
+   Refresh older downloads for place labels and automatic area naming. Evaluate
    MapLibre/PMTiles against the existing offline renderer before adopting it.
 
 ---
@@ -171,3 +173,13 @@ turning it off removes the extra estimates. Synthetic routes and native
 persistence tests pass; the next field check is the same walk with the setting
 on/off, comparing recovered gaps against the route actually walked. See
 [MATCHING_EVIDENCE.md](MATCHING_EVIDENCE.md#optional-short-gap-interpolation).
+
+### Walk review and offline labels (implemented)
+
+Saved walks now open a read-only review map with independent GPS trace, directly
+matched streets and dashed inferred-connection layers. Gap filling can be
+previewed without changing saved coverage. Street labels work with existing map
+data; new/refreshed downloads add place and landmark names and readable area
+names. See [WALK_REVIEW.md](WALK_REVIEW.md). Next: use exported phone traces and
+this review screen to identify remaining matching errors; validate label density
+and readability on the actual phone.

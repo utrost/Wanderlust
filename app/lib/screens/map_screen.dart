@@ -567,6 +567,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         builder: (_) => WalkLibraryScreen(
           store: _store,
           showSamples: _preferences.showSamples,
+          networks: _coverage.networks,
+          fillSmallGaps: _preferences.fillSmallGaps,
           onChanged: () async {
             await _recorder.refreshSavedWalks();
             await _coverage.synchronize(_recorder.savedWalks);

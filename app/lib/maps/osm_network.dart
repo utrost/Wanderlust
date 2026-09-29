@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:crypto/crypto.dart';
 import 'package:xml/xml.dart';
 import 'osm_scenery.dart';
+import 'osm_places.dart';
 
 /// Same pedestrian policy and node-chain identities as tools/build_network.py.
 /// Raw OSM nodes remain graph junctions; proximity never joins bridges.
@@ -258,13 +259,15 @@ class OsmNetwork {
           ),
         )
         .toString();
+    final scenery = OsmScenery.extract(root, nodes);
+    final places = OsmPlaces.extract(root, bbox, scenery);
     return jsonEncode({
       'type': 'FeatureCollection',
       'bbox': bbox,
       'wanderlust_network': {
         'version': 1,
         'area_id': areaId,
-        'name': name,
+        'name': OsmPlaces.areaName(name, bbox, places, ordered),
         'network_version': version,
         'policy': policy,
         'edge_id_scheme': 'sha256-osm-way-node-chain-52bit-v2',
@@ -277,7 +280,8 @@ class OsmNetwork {
             '',
       },
       'features': ordered,
-      'wanderlust_scenery': OsmScenery.extract(root, nodes),
+      'wanderlust_scenery': scenery,
+      'wanderlust_places': places,
     });
   }
 }
