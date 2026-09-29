@@ -14,6 +14,15 @@ Size mapDrawingSize(Size size) =>
 Offset mapPoint(AreaNetwork network, Offset coordinate, Size size) =>
     network.project(coordinate, mapDrawingSize(size)) + const Offset(12, 80);
 
+// Preserve walking-scale zoom as downloaded footprints grow beyond 4 km.
+double mapZoomFactor(AreaNetwork network) {
+  final b = network.bbox;
+  final width =
+      (b[2] - b[0]) * math.cos((b[1] + b[3]) / 2 * math.pi / 180) * 111320;
+  final height = (b[3] - b[1]) * 111320;
+  return math.max(1, math.max(width, height) / 4000);
+}
+
 class AreaMap extends StatefulWidget {
   const AreaMap({
     super.key,
@@ -75,7 +84,10 @@ class _AreaMapState extends State<AreaMap> {
       Offset(p.longitude, p.latitude),
       _size!,
     );
-    final scale = math.max(4.0, _transform.value.getMaxScaleOnAxis());
+    final scale = math.max(
+      4.0 * mapZoomFactor(widget.network),
+      _transform.value.getMaxScaleOnAxis(),
+    );
     _transform.value = Matrix4.diagonal3Values(scale, scale, 1)
       ..setTranslationRaw(
         _size!.width / 2 - point.dx * scale,
@@ -105,7 +117,7 @@ class _AreaMapState extends State<AreaMap> {
             transformationController: _transform,
             boundaryMargin: const EdgeInsets.all(double.infinity),
             minScale: 1,
-            maxScale: 12,
+            maxScale: 12 * mapZoomFactor(widget.network),
             onInteractionStart: (_) => _pendingCenter = false,
             child: const SizedBox.expand(),
           ),

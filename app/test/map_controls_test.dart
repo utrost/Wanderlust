@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -43,6 +44,36 @@ void main() {
     );
     expect(() => NearbyArea.around(79, 179.9, sizeKm: 1), returnsNormally);
   });
+  testWidgets(
+    'large maps retain walking-scale centering and adequate pinch zoom',
+    (tester) async {
+      final json = jsonDecode(networkJson()) as Map<String, dynamic>;
+      json['bbox'] = NearbyArea.around(53.1, 8.8, sizeKm: 25).bbox;
+      final network = AreaNetwork.parse(jsonEncode(json));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AreaMap(
+              network: network,
+              counts: const {},
+              position: fix(1),
+              centerRequest: 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final viewer = tester.widget<InteractiveViewer>(
+        find.byType(InteractiveViewer),
+      );
+      final zoom = viewer.transformationController!.value.getMaxScaleOnAxis();
+      expect(zoom, closeTo(25, 0.1));
+      expect(viewer.maxScale, greaterThan(74));
+      expect(zoom, lessThan(viewer.maxScale));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'old settings use thinner defaults and new settings persist without resetting toggles',
     () async {

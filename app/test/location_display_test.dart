@@ -109,7 +109,7 @@ void main() {
       (marker().center(const Size(400, 800)) - const Offset(200, 400)).distance,
       lessThan(0.001),
     );
-    expect(marker().transform.getMaxScaleOnAxis(), 4);
+    expect(marker().transform.getMaxScaleOnAxis(), 4 * mapZoomFactor(network));
     // A later fix moves the marker, but doesn't recenter behind the user's back.
     await show(fix(30));
     expect(

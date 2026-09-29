@@ -134,8 +134,11 @@ preserve the current camera. Preferences also remember the download side length
 from the Offline maps picker; old preference JSON uses the thinner default and
 the existing 4 km map size without a schema migration.
 
-Validation for this update: 82 regression tests passed with native matching
+Validation for this update: 83 regression tests passed with native matching
 enabled (two optional live-data evaluations skipped), clean analysis, and
 focused tests for actual rendered stroke pixels, persisted controls, legacy and
 invalid settings, dimensions at 1/4/10/25 km, date-line handling, failed preference
 saves and preservation of existing maps after failed large downloads.
+
+Larger maps increase the available zoom range and Center on me zoom, preserving
+a useful walking-scale view rather than shrinking the streets as the footprint grows.
