@@ -17,8 +17,9 @@ import 'package:ffi/ffi.dart';
 typedef _FromGeoJsonNative = Pointer<Void> Function(Pointer<Utf8>);
 typedef _FromGeoJson = Pointer<Void> Function(Pointer<Utf8>);
 
-typedef _MatchGpxNative = Pointer<Utf8> Function(Pointer<Void>, Pointer<Utf8>);
-typedef _MatchGpx = Pointer<Utf8> Function(Pointer<Void>, Pointer<Utf8>);
+typedef _MatchGpxNative =
+    Pointer<Utf8> Function(Pointer<Void>, Pointer<Utf8>, Uint8);
+typedef _MatchGpx = Pointer<Utf8> Function(Pointer<Void>, Pointer<Utf8>, int);
 
 typedef _FreeMatcherNative = Void Function(Pointer<Void>);
 typedef _FreeMatcher = void Function(Pointer<Void>);
@@ -57,7 +58,7 @@ class WanderlustGeo {
         'wanderlust_matcher_from_geojson',
       ),
       _matchGpx = lib.lookupFunction<_MatchGpxNative, _MatchGpx>(
-        'wanderlust_match_gpx',
+        'wanderlust_match_gpx_options',
       ),
       _freeMatcher = lib.lookupFunction<_FreeMatcherNative, _FreeMatcher>(
         'wanderlust_matcher_free',
@@ -105,12 +106,12 @@ class Matcher {
   Pointer<Void> _handle;
 
   /// Match a GPX track, returning the streets it lit.
-  MatchResult matchGpx(String gpx) {
+  MatchResult matchGpx(String gpx, {bool fillSmallGaps = false}) {
     if (_handle == nullptr) throw StateError('Matcher already disposed');
     final gpxPtr = gpx.toNativeUtf8();
     Pointer<Utf8> out = nullptr;
     try {
-      out = _geo._matchGpx(_handle, gpxPtr);
+      out = _geo._matchGpx(_handle, gpxPtr, fillSmallGaps ? 1 : 0);
       if (out == nullptr) throw const FormatException('match failed');
       final json = out.toDartString();
       final decoded = jsonDecode(json) as Map<String, dynamic>;

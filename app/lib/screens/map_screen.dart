@@ -159,7 +159,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _loadPreferences() async {
     try {
       final value = await _store.readPreferences();
-      if (mounted) setState(() => _preferences = value);
+      if (mounted) {
+        setState(() => _preferences = value);
+        await _coverage.setFillSmallGaps(
+          value.fillSmallGaps,
+          _recorder.savedWalks,
+        );
+      }
     } catch (_) {
       /* Calm defaults remain available if storage is unavailable. */
     }
@@ -173,7 +179,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           diagnostic: _geoStatusChip(),
           save: (value) async {
             await _store.savePreferences(value);
+            final changed = value.fillSmallGaps != _preferences.fillSmallGaps;
             if (mounted) setState(() => _preferences = value);
+            if (changed) {
+              await _coverage.setFillSmallGaps(
+                value.fillSmallGaps,
+                _recorder.savedWalks,
+              );
+            }
           },
         ),
       ),

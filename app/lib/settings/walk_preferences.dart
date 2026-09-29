@@ -4,6 +4,7 @@ class WalkPreferences {
     this.showSamples = false,
     this.showGps = false,
     this.detailedGps = false,
+    this.fillSmallGaps = false,
     this.walkedLineWidth = 3,
     this.mapSizeKm = 4,
   });
@@ -11,6 +12,7 @@ class WalkPreferences {
   final bool showSamples;
   final bool showGps;
   final bool detailedGps;
+  final bool fillSmallGaps;
 
   /// Maximum screen-space stroke width; keeps zoomed-in coverage legible.
   final double walkedLineWidth;
@@ -21,6 +23,7 @@ class WalkPreferences {
     bool? showSamples,
     bool? showGps,
     bool? detailedGps,
+    bool? fillSmallGaps,
     double? walkedLineWidth,
     int? mapSizeKm,
   }) => WalkPreferences(
@@ -28,6 +31,7 @@ class WalkPreferences {
     showSamples: showSamples ?? this.showSamples,
     showGps: showGps ?? this.showGps,
     detailedGps: detailedGps ?? this.detailedGps,
+    fillSmallGaps: fillSmallGaps ?? this.fillSmallGaps,
     walkedLineWidth: walkedLineWidth ?? this.walkedLineWidth,
     mapSizeKm: mapSizeKm ?? this.mapSizeKm,
   );
@@ -37,6 +41,7 @@ class WalkPreferences {
     'showSamples': showSamples,
     'showGps': showGps,
     'detailedGps': detailedGps,
+    'fillSmallGaps': fillSmallGaps,
     'walkedLineWidth': walkedLineWidth,
     'mapSizeKm': mapSizeKm,
   };
@@ -48,6 +53,7 @@ class WalkPreferences {
       showSamples: json['showSamples'] == true,
       showGps: json['showGps'] == true,
       detailedGps: json['detailedGps'] == true,
+      fillSmallGaps: json['fillSmallGaps'] == true,
       walkedLineWidth:
           width is num && width.isFinite && width >= 1 && width <= 6
           ? width.toDouble()

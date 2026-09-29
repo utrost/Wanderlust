@@ -17,18 +17,21 @@ from build_network import metres
 
 
 class NativeMatcher:
-    def __init__(self, library, network):
+    def __init__(self, library, network, fill_small_gaps=False):
+        self.fill_small_gaps = fill_small_gaps
         self.lib = ctypes.CDLL(str(Path(library).resolve()))
         self.lib.wanderlust_matcher_from_geojson.argtypes = [ctypes.c_char_p]
         self.lib.wanderlust_matcher_from_geojson.restype = ctypes.c_void_p
         self.lib.wanderlust_match_gpx.argtypes = [ctypes.c_void_p,ctypes.c_char_p]
         self.lib.wanderlust_match_gpx.restype = ctypes.c_void_p
+        self.lib.wanderlust_match_gpx_options.argtypes = [ctypes.c_void_p,ctypes.c_char_p,ctypes.c_uint8]
+        self.lib.wanderlust_match_gpx_options.restype = ctypes.c_void_p
         self.lib.wanderlust_string_free.argtypes = [ctypes.c_void_p]
         self.lib.wanderlust_matcher_free.argtypes = [ctypes.c_void_p]
         self.handle = self.lib.wanderlust_matcher_from_geojson(network.encode())
         if not self.handle: raise ValueError('native loader rejected network')
     def match(self,gpx):
-        ptr = self.lib.wanderlust_match_gpx(self.handle,gpx.encode())
+        ptr = self.lib.wanderlust_match_gpx_options(self.handle,gpx.encode(),int(self.fill_small_gaps))
         if not ptr: raise ValueError('native match failed')
         try:
             result = json.loads(ctypes.string_at(ptr))
@@ -97,9 +100,9 @@ def synthetic_gpx(path, noise_m=0, step_m=3):
     return '\n'.join(xml),len(points)
 
 
-def evaluate(network_text, library, output_dir, step_m=3):
+def evaluate(network_text, library, output_dir, step_m=3, fill_small_gaps=False):
     network = json.loads(network_text)
-    matcher = NativeMatcher(library,network_text)
+    matcher = NativeMatcher(library,network_text,fill_small_gaps)
     lengths = {f['id']:f['properties']['length_m'] for f in network['features']}
     routes = [
         ('market-to-wall',[8.8073262,53.0759058],[8.810,53.0805]),
@@ -128,7 +131,7 @@ def evaluate(network_text, library, output_dir, step_m=3):
                 if noise == 0:
                     (output_dir/f'{name}.synthetic.gpx').write_text(gpx)
                     (output_dir/f'{name}.expected.json').write_text(json.dumps(sorted(expected))+'\n')
-        report = {'network_version':network['wanderlust_network']['network_version'],
+        report = {'fill_small_gaps':fill_small_gaps, 'network_version':network['wanderlust_network']['network_version'],
                   'method':f'Synthetic traces on independently routed OSM edges, {step_m}m sampling, 1.3m/s. Not real GPS validation.',
                   'results':rows}
         (output_dir/'matching-report.json').write_text(json.dumps(report,indent=2)+'\n')
@@ -142,10 +145,11 @@ def main():
     p.add_argument('--library',type=Path,default=Path('target/release/libwanderlust_geo.so'))
     p.add_argument('--output',type=Path,default=Path('tools/out/evaluation'))
     p.add_argument('--step-m',type=float,default=3)
+    p.add_argument('--fill-small-gaps',action='store_true')
     p.add_argument('--check',action='store_true',help='Fail on false positives or clean length recall below 80 percent')
     args = p.parse_args()
     if args.step_m <= 0: p.error('--step-m must be positive')
-    report = evaluate(args.network.read_text(),args.library,args.output,args.step_m)
+    report = evaluate(args.network.read_text(),args.library,args.output,args.step_m,args.fill_small_gaps)
     print(json.dumps(report,indent=2))
     if args.check and any(row['false_positive_edges'] or (row['synthetic_noise_m'] == 0 and row['length_recall'] < .8) for row in report['results']):
         raise SystemExit('Matching regression: inspect report')

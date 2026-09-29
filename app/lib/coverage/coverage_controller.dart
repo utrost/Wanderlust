@@ -23,7 +23,9 @@ class CoverageFailure implements Exception {
   String toString() => '$stage: $detail';
 }
 
-Future<List<MatchResult>> _matchOnWorker((String, List<String>) input) async {
+Future<List<MatchResult>> _matchOnWorker(
+  (String, List<String>, bool) input,
+) async {
   late final WanderlustGeo geo;
   try {
     geo = WanderlustGeo.open();
@@ -37,7 +39,10 @@ Future<List<MatchResult>> _matchOnWorker((String, List<String>) input) async {
     throw CoverageFailure('Street network rejected', e.toString());
   }
   try {
-    return [for (final gpx in input.$2) matcher.matchGpx(gpx)];
+    return [
+      for (final gpx in input.$2)
+        matcher.matchGpx(gpx, fillSmallGaps: input.$3),
+    ];
   } catch (e) {
     throw CoverageFailure('Walk matching failed', e.toString());
   } finally {
@@ -47,8 +52,9 @@ Future<List<MatchResult>> _matchOnWorker((String, List<String>) input) async {
 
 Future<List<MatchResult>> matchBatchInBackground(
   String network,
-  List<String> walks,
-) => compute(_matchOnWorker, (network, walks));
+  List<String> walks, {
+  bool fillSmallGaps = false,
+}) => compute(_matchOnWorker, (network, walks, fillSmallGaps));
 
 /// Serializes matching and persistence; repeated refreshes never add counts.
 /// Matching runs off the UI isolate. Raw walks remain untouched on any failure.
@@ -65,7 +71,7 @@ class CoverageController extends ChangeNotifier {
            (() => rootBundle.loadString(
              'assets/geo/bremen-center.streets.geojson',
            )),
-       _match = match ?? matchBatchInBackground;
+       _match = match;
   final Duration liveInterval;
   final Future<List<String>> Function()? loadSavedNetworks;
   SavedWalk? _liveWalk;
@@ -132,7 +138,7 @@ class CoverageController extends ChangeNotifier {
           );
           final edges = <int>{};
           for (final area in networks) {
-            final result = await _match(area.geojson, [gpx]);
+            final result = await _runMatch(area.geojson, [gpx]);
             if (result.length != 1 ||
                 !area.edgeIds.containsAll(result.single.walked)) {
               throw StateError('Invalid live coverage result');
@@ -170,7 +176,30 @@ class CoverageController extends ChangeNotifier {
   List<AreaNetwork> networks = const [];
   final CoverageStore _store;
   final Future<String> Function() _loadNetwork;
-  final MatchBatch _match;
+  final MatchBatch? _match;
+  bool _fillSmallGaps = false;
+
+  Future<List<MatchResult>> _runMatch(String network, List<String> walks) =>
+      _match?.call(network, walks) ??
+      matchBatchInBackground(network, walks, fillSmallGaps: _fillSmallGaps);
+
+  /// Serialize policy changes with matching. Invalidate any in-flight preview,
+  /// then rebuild saved memberships and the whole current walk under the policy.
+  Future<void> setFillSmallGaps(bool enabled, List<SavedWalk> walks) {
+    if (_disposed) return Future.value();
+    _liveEpoch++;
+    final snapshot = List<SavedWalk>.of(walks);
+    _queue = _queue.then((_) async {
+      if (_disposed || _fillSmallGaps == enabled) return;
+      _fillSmallGaps = enabled;
+      _liveEdges = {};
+      _liveMatchedPoints = 0;
+      await _synchronize(snapshot);
+      _scheduleLive();
+    });
+    return _queue;
+  }
+
   AreaNetwork? network;
   Map<int, int> counts = const {};
   bool busy = false;
@@ -306,7 +335,11 @@ class CoverageController extends ChangeNotifier {
           if (walk.status == 'recording') continue;
           final gpx = WalkCodec.exportGpx(walk);
           final fingerprint = sha256
-              .convert(utf8.encode('$matchingRevision\n$gpx'))
+              .convert(
+                utf8.encode(
+                  '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}\n$gpx',
+                ),
+              )
               .toString();
           if (await _store.matchFingerprint(walk.id, area.version) !=
               fingerprint) {
@@ -317,7 +350,7 @@ class CoverageController extends ChangeNotifier {
         final nonempty = pending.where((p) => p.$1.points.isNotEmpty).toList();
         final results = nonempty.isEmpty
             ? <MatchResult>[]
-            : await _match(area.geojson, nonempty.map((p) => p.$2).toList());
+            : await _runMatch(area.geojson, nonempty.map((p) => p.$2).toList());
         if (results.length != nonempty.length) {
           throw StateError('Matcher returned an incomplete batch');
         }

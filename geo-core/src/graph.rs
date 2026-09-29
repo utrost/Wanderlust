@@ -254,6 +254,72 @@ impl Graph {
         None
     }
 
+    /// A short connector between projected fixes, including the unwalked tails
+    /// of the anchor edges. Reject it if another route fits the same budget.
+    pub fn unique_connection(
+        &self,
+        from: usize,
+        to: usize,
+        start: LngLat,
+        end: LngLat,
+        budget: f64,
+    ) -> Option<Vec<usize>> {
+        let search = |blocked: Option<usize>| -> Option<Vec<usize>> {
+            let a = self.segment(from);
+            let b = self.segment(to);
+            let start_along = a.project(start)?.0.min(a.length_m());
+            let end_along = b.project(end)?.0.min(b.length_m());
+            let mut dist = vec![f64::INFINITY; self.adjacency.len()];
+            let mut prev = vec![None; self.adjacency.len()];
+            let mut heap = BinaryHeap::new();
+            for (node, cost) in [
+                (self.seg_nodes[from].0, start_along),
+                (self.seg_nodes[from].1, a.length_m() - start_along),
+            ] {
+                if cost < dist[node] {
+                    dist[node] = cost;
+                    heap.push(HeapEntry { node, cost });
+                }
+            }
+            let mut best = budget + 1e-6;
+            let mut target = None;
+            while let Some(HeapEntry { node, cost }) = heap.pop() {
+                if cost > dist[node] || cost > best {
+                    continue;
+                }
+                for (end_node, tail) in [
+                    (self.seg_nodes[to].0, end_along),
+                    (self.seg_nodes[to].1, b.length_m() - end_along),
+                ] {
+                    if node == end_node && cost + tail < best {
+                        best = cost + tail;
+                        target = Some(node);
+                    }
+                }
+                for &(next, edge, length) in &self.adjacency[node] {
+                    if edge == from || edge == to || Some(edge) == blocked {
+                        continue;
+                    }
+                    let next_cost = cost + length;
+                    if next_cost < dist[next] && next_cost <= budget {
+                        dist[next] = next_cost;
+                        prev[next] = Some((node, edge));
+                        heap.push(HeapEntry {
+                            node: next,
+                            cost: next_cost,
+                        });
+                    }
+                }
+            }
+            Some(self.reconstruct(target?, &prev))
+        };
+        let path = search(None)?;
+        if path.is_empty() || path.iter().any(|&edge| search(Some(edge)).is_some()) {
+            return None;
+        }
+        Some(path)
+    }
+
     fn reconstruct(&self, target: usize, prev: &[Option<(usize, usize)>]) -> Vec<usize> {
         let mut segs = Vec::new();
         let mut cur = target;

@@ -7,7 +7,7 @@
 
 use std::collections::HashSet;
 
-use crate::geometry::{haversine_m, LngLat};
+use crate::geometry::{haversine_m, point_to_segment_m, LngLat};
 use crate::graph::Graph;
 
 /// Tunables for a matching run.
@@ -16,6 +16,8 @@ pub struct MatchConfig {
     /// A GPS point further than this from any street is treated as unmatched
     /// (noise / off-network), not snapped.
     pub snap_radius_m: f64,
+    /// Opt-in interpolation across short unconfirmed runs between strong anchors.
+    pub fill_small_gaps: bool,
     /// Refuse to fill a gap whose shortest connecting path exceeds this multiple
     /// of the straight-line distance the walker actually moved.
     pub max_fill_detour_ratio: f64,
@@ -28,6 +30,7 @@ impl Default for MatchConfig {
     fn default() -> Self {
         Self {
             snap_radius_m: 25.0,
+            fill_small_gaps: false,
             max_fill_detour_ratio: 2.5,
             max_fill_len_m: 300.0,
         }
@@ -186,6 +189,9 @@ pub fn match_gpx_tracks(
                 }
             }
         }
+        if cfg.fill_small_gaps {
+            interpolate_gaps(graph, track, &snapped, &confirmed, &mut total);
+        }
         for i in 1..track.len() {
             if !confirmed[i - 1] || !confirmed[i] {
                 continue;
@@ -213,6 +219,75 @@ pub fn match_gpx_tracks(
         }
     }
     total
+}
+
+/// Only infer between consecutive confirmed anchors within this GPX segment.
+/// Never join unrelated walks or bridge bad accuracy, outages or speed jumps.
+fn interpolate_gaps(
+    graph: &Graph,
+    track: &[crate::gpx::TrackPoint],
+    snapped: &[Option<(usize, f64)>],
+    confirmed: &[bool],
+    result: &mut MatchResult,
+) {
+    let mut anchor: Option<usize> = None;
+    for i in 0..track.len() {
+        if i > 0
+            && (!reliable(&track[i - 1])
+                || !reliable(&track[i])
+                || continuous_seconds(&track[i - 1], &track[i]).is_none())
+        {
+            anchor = None;
+        }
+        if !confirmed[i] {
+            continue;
+        }
+        if let Some(j) = anchor {
+            let a = snapped[j].unwrap().0;
+            let b = snapped[i].unwrap().0;
+            // Adjacent fixes already have the default, stricter fill path.
+            if i > j + 1 && a != b && !graph.adjacent(a, b) {
+                let seconds = track[i]
+                    .time
+                    .zip(track[j].time)
+                    .map(|(end, start)| (end - start).num_milliseconds() as f64 / 1000.0);
+                if let Some(seconds) = seconds.filter(|&s| s > 0.0 && s <= 30.0) {
+                    let distance = haversine_m(track[j].pos, track[i].pos);
+                    let budget = 75.0_f64.min(seconds * 3.0).min(distance * 1.8);
+                    if let Some(path) =
+                        graph.unique_connection(a, b, track[j].pos, track[i].pos, budget)
+                    {
+                        let reference = track[j].pos.lat.to_radians();
+                        // Geometry must follow the observed trace, not merely
+                        // offer a short graph detour through an unwalked street.
+                        let follows_trace = path.iter().all(|&edge| {
+                            graph.segment(edge).polyline.iter().all(|&point| {
+                                track[j..=i].windows(2).any(|pair| {
+                                    point_to_segment_m(point, pair[0].pos, pair[1].pos, reference)
+                                        <= 20.0
+                                })
+                            })
+                        });
+                        let stays_near_route = track[j..=i].iter().all(|fix| {
+                            path.iter().copied().chain([a, b]).any(|edge| {
+                                graph.segment(edge).polyline.windows(2).any(|pair| {
+                                    point_to_segment_m(fix.pos, pair[0], pair[1], reference) <= 20.0
+                                })
+                            })
+                        });
+                        if follows_trace && stays_near_route {
+                            result.walked.extend(path);
+                            result.gaps_filled += 1;
+                            anchor = Some(i);
+                            continue;
+                        }
+                    }
+                    result.gaps_rejected += 1;
+                }
+            }
+        }
+        anchor = Some(i);
+    }
 }
 
 fn reliable(point: &crate::gpx::TrackPoint) -> bool {

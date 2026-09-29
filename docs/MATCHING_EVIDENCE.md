@@ -83,3 +83,49 @@ validation and further tuning.
 
 Reproduce with `cargo test --workspace`, a release host geo-ffi build, and
 `python3 tools/evaluate_matching.py --check` (repeat with `--step-m 5`).
+
+## Optional short-gap interpolation
+
+Settings → **Fill small gaps** defaults off. It applies immediately to live
+coverage and recalculates saved walks. Turning it off recalculates again, removing
+only the additional estimates; raw GPS readings remain unchanged. The cache key
+includes the policy. Existing limited fill between consecutive confirmed fixes
+remains available with the option off.
+
+The new pass bridges an unconfirmed run between two motion-confirmed street
+anchors in the same walk and GPX segment. It requires:
+
+- Reliable readings throughout, increasing timestamps and no adjacent speed
+  above 3 m/s. Untimed imports and bad-accuracy readings cannot support this fill.
+- At most 30 seconds between anchors and a complete projected route of at most
+  75 m, also bounded by elapsed time × 3 m/s and 1.8 × straight-line separation.
+  The route includes the partial lengths of both anchor streets.
+- Connected map topology and only one route within that budget. A second plausible
+  route causes rejection, rather than arbitrarily choosing a shortest path.
+- Intermediate route vertices within 20 m of the trace, and readings within
+  20 m of the selected route including anchor streets.
+
+No extrapolation beyond the last confirmed street, merging unrelated walks, or
+bridging separate GPX segments. A subsequent confirmed street is needed before a
+live gap fills. Long outages, ambiguous routes and substantial noise stay dark.
+
+Regression tests exercise the missing connector, delayed live confirmation,
+side streets, alternate routes, off-route excursions, bad accuracy, untimed
+imports, backwards timestamps, outages, disconnected topology and full route
+cost. Existing junction/jitter/turn tests also run with interpolation enabled.
+Native Flutter/SQLite tests verify saved/live on→off recalculation, idempotence,
+and unchanged raw walks. Settings tests cover persistence and failed writes.
+
+All 18 synthetic Bremen scenarios with the option enabled had zero false-positive
+edges. Clean expected-length recall (off → on):
+
+| Sampling | Market to wall | Schlachte | Ostertor |
+| --- | --- | --- | --- |
+| 3 m | 83.5 → 84.8% | 93.0 → 100% | 90.8 → 97.4% |
+| 5 m | 91.2 → 96.7% | 91.4 → 95.3% | 92.2 → 97.4% |
+
+At 2 m simulated noise, 5 m sampling improves from 75.5–87.5% to 83.5–91.8%.
+At 6 m noise the safeguards add no coverage. These are synthetic traces, not a
+claim that every gap in the phone screenshot will fill. Reproduce with
+`python3 tools/evaluate_matching.py --fill-small-gaps --check`, and repeat with
+`--step-m 5`. CI evaluates both policies.

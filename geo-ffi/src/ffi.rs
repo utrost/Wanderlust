@@ -57,6 +57,19 @@ pub unsafe extern "C" fn wanderlust_match_gpx(
     matcher: *mut Matcher,
     gpx: *const c_char,
 ) -> *mut c_char {
+    wanderlust_match_gpx_options(matcher, gpx, 0)
+}
+
+/// Match with optional short-gap interpolation (nonzero enables it).
+///
+/// # Safety
+/// Same pointer and ownership requirements as `wanderlust_match_gpx`.
+#[no_mangle]
+pub unsafe extern "C" fn wanderlust_match_gpx_options(
+    matcher: *mut Matcher,
+    gpx: *const c_char,
+    fill_small_gaps: u8,
+) -> *mut c_char {
     if matcher.is_null() {
         return std::ptr::null_mut();
     }
@@ -67,7 +80,13 @@ pub unsafe extern "C" fn wanderlust_match_gpx(
     };
 
     let json = catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let result = match matcher.match_gpx(&gpx_owned, MatchConfig::default()) {
+        let result = match matcher.match_gpx(
+            &gpx_owned,
+            MatchConfig {
+                fill_small_gaps: fill_small_gaps != 0,
+                ..MatchConfig::default()
+            },
+        ) {
             Ok(result) => result,
             Err(message) => return serde_json::json!({"error": message}).to_string(),
         };

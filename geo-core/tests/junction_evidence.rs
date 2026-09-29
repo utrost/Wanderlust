@@ -30,10 +30,27 @@ fn matched_interval(points: &[(f64, f64)], seconds: i64) -> Vec<u64> {
         })
         .collect();
     let graph = junction();
-    walked_ids(
+    let tracks = [track];
+    let direct = walked_ids(
         &graph,
-        &match_gpx_tracks(&graph, &[track], MatchConfig::default()),
-    )
+        &match_gpx_tracks(&graph, &tracks, MatchConfig::default()),
+    );
+    let filled = walked_ids(
+        &graph,
+        &match_gpx_tracks(
+            &graph,
+            &tracks,
+            MatchConfig {
+                fill_small_gaps: true,
+                ..MatchConfig::default()
+            },
+        ),
+    );
+    assert_eq!(
+        filled, direct,
+        "Gap filling must preserve junction safeguards"
+    );
+    direct
 }
 
 #[test]

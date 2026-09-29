@@ -129,6 +129,7 @@ void main() {
           'showSamples': true,
           'showGps': false,
           'detailedGps': false,
+          'fillSmallGaps': false,
           'walkedLineWidth': 3.0,
           'mapSizeKm': 4,
         });

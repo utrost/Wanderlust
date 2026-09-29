@@ -162,3 +162,12 @@ These are permanent non-goals, not backlog. See
 Implemented calm-by-default recording details with persisted settings, live street
 colour and section counts during walks, offline decorative parks/water with
 refresh for older downloads, configurable finer lines and 1–25 km map sides. See [calm walking](CALM_WALKING.md).
+
+### Optional gap filling (implemented)
+
+Settings → Fill small gaps conservatively interpolates short, uniquely connected
+missing sections between confirmed streets. Applies to live and saved walks;
+turning it off removes the extra estimates. Synthetic routes and native
+persistence tests pass; the next field check is the same walk with the setting
+on/off, comparing recovered gaps against the route actually walked. See
+[MATCHING_EVIDENCE.md](MATCHING_EVIDENCE.md#optional-short-gap-interpolation).

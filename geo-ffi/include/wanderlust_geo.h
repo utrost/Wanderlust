@@ -32,6 +32,9 @@ void wanderlust_matcher_free(Matcher *matcher);
  */
 char *wanderlust_match_gpx(Matcher *matcher, const char *gpx);
 
+/* Same ownership as above. Nonzero enables conservative short-gap interpolation. */
+char *wanderlust_match_gpx_options(Matcher *matcher, const char *gpx, unsigned char fill_small_gaps);
+
 /* Free a string returned by this library. */
 void wanderlust_string_free(char *s);
 

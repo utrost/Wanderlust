@@ -135,3 +135,8 @@ See [download behavior and phone checks](docs/NEARBY_MAPS.md).
 of 5 seconds / 5 metres, starting with the next walk. It uses more battery.
 Street colouring now requires movement along the street in a compatible direction;
 see [matching changes, regression tests and limits](docs/MATCHING_EVIDENCE.md).
+
+**Settings → Fill small gaps** optionally fills short missing street sections
+between confidently matched parts of a walk. It updates both live and saved
+walks; switch it off to remove the extra estimates. Ambiguous routes and long GPS
+outages remain unfilled. See [matching evidence](docs/MATCHING_EVIDENCE.md).
