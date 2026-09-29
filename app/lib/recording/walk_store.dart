@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'saved_walk.dart';
+import '../settings/walk_preferences.dart';
 import '../maps/area_store.dart';
 export 'saved_walk.dart';
 
@@ -40,7 +41,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
       return await _factory.openDatabase(
         file,
         options: OpenDatabaseOptions(
-          version: 4,
+          version: 5,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
           },
@@ -54,11 +55,13 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
             await _createCoverage(db);
             await _createTransfer(db);
             await _createAreas(db);
+            await _createPreferences(db);
           },
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 2) await _createCoverage(db);
             if (oldVersion < 3) await _createTransfer(db);
             if (oldVersion < 4) await _createAreas(db);
+            if (oldVersion < 5) await _createPreferences(db);
           },
         ),
       );
@@ -66,6 +69,26 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
       _opening = null;
       rethrow;
     }
+  }
+
+  static Future<void> _createPreferences(DatabaseExecutor db) => db.execute(
+    'CREATE TABLE walk_preferences (id INTEGER PRIMARY KEY CHECK(id = 1), json TEXT NOT NULL)',
+  );
+
+  Future<WalkPreferences> readPreferences() async {
+    final rows = await (await _db).query('walk_preferences', where: 'id = 1');
+    return rows.isEmpty
+        ? const WalkPreferences()
+        : WalkPreferences.fromJson(
+            jsonDecode(rows.single['json'] as String) as Map<String, dynamic>,
+          );
+  }
+
+  Future<void> savePreferences(WalkPreferences value) async {
+    await (await _db).insert('walk_preferences', {
+      'id': 1,
+      'json': jsonEncode(value.toJson()),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<void> _createAreas(DatabaseExecutor db) async {

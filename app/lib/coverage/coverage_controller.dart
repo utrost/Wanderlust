@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -57,6 +58,7 @@ class CoverageController extends ChangeNotifier {
     Future<String> Function()? loadNetwork,
     MatchBatch? match,
     this.loadSavedNetworks,
+    this.liveInterval = const Duration(seconds: 2),
   }) : _store = store,
        _loadNetwork =
            loadNetwork ??
@@ -64,7 +66,88 @@ class CoverageController extends ChangeNotifier {
              'assets/geo/bremen-center.streets.geojson',
            )),
        _match = match ?? matchBatchInBackground;
+  final Duration liveInterval;
   final Future<List<String>> Function()? loadSavedNetworks;
+  SavedWalk? _liveWalk;
+  Set<int> _liveEdges = {};
+  Timer? _liveTimer;
+  bool _liveScheduled = false;
+  int _liveEpoch = 0;
+  String? liveError;
+  Map<int, int> get displayCounts => {
+    ...counts,
+    for (final id in _liveEdges) id: (counts[id] ?? 0) + 1,
+  };
+
+  /// Coalesce fixes; previews never write coverage or mark an unfinished walk saved.
+  void updateLive(SavedWalk walk) {
+    if (_disposed ||
+        (_liveWalk?.id == walk.id &&
+            _liveWalk?.points.length == walk.points.length)) {
+      return;
+    }
+    if (_liveWalk?.id != walk.id) {
+      _liveEpoch++;
+      _liveEdges = {};
+    }
+    _liveWalk = walk;
+    _scheduleLive();
+  }
+
+  void _scheduleLive() {
+    if (_disposed || _liveScheduled || _liveWalk == null) return;
+    _liveScheduled = true;
+    _liveTimer = Timer(liveInterval, () {
+      _queue = _queue.then((_) async {
+        final walk = _liveWalk;
+        var epoch = _liveEpoch;
+        try {
+          if (_disposed || walk == null || walk.points.length < 2) return;
+          await initialize();
+          epoch = _liveEpoch;
+          // Match a bounded tail, with ample overlap for consecutive-fix checks.
+          // Confirmed sections accumulate; final save matches the complete trace.
+          final tail = walk.points
+              .skip(walk.points.length > 80 ? walk.points.length - 80 : 0)
+              .toList();
+          final gpx = WalkCodec.exportGpx(
+            SavedWalk(walk.id, walk.startedAt, null, 'recording', tail),
+          );
+          final edges = <int>{};
+          for (final area in networks) {
+            final result = await _match(area.geojson, [gpx]);
+            if (result.length != 1 ||
+                !area.edgeIds.containsAll(result.single.walked)) {
+              throw StateError('Invalid live coverage result');
+            }
+            edges.addAll(result.single.walked);
+          }
+          if (!_disposed && epoch == _liveEpoch && _liveWalk?.id == walk.id) {
+            _liveEdges = {..._liveEdges, ...edges};
+            liveError = null;
+            _notify();
+          }
+        } catch (_) {
+          if (!_disposed && epoch == _liveEpoch) {
+            liveError =
+                'Live colour is unavailable for now. Your walk is still recording.';
+            _notify();
+          }
+        } finally {
+          _liveScheduled = false;
+          if (_liveWalk != walk) _scheduleLive();
+        }
+      });
+    });
+  }
+
+  void _resetLiveMaps() {
+    _liveEpoch++;
+    final visible = {for (final map in networks) ...map.edgeIds};
+    _liveEdges = _liveEdges.intersection(visible);
+    _scheduleLive();
+  }
+
   List<AreaNetwork> networks = const [];
   final CoverageStore _store;
   final Future<String> Function() _loadNetwork;
@@ -127,6 +210,7 @@ class CoverageController extends ChangeNotifier {
     final loaded = await _readMaps(selected);
     networks = loaded.$1;
     counts = loaded.$2;
+    _resetLiveMaps();
   }
 
   Future<void> refreshMaps() async {
@@ -163,6 +247,7 @@ class CoverageController extends ChangeNotifier {
         networks = loaded.$1;
         counts = loaded.$2;
         network = area;
+        _resetLiveMaps();
         error = null;
         _initializing = Future.value();
         success = true;
@@ -239,6 +324,15 @@ class CoverageController extends ChangeNotifier {
           networks.map((map) => map.version).toList(),
         ),
       );
+      if (_liveWalk != null &&
+          walks.any((w) => w.id == _liveWalk!.id && w.status != 'recording')) {
+        _liveEpoch++;
+        _liveWalk = null;
+        _liveEdges = {};
+        liveError = null;
+        _liveTimer?.cancel();
+        _liveScheduled = false;
+      }
       processedWalks = walks.where((w) => w.status != 'recording').length;
       error = null;
     } catch (e) {
@@ -254,6 +348,8 @@ class CoverageController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _liveTimer?.cancel();
+    _liveWalk = null;
     super.dispose();
   }
 }

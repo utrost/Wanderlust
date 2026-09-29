@@ -22,10 +22,12 @@ class WalkLibraryScreen extends StatefulWidget {
     required this.store,
     required this.onChanged,
     this.files,
+    this.showSamples = false,
   });
   final SqliteWalkStore store;
   final Future<void> Function() onChanged;
   final WalkFiles? files;
+  final bool showSamples;
 
   @override
   State<WalkLibraryScreen> createState() => _WalkLibraryScreenState();
@@ -180,7 +182,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                     .first,
                         ),
                         subtitle: Text(
-                          '${walk.status} · ${walk.points.length} points',
+                          '${walk.status}${widget.showSamples ? ' · ${walk.points.length} GPS samples' : ''}',
                         ),
                         trailing: IconButton(
                           tooltip: 'Export GPX',

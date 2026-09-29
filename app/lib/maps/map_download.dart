@@ -35,8 +35,21 @@ class NearbyArea {
   String get id => 'nearby-${bbox.join(',')}';
   String get name =>
       'Near ${((bbox[1] + bbox[3]) / 2).toStringAsFixed(3)}, ${((bbox[0] + bbox[2]) / 2).toStringAsFixed(3)}';
-  String get query =>
-      '[out:xml][timeout:45][maxsize:33554432];way["highway"](${bbox[1]},${bbox[0]},${bbox[3]},${bbox[2]});(._;>;);out body;';
+  String get query {
+    final bounds = '${bbox[1]},${bbox[0]},${bbox[3]},${bbox[2]}';
+    final scenery = [
+      for (final filter in [
+        r'["leisure"~"^(park|garden|nature_reserve)$"]',
+        r'["natural"~"^(water|wood)$"]',
+        r'["landuse"~"^(forest|grass|recreation_ground|reservoir)$"]',
+      ])
+        'way$filter($bounds);relation$filter($bounds);',
+    ].join();
+    return '[out:xml][timeout:45][maxsize:33554432];('
+        'way["highway"]($bounds);'
+        'way["waterway"~"^(river|stream|canal|drain|riverbank)\$"]($bounds);'
+        '$scenery);(._;>>;);out body;';
+  }
 }
 
 String _normalize((String, List<double>, String, String) input) =>

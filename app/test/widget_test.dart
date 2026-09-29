@@ -51,8 +51,8 @@ void main() {
     await tester.tap(find.byTooltip('Center on me'));
     await tester.pumpAndSettle();
     expect(requests, 1);
-    expect(find.textContaining('±4 m'), findsOneWidget);
-    expect(find.text('53.07591, 8.80733'), findsOneWidget);
+    expect(find.text('Location ready'), findsOneWidget);
+    expect(find.text('53.07591, 8.80733'), findsNothing);
     expect(find.text('Start walk'), findsOneWidget);
     expect(find.text('Stop'), findsNothing);
     expect(find.byTooltip('Show map area'), findsOneWidget);

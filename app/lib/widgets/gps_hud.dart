@@ -23,6 +23,7 @@ class GpsHud extends StatelessWidget {
     this.network,
     this.networks = const [],
     this.error,
+    this.details = true,
   });
   final Position? position;
   final DateTime now;
@@ -31,6 +32,7 @@ class GpsHud extends StatelessWidget {
   final AreaNetwork? network;
   final List<AreaNetwork> networks;
   final String? error;
+  final bool details;
 
   @override
   Widget build(BuildContext context) {
@@ -68,10 +70,18 @@ class GpsHud extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              title,
+              details
+                  ? title
+                  : point == null
+                  ? (recording || locating
+                        ? 'Finding your location…'
+                        : 'Tap Center on me to locate yourself')
+                  : old
+                  ? 'Last known location'
+                  : 'Location ready',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
-            if (point != null)
+            if (details && point != null)
               Text(
                 '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}',
                 style: const TextStyle(fontSize: 11),

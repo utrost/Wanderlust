@@ -223,13 +223,56 @@ class AreaMapPainter extends CustomPainter {
     canvas.clipRect(Offset.zero & size);
     if (transform != null) canvas.transform(transform!.storage);
     canvas.translate(12, 80);
+    final zoom = transform?.getMaxScaleOnAxis() ?? 1.0;
+    final maps = {
+      for (final map in [network, ...networks]) map.version: map,
+    }.values;
+    for (final kind in ['park', 'water', 'waterway']) {
+      for (final map in maps) {
+        canvas.save();
+        final a = network.project(Offset(map.bbox[0], map.bbox[3]), mapSize);
+        final b = network.project(Offset(map.bbox[2], map.bbox[1]), mapSize);
+        canvas.clipRect(Rect.fromPoints(a, b));
+        for (final feature in map.scenery.where((s) => s.kind == kind)) {
+          final path = Path()..fillType = PathFillType.evenOdd;
+          for (final ring in feature.paths) {
+            for (var i = 0; i < ring.length; i++) {
+              final p = network.project(ring[i], mapSize);
+              if (i == 0) {
+                path.moveTo(p.dx, p.dy);
+              } else {
+                path.lineTo(p.dx, p.dy);
+              }
+            }
+            if (kind != 'waterway') path.close();
+          }
+          canvas.drawPath(
+            path,
+            Paint()
+              ..color = kind == 'park'
+                  ? const Color(0xFFDCE4D2)
+                  : const Color(0xFFC4DAE2)
+              ..style = kind == 'waterway'
+                  ? PaintingStyle.stroke
+                  : PaintingStyle.fill
+              ..strokeWidth = 2.0 / zoom
+              ..strokeCap = StrokeCap.round,
+          );
+        }
+        canvas.restore();
+      }
+    }
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
     void draw(AreaEdge edge, int count) {
       stroke
         ..color = HeatRamp.color(count, dark: false)
-        ..strokeWidth = count == 0 ? 0.65 : HeatRamp.width(count);
+        ..strokeWidth =
+            (count == 0
+                ? math.min(1.5, 0.65 * math.sqrt(zoom))
+                : math.min(4.5, HeatRamp.width(count) * math.sqrt(zoom))) /
+            zoom;
       final path = Path();
       for (var i = 0; i < edge.points.length; i++) {
         final p = network.project(edge.points[i], mapSize);

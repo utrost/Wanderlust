@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 import 'package:xml/xml.dart';
+import 'osm_scenery.dart';
 
 /// Same pedestrian policy and node-chain identities as tools/build_network.py.
 /// Raw OSM nodes remain graph junctions; proximity never joins bridges.
@@ -274,6 +275,7 @@ class OsmNetwork {
             '',
       },
       'features': ordered,
+      'wanderlust_scenery': OsmScenery.extract(root, nodes),
     });
   }
 }

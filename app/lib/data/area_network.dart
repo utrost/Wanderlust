@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'map_scenery.dart';
 
 class AreaEdge {
   const AreaEdge(this.id, this.points, this.name);
@@ -19,6 +20,7 @@ class AreaNetwork {
     this.bbox,
     this.edges,
     this.attribution,
+    this.scenery,
   );
   final String geojson;
   final String areaId;
@@ -27,6 +29,7 @@ class AreaNetwork {
   final List<double> bbox;
   final List<AreaEdge> edges;
   final String attribution;
+  final List<MapScenery> scenery;
   late final Set<int> edgeIds = edges.map((e) => e.id).toSet();
 
   factory AreaNetwork.parse(String source) {
@@ -94,6 +97,10 @@ class AreaNetwork {
       bbox,
       edges,
       meta['attribution'] as String,
+      [
+        for (final s in json['wanderlust_scenery'] as List? ?? [])
+          MapScenery.parse(s as Map<String, dynamic>),
+      ],
     );
   }
 

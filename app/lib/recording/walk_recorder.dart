@@ -81,6 +81,15 @@ class WalkRecorder extends ChangeNotifier {
       state == RecorderState.starting || state == RecorderState.stopping;
   int get pointCount => _points.length;
   Position? get latestPosition => _points.isEmpty ? null : _points.last;
+  SavedWalk? get recordingSnapshot => _walkId == null || _startedAt == null
+      ? null
+      : SavedWalk(
+          _walkId!,
+          _startedAt!,
+          null,
+          'recording',
+          List.unmodifiable(_points),
+        );
   double get distanceMeters => _distance;
   Duration get elapsed => _startedAt == null
       ? Duration.zero

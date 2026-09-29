@@ -111,6 +111,28 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
     _close();
   }
 
+  Future<void> _refresh(OfflineArea old) async {
+    final source = await widget.store.readArea(old.version);
+    if (source == null) throw StateError('Saved map is unavailable.');
+    final area = AreaNetwork.parse(source);
+    _progress = 'Refreshing streets, parks and water…';
+    _cancelRequested = false;
+    setState(() => _fetching = true);
+    late final String updated;
+    try {
+      updated = await (widget.fetch ?? _download.fetch)(NearbyArea(area.bbox));
+    } finally {
+      if (mounted) setState(() => _fetching = false);
+    }
+    if (!mounted || _cancelRequested) return;
+    await widget.store.saveArea(updated);
+    final version = AreaNetwork.parse(updated).version;
+    await _select(updated, version);
+    if (version != old.version) await widget.store.deleteArea(old.version);
+    await _load();
+    _close();
+  }
+
   Future<void> _bundled() async {
     await _select(
       await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
@@ -143,7 +165,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Save a roughly 4 × 4 km street map for offline walking and coverage. Saved maps appear together automatically. Internet is needed only for the download.',
+                    'Save a roughly 4 × 4 km street map for offline walking and coverage. Parks and water are included for orientation. Saved maps appear together automatically. Internet is needed only for the download.',
                   ),
                   const SizedBox(height: 8),
                   if (widget.position case final p?)
@@ -198,7 +220,12 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
               ),
             ),
             const Divider(),
-            const ListTile(title: Text('Saved maps · tap to focus')),
+            const ListTile(
+              title: Text('Saved maps · tap to focus'),
+              subtitle: Text(
+                'Refresh older maps to add parks and water. Refresh sends the saved map area to Overpass and needs internet.',
+              ),
+            ),
             ListTile(
               title: const Text('Bremen center'),
               subtitle: const Text('Bundled · available offline'),
@@ -217,10 +244,22 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   '${(area.bytes / (1024 * 1024)).toStringAsFixed(1)} MiB · saved ${area.downloadedAt.toLocal().toString().split(' ').first}${_active == area.version ? ' · selected' : ''}',
                 ),
                 leading: const Icon(Icons.offline_pin_outlined),
-                trailing: IconButton(
-                  tooltip: 'Remove downloaded map',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: _busy ? null : () => _run(() => _remove(area)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Refresh map with parks and water',
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _busy
+                          ? null
+                          : () => _run(() => _refresh(area)),
+                    ),
+                    IconButton(
+                      tooltip: 'Remove downloaded map',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: _busy ? null : () => _run(() => _remove(area)),
+                    ),
+                  ],
                 ),
                 onTap: _busy
                     ? null
@@ -238,7 +277,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                '© OpenStreetMap contributors · ODbL 1.0\nStreet maps only; a detailed basemap with buildings and terrain is still planned.',
+                '© OpenStreetMap contributors · ODbL 1.0\nOffline streets, parks and water. Buildings and terrain are still planned.',
                 style: TextStyle(fontSize: 12),
               ),
             ),

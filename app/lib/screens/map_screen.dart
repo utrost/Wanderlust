@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'walk_library_screen.dart';
 import 'offline_maps_screen.dart';
+import 'settings_screen.dart';
+import '../settings/walk_preferences.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -43,6 +45,7 @@ class _MapScreenState extends State<MapScreen> {
         await rootBundle.loadString('assets/geo/bremen-center.streets.geojson'),
   );
 
+  WalkPreferences _preferences = const WalkPreferences();
   Position? _previewPosition;
   bool _locating = false;
   String? _gpsError;
@@ -143,12 +146,37 @@ class _MapScreenState extends State<MapScreen> {
     await _coverage.synchronize(_recorder.savedWalks);
   }
 
+  Future<void> _loadPreferences() async {
+    try {
+      final value = await _store.readPreferences();
+      if (mounted) setState(() => _preferences = value);
+    } catch (_) {
+      /* Calm defaults remain available if storage is unavailable. */
+    }
+  }
+
+  Future<void> _showSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(
+          initial: _preferences,
+          diagnostic: _geoStatusChip(),
+          save: (value) async {
+            await _store.savePreferences(value);
+            if (mounted) setState(() => _preferences = value);
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _recorder.addListener(_walkChanged);
     _coverage.initialize();
     _recorder.initialize();
+    unawaited(_loadPreferences());
     _gpsClock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && !_recorder.isRecording && _currentFix != null) {
         setState(() {});
@@ -168,6 +196,10 @@ class _MapScreenState extends State<MapScreen> {
 
   void _walkChanged() {
     if (mounted) setState(() {});
+    if (_recorder.isRecording) {
+      final walk = _recorder.recordingSnapshot;
+      if (walk != null) _coverage.updateLive(walk);
+    }
     if (!_recorder.isRecording &&
         !_recorder.isBusy &&
         !_recorder.needsSaveRetry) {
@@ -189,7 +221,7 @@ class _MapScreenState extends State<MapScreen> {
                 : AreaMap(
                     network: _coverage.network!,
                     networks: _coverage.networks,
-                    counts: _coverage.counts,
+                    counts: _coverage.displayCounts,
                     position: _currentFix,
                     stale:
                         _currentFix != null &&
@@ -213,7 +245,11 @@ class _MapScreenState extends State<MapScreen> {
                               InkWell(onTap: _showMaps, child: _areaChip()),
                         ),
                       ),
-                      _geoStatusChip(),
+                      IconButton(
+                        tooltip: 'Settings',
+                        onPressed: _showSettings,
+                        icon: const Icon(Icons.settings_outlined),
+                      ),
                       IconButton.filledTonal(
                         tooltip: 'Show map area',
                         onPressed: () => setState(() => _areaRequest++),
@@ -245,6 +281,7 @@ class _MapScreenState extends State<MapScreen> {
                       network: _coverage.network,
                       networks: _coverage.networks,
                       error: _gpsError,
+                      details: _preferences.showGps,
                     ),
                   ),
                   ListenableBuilder(
@@ -351,7 +388,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           Text(
-            '${_coverage.networks.length} offline maps · tap to manage',
+            '${_coverage.networks.length} offline ${_coverage.networks.length == 1 ? 'map' : 'maps'} · tap to manage',
             style: TextStyle(fontSize: 10.5, color: WanderlustColors.inkMuted),
           ),
         ],
@@ -391,7 +428,11 @@ class _MapScreenState extends State<MapScreen> {
         if (_coverage.busy)
           const Text('Updating your streets…')
         else
-          Text('${_coverage.counts.length} street segments walked'),
+          Text(
+            '${_coverage.displayCounts.length} street ${_coverage.displayCounts.length == 1 ? 'section' : 'sections'} explored',
+          ),
+        if (_recorder.isRecording && _coverage.liveError != null)
+          Text(_coverage.liveError!),
         if (_coverage.error case final error?)
           TextButton(
             onPressed: () => showDialog<void>(
@@ -424,7 +465,7 @@ class _MapScreenState extends State<MapScreen> {
             applicationName: 'Wanderlust',
             children: [
               const SelectableText(
-                'Map data © OpenStreetMap contributors, ODbL 1.0\nhttps://www.openstreetmap.org/copyright\nOffline street view. Tap the area name to download or choose maps. Pinch to zoom. Streets update after saving a walk.',
+                'Map data © OpenStreetMap contributors, ODbL 1.0\nhttps://www.openstreetmap.org/copyright\nOffline street view. Tap the area name to download or choose maps. Pinch to zoom. Streets colour as you walk and are confirmed when you save.',
               ),
             ],
           ),
@@ -477,6 +518,7 @@ class _MapScreenState extends State<MapScreen> {
       MaterialPageRoute<void>(
         builder: (_) => WalkLibraryScreen(
           store: _store,
+          showSamples: _preferences.showSamples,
           onChanged: () async {
             await _recorder.refreshSavedWalks();
             await _coverage.synchronize(_recorder.savedWalks);
@@ -518,13 +560,20 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            '$clock · $km km · ${_recorder.pointCount} pts',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              fontFeatures: const [FontFeature.tabularFigures()],
-              color: WanderlustColors.ink,
+          Flexible(
+            child: Text(
+              [
+                if (_preferences.showTime) clock,
+                '$km km',
+                if (_preferences.showSamples)
+                  '${_recorder.pointCount} GPS samples',
+              ].join(' · '),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: WanderlustColors.ink,
+              ),
             ),
           ),
           const SizedBox(width: 14),

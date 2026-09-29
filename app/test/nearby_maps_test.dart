@@ -157,6 +157,9 @@ void main() {
       expect(OsmNetwork.metres([b[0], 53.1], [b[2], 53.1]), closeTo(4000, 30));
       expect(OsmNetwork.metres([8.8, b[1]], [8.8, b[3]]), closeTo(4000, 30));
       expect(area.query, contains('${b[1]},${b[0]},${b[3]},${b[2]}'));
+      expect(area.query, contains('relation["natural"'));
+      expect(area.query, contains('(._;>>;)'));
+      expect(area.query, contains('waterway'));
       expect(() => NearbyArea.around(double.nan, 8.8), throwsFormatException);
       expect(() => NearbyArea.around(89, 8.8), throwsFormatException);
     },
@@ -319,6 +322,7 @@ void main() {
         final before = (await store.listSaved()).single.toBackup();
         await store.close();
         final db = await databaseFactoryFfi.openDatabase(path);
+        await db.execute('DROP TABLE walk_preferences');
         await db.execute('DROP TABLE offline_selection');
         await db.execute('DROP TABLE offline_area');
         await db.execute('PRAGMA user_version = 3');

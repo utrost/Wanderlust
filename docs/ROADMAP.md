@@ -151,3 +151,9 @@ These are permanent non-goals, not backlog. See
 
 - Leaderboards / social ranking · required cloud sync · accounts & logins · ads,
   analytics, telemetry · turn-by-turn navigation.
+
+## Latest phone-feedback slice
+
+Implemented calm-by-default recording details with persisted settings, live street
+colour and section counts during walks, and offline decorative parks/water with
+refresh for older downloads. See [calm walking](CALM_WALKING.md).

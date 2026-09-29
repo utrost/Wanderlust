@@ -7,6 +7,7 @@ import 'package:wanderlust/maps/area_store.dart';
 import 'package:wanderlust/screens/offline_maps_screen.dart';
 
 import 'nearby_maps_test.dart' show smallNetwork;
+import 'calm_live_scenery_test.dart' show decorated;
 import 'recording_test.dart' show fix;
 
 class MemoryAreas implements AreaStore {
@@ -130,6 +131,44 @@ void main() {
       await tester.pumpAndSettle();
       expect(store.maps, hasLength(1));
       expect(store.selected, before);
+    },
+  );
+
+  testWidgets(
+    'refresh uses the saved bounds without GPS and replaces the old map after selection',
+    (tester) async {
+      final store = MemoryAreas();
+      await store.saveArea(smallNetwork());
+      final old = store.maps.keys.single;
+      await store.selectArea(old);
+      final updated = decorated();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: OfflineMapsScreen(
+            store: store,
+            position: null,
+            activeVersion: old,
+            fetch: (area) async {
+              expect(area.bbox, AreaNetwork.parse(smallNetwork()).bbox);
+              return updated;
+            },
+            onSelect: (source, version) async {
+              expect(store.maps.containsKey(old), isTrue);
+              await store.selectArea(version);
+              return true;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byTooltip('Refresh map with parks and water'),
+      );
+      await tester.tap(find.byTooltip('Refresh map with parks and water'));
+      await tester.pumpAndSettle();
+      expect(store.maps, hasLength(1));
+      expect(store.selected, AreaNetwork.parse(updated).version);
+      expect(AreaNetwork.parse(store.maps.values.single).scenery, isNotEmpty);
     },
   );
 

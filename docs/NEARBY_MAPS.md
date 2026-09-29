@@ -13,9 +13,9 @@ selected map controls the initial view, not which streets can be displayed.
 Downloads remain manual. Outside saved areas, recording continues and coverage
 can be recovered after saving the walk and downloading the missing streets.
 
-This first slice downloads **street geometry**, including the pedestrian graph
-used for matching. It does not yet add a detailed tiled basemap, terrain,
-buildings, or satellite imagery. This resolves coverage outside Bremen center
+Downloads include **street geometry** for matching plus decorative parks and
+water. Refresh older downloaded maps to add this scenery. Terrain, buildings
+and satellite imagery remain out of scope. See [calm walking](CALM_WALKING.md). This resolves coverage outside Bremen center
 without introducing a separate map whose streets cannot receive walk coverage.
 
 ## Data and offline behavior
@@ -35,8 +35,8 @@ without introducing a separate map whose streets cannot receive walk coverage.
   scoped to each map version in storage. Display counts use distinct walk IDs
   per street across all loaded maps, so overlaps never count a walk twice. A queued match always finishes against its
   original network before another network can become active.
-- Walk recording may continue while downloading. The active walk contributes
-  coverage after it is saved, as before. Downloads use the GPS fix displayed when
+- Walk recording may continue while downloading. The active walk shows provisional live colour;
+  saved coverage is confirmed when the walk is saved. Downloads use the GPS fix displayed when
   the map picker was opened, not a moving request boundary.
 - Up to eight downloaded maps can be kept, each at most 16 MiB. Remove unused
   downloads in the picker. Removing the selected download returns to the bundled
