@@ -58,3 +58,22 @@ class AndroidSetupTest(unittest.TestCase):
                 type('Result', (), {'stdout': "package: name='com.wanderlust.wanderlust' versionCode='1010' versionName='0.0.1'"})(),
             ]
             module.verify(Path('test.apk'), Path('/tools'), 1010, 'deadbeef')
+
+    def test_build_tools_37_certificate_labels_and_multiple_signers(self):
+        module = load('verify_android_release')
+        package = "package: name='com.wanderlust.wanderlust' versionCode='1015' versionName='0.0.1'"
+        for certificate in (
+            'Signer #1 certificate SHA-256 digest: deadbeef\n',
+            'V3.0 Signer: certificate SHA-256 digest: deadbeef\n',
+            'V3.0 Signer: certificate SHA-256 digest: deadbeef\nV3.1 Signer: certificate SHA-256 digest: DEADBEEF\n',
+        ):
+            with self.subTest(certificate=certificate), patch.object(module.subprocess, 'run') as run:
+                run.side_effect = [
+                    type('Result', (), {'stdout': certificate})(),
+                    type('Result', (), {'stdout': package})(),
+                ]
+                module.verify(Path('test.apk'), Path('/tools'), 1015, 'deadbeef')
+        with patch.object(module.subprocess, 'run') as run:
+            run.return_value.stdout = 'V3.0 Signer: certificate SHA-256 digest: deadbeef\nV3.1 Signer: certificate SHA-256 digest: abcdef\n'
+            with self.assertRaises(ValueError):
+                module.verify(Path('test.apk'), Path('/tools'), 1015, 'deadbeef')

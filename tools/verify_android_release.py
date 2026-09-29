@@ -17,9 +17,16 @@ def verify(apk, build_tools, expected_version, expected_certificate):
         [str(build_tools / 'apksigner'), 'verify', '--print-certs', str(apk)],
         check=True, capture_output=True, text=True,
     ).stdout
-    fingerprints = re.findall(r'Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)', certificates)
-    if [f.lower() for f in fingerprints] != [expected_certificate.strip().lower()]:
-        raise ValueError('APK does not use the pinned test signing certificate')
+    # Build-tools 36 labels this "Signer #1"; 37 uses "V3.0 Signer:".
+    # Accept repeated certificates across schemes, but never a different signer.
+    fingerprints = {
+        f.lower() for f in re.findall(
+            r'^.*certificate SHA-256 digest: ([0-9a-fA-F]+)\s*$',
+            certificates, re.MULTILINE,
+        )
+    }
+    if fingerprints != {expected_certificate.strip().lower()}:
+        raise ValueError(f'APK certificate check failed; observed public fingerprints: {sorted(fingerprints)}')
     package = subprocess.run(
         [str(build_tools / 'aapt'), 'dump', 'badging', str(apk)],
         check=True, capture_output=True, text=True,
