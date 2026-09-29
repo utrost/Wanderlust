@@ -26,6 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install persistent test signing key
+        env:
+          WANDERLUST_TEST_KEYSTORE: ${{ secrets.WANDERLUST_TEST_KEYSTORE }}
+        run: python3 tools/install_test_signing.py
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -62,10 +67,15 @@ jobs:
 
       - name: Build debug APK
         working-directory: app
-        run: flutter build apk --debug --target-platform android-arm64,android-x64
+        # Preserve this workflow's run counter. Re-runs retain their version;
+        # every new run increases it, including manual builds and tag builds.
+        run: flutter build apk --debug --target-platform android-arm64,android-x64 --build-number "$((1000 + GITHUB_RUN_NUMBER))"
 
       - name: Verify APK native libraries and Bremen asset
         run: python3 tools/verify_apk.py app/build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Verify update signing and version
+        run: python3 tools/verify_android_release.py app/build/app/outputs/flutter-apk/app-debug.apk --version "$((1000 + GITHUB_RUN_NUMBER))"
 
       - name: Name APK for testers
         id: package
@@ -95,6 +105,10 @@ jobs:
           Wanderlust Android test APK built from $GITHUB_SHA.
 
           Download the .apk asset below directly on your Android phone.
+          Build number: $((1000 + GITHUB_RUN_NUMBER)).
+          This APK uses the persistent Wanderlust test signing certificate.
+          It updates other builds using that certificate without deleting data.
+          Older builds with temporary keys require one final backup/reinstall/restore.
           For install steps, see README.md → Installing the Android test app.
           EOF
           if gh release view "$release_tag" >/dev/null 2>&1; then
@@ -109,3 +123,7 @@ jobs:
           fi
           release_url=$(gh release view "$release_tag" --json url --jq .url)
           echo "Download the Android APK from [$release_tag]($release_url)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove runner signing key
+        if: always()
+        run: rm -f "$HOME/.android/debug.keystore"

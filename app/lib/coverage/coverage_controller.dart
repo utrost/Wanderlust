@@ -72,6 +72,8 @@ class CoverageController extends ChangeNotifier {
   Set<int> _liveEdges = {};
   Timer? _liveTimer;
   bool _liveScheduled = false;
+  bool _previewActive = true;
+  int _liveMatchedPoints = 0;
   int _liveEpoch = 0;
   String? liveError;
   Map<int, int> get displayCounts => {
@@ -89,26 +91,41 @@ class CoverageController extends ChangeNotifier {
     if (_liveWalk?.id != walk.id) {
       _liveEpoch++;
       _liveEdges = {};
+      _liveMatchedPoints = 0;
     }
     _liveWalk = walk;
     _scheduleLive();
   }
 
+  /// Hidden screens need no live rendering work. On return, match all fixes
+  /// since the last successful preview, with overlap for consecutive evidence.
+  void setPreviewActive(bool active) {
+    _previewActive = active;
+    if (active) _scheduleLive();
+  }
+
   void _scheduleLive() {
-    if (_disposed || _liveScheduled || _liveWalk == null) return;
+    if (_disposed || !_previewActive || _liveScheduled || _liveWalk == null) {
+      return;
+    }
     _liveScheduled = true;
     _liveTimer = Timer(liveInterval, () {
       _queue = _queue.then((_) async {
         final walk = _liveWalk;
         var epoch = _liveEpoch;
         try {
-          if (_disposed || walk == null || walk.points.length < 2) return;
+          if (_disposed ||
+              !_previewActive ||
+              walk == null ||
+              walk.points.length < 2) {
+            return;
+          }
           await initialize();
           epoch = _liveEpoch;
-          // Match a bounded tail, with ample overlap for consecutive-fix checks.
-          // Confirmed sections accumulate; final save matches the complete trace.
+          // Usually an 80-fix overlap plus new points. After time in the pocket,
+          // include ALL unprocessed fixes rather than dropping the hidden walk.
           final tail = walk.points
-              .skip(walk.points.length > 80 ? walk.points.length - 80 : 0)
+              .skip(_liveMatchedPoints > 80 ? _liveMatchedPoints - 80 : 0)
               .toList();
           final gpx = WalkCodec.exportGpx(
             SavedWalk(walk.id, walk.startedAt, null, 'recording', tail),
@@ -124,6 +141,7 @@ class CoverageController extends ChangeNotifier {
           }
           if (!_disposed && epoch == _liveEpoch && _liveWalk?.id == walk.id) {
             _liveEdges = {..._liveEdges, ...edges};
+            _liveMatchedPoints = walk.points.length;
             liveError = null;
             _notify();
           }
@@ -143,6 +161,7 @@ class CoverageController extends ChangeNotifier {
 
   void _resetLiveMaps() {
     _liveEpoch++;
+    _liveMatchedPoints = 0;
     final visible = {for (final map in networks) ...map.edgeIds};
     _liveEdges = _liveEdges.intersection(visible);
     _scheduleLive();

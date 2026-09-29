@@ -1,0 +1,47 @@
+# Android test APK updates
+
+Test APK releases now use one persistent, private test signing key and build
+number `1000 + github.run_number` from the **Test APK** workflow. New workflow
+runs increase the version; retrying the same run keeps its version. Keep that
+workflow's run counter when changing the build pipeline. Android rejects a
+downgrade to an older build.
+
+The workflow requires the `WANDERLUST_TEST_KEYSTORE` Actions secret (base64 JKS,
+the conventional Android debug alias/password). The private key must never be
+committed. A protected local backup lives in the ignored `.local/signing/`
+directory. Back it up securely before deleting this checkout. GitHub does not
+allow reading a secret back after upload. These are still debug APKs, not a
+production signing/distribution setup.
+
+The public certificate SHA-256 is pinned in
+`tools/android/test-signing.sha256`. `tools/install_test_signing.py` refuses
+missing credentials and certificates that differ from the pin. There is no
+fallback to a random key. Before publication, `tools/verify_android_release.py`
+verifies the APK signature, certificate, application ID and version code. The
+runner's key is removed in an always-run cleanup step.
+
+## One-time transition
+
+Earlier test releases used disposable runner keys. Their private keys cannot
+be recovered from the APK. Moving from those builds requires one final backup,
+uninstall, install and restore. Backups contain walks, not maps or settings;
+download the maps again and choose settings after that transition.
+
+Afterwards, download a newer APK and install it over Wanderlust. Do not uninstall:
+Android retains the database, saved walks, maps, selection and preferences.
+Stop and save any active walk before installing an update.
+
+## Provisioning status
+
+The stable key is prepared locally. Upload to the repository Actions secret is
+pending explicit approval because automatic approval review blocked exporting
+the private credential. The publication workflow intentionally fails closed
+until that secret is provisioned.
+
+## Local upgrade validation
+
+On Android API 35, builds 990 and 991 signed with the prepared key passed APK
+certificate/application-ID/version checks. Installing 991 over 990 succeeded.
+Every database table remained identical after reopening: walks and fixes,
+downloaded map bytes, selection, coverage and a non-default preference. See
+[screen-off evaluation](SCREEN_OFF_RECORDING.md#evaluation--2026-09-29).

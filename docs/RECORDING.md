@@ -1,6 +1,6 @@
-# Recording and matching before the device test
+# Recording and matching
 
-Foreground recording now journals each GPS fix to local SQLite before a walk
+Walk recording journals each GPS fix to local SQLite before a walk
 is finalized. It retains timestamps and horizontal accuracy, prevents overlapping
 starts, freezes elapsed time on stop, and handles location stream errors and
 completion. Distance is accumulated incrementally; it is still a raw GPS-distance
@@ -14,7 +14,8 @@ duplicate handling, and phone acceptance checks.
 On relaunch, unfinished sessions become `interrupted`; their end time is the last
 committed fix (or start time if there were no fixes). Recovery never resumes GPS
 automatically. Committed points survive a process kill; fixes still awaiting a
-commit can be lost. Background recording is not implemented.
+commit can be lost. User-started Android screen-off recording is implemented;
+see [behaviour, limits and battery acceptance](SCREEN_OFF_RECORDING.md).
 
 If writing fails, recording stops and the in-memory trace remains available for
 **Retry saving walk**. Another walk cannot start until this save succeeds. Retry
@@ -30,22 +31,22 @@ idle without creating a walk. Panning remains manual after centering; subsequent
 fixes move the dot without pulling the map away from where you are looking.
 **Show map area** returns to the full selected street view.
 
-The compact GPS HUD shows coordinates, accuracy, and the age of the fix. It
-explicitly reports waiting for GPS and locations outside the offline Bremen
-bounds. Fixes older than 30 seconds use a gray marker and a last-fix label;
+Optional GPS details show coordinates, accuracy, and the age of the fix. The HUD
+explicitly reports waiting for GPS and locations outside all saved maps. Fixes older than 30 seconds use a gray marker and a last-fix label;
 recording uses a 5 m distance filter, so an aging fix can also mean you have not
-moved. Coverage uses the selected network. If your position is outside it,
+moved. Coverage uses all saved networks. If your position is outside them,
 use **Download a map here** to save nearby streets; see [nearby maps](NEARBY_MAPS.md). Stopping retains the last marker; idle centering can
-refresh it. The bundled geo-core diagnostic is now behind the info button.
+refresh it. The bundled geo-core diagnostic is available in Settings.
 
 Phone follow-up: check initial positioning, accuracy-circle size, pan then
 recenter, area reset, and disabled GPS. Initial installation, permission prompt,
-and receiving a recording fix were confirmed by the tester on 2026-09-26; a
-complete outdoor recording/coverage test remains open.
+and receiving a recording fix were confirmed by the tester on 2026-09-26; outdoor
+recording and saved coverage have since been confirmed by the tester. Broader
+trace-quality and screen-off battery testing remain open.
 
 ## Storage boundary
 
-`app/lib/recording/walk_store.dart` owns database schema version 4 in
+`app/lib/recording/walk_store.dart` owns database schema version 5 in
 `wanderlust.db`: `recorded_walk` and `recorded_point`. SQLite plugin access is lazy
 so an unavailable database reports a recording error instead of crashing startup.
 Writes are serialized and stop waits for queued fixes. Foreign keys are enabled.
@@ -55,7 +56,7 @@ The journal is separate from the older area/segment schema sketch in
 network-scoped counts; see [Bremen coverage](BREMEN_SLICE.md). The current
 saved-walk list loads all recorded points; imports have explicit resource limits.
 Version 3 adds stable backup identities and segment/missing-time metadata. Older database versions migrate in place. Version 4 adds offline maps and
-persisted area selection. Paging remains needed for large libraries.
+persisted area selection. Version 5 adds local display preferences. Paging remains needed for large libraries.
 
 ## Conservative GPX matching
 

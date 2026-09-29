@@ -118,6 +118,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
         const Divider(),
         const ListTile(
+          title: Text('Walking with the screen off'),
+          subtitle: Text(
+            'Start a walk, then lock your phone or use another app. Tap the walk notification to return and stop. If Android closes the app, your saved readings are recovered as an interrupted walk next time you open it.',
+          ),
+        ),
+        const ListTile(
           title: Text('What are street sections?'),
           subtitle: Text(
             'Small pieces of walkable street or path, split at junctions and along longer streets. They are not whole named streets or a score. A section colours when consecutive GPS readings confirm it; uncertain readings may take longer.',

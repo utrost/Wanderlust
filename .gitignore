@@ -32,3 +32,8 @@ __pycache__/
 app/.metadata
 app/.idea/
 app/*.iml
+
+# Persistent APK signing material: never commit or publish private keys.
+.local/signing/
+*.keystore
+*.jks

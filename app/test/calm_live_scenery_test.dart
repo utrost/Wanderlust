@@ -47,6 +47,62 @@ String decorated() => OsmNetwork.normalize(
 void main() {
   sqfliteFfiInit();
   test(
+    'returning from screen-off matches all unseen fixes, not just last 80',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('wanderlust-pocket-');
+      final store = SqliteWalkStore(
+        factory: databaseFactoryFfi,
+        databasePath: '${dir.path}/walks.db',
+      );
+      final batches = <int>[];
+      final controller = CoverageController(
+        store: store,
+        loadNetwork: () async => networkJson(),
+        liveInterval: Duration.zero,
+        match: (_, traces) async {
+          batches.add(WalkCodec.importGpx(traces.single).points.length);
+          return [
+            const MatchResult(walked: [1], gapsFilled: 0, gapsRejected: 0),
+          ];
+        },
+      );
+      SavedWalk snapshot(int length) => SavedWalk(
+        1,
+        fix(0).timestamp,
+        null,
+        'recording',
+        [for (var i = 0; i < length; i++) fix(i)],
+      );
+      Future<void> drain() async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await controller.settled;
+      }
+
+      try {
+        controller.updateLive(snapshot(100));
+        await drain();
+        expect(batches, [100]);
+        controller.setPreviewActive(false);
+        controller.updateLive(snapshot(300));
+        await drain();
+        expect(batches, [100]);
+        controller.setPreviewActive(true);
+        await drain();
+        expect(batches, [100, 280]);
+        expect(controller.displayCounts, {1: 1});
+        expect(controller.counts, isEmpty);
+        controller.updateLive(snapshot(301));
+        await drain();
+        expect(batches.last, 81);
+      } finally {
+        controller.dispose();
+        await controller.settled;
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
+  test(
     'preferences default calm, migrate v4 and persist after reopening',
     () async {
       final dir = await Directory.systemTemp.createTemp('wanderlust-settings-');

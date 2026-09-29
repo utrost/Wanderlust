@@ -6,13 +6,14 @@ A phased plan from nothing to a lifetime map. Ordering follows the architecture:
 
 Status legend: 🔴 not started · 🟡 in progress · 🟢 done.
 
-Current status: **pre-alpha scaffold**. The core map-matching spike, FFI bridge,
-Flutter surface, foreground walk recorder, and CI-built Android debug APK exist.
-The saved-walk → real Bremen street coverage loop now exists and passes a
-host-native integration test. Device validation and the richer offline basemap
-remain open; see [slice evaluation](BREMEN_SLICE.md). GPX import, per-walk GPX
-export, and JSON backup/restore are implemented and tested locally; see
-[import/export](IMPORT_EXPORT.md).
+Current status: **Android pre-alpha in field testing**. The core walk → street
+colour loop has been confirmed on the tester's phone. Offline maps, GPS controls,
+live colouring, parks/water, calm settings, adjustable line width and 1–25 km
+map sides are implemented. GPX import/export and raw-walk backup/restore exist.
+Screen-off recording and persistent APK signing are implemented; signing-secret
+provisioning awaits approval and actual-phone battery testing remains open.
+See [screen-off recording](SCREEN_OFF_RECORDING.md), [Android updates](ANDROID_UPDATES.md)
+and [nearby maps](NEARBY_MAPS.md).
 
 ---
 
@@ -27,8 +28,8 @@ Prove the risky pieces in isolation, before any polished app.
   [ADR-0001](adr/0001-pragmatic-map-matching.md)). Implemented and tested;
   reachable from the app through the FFI boundary + GeoJSON loader
   ([`geo-ffi`](../geo-ffi/)), validated end-to-end (GeoJSON network + GPX in →
-  correct street ids out) on a real-coordinate sample. Still to validate on real
-  OSM data and messy/flâneur GPX.
+  correct street ids out) on a real-coordinate sample. Real OSM data and an initial outdoor walk are validated; broader
+  messy/flâneur GPS field evaluation remains open.
 - 🟢 **Routing graph** load + query for Bremen center, using an OSM-derived
   network with explicit node topology and stable ids.
 - 🟡 **Tile/data pipeline**: reproducible OSM extraction, conservative pedestrian
@@ -37,9 +38,9 @@ Prove the risky pieces in isolation, before any polished app.
   ([#6](https://github.com/utrost/Wanderlust/issues/6)).
 - 🔴 **PMTiles + MapLibre** render of one area, offline
   ([#8](https://github.com/utrost/Wanderlust/issues/8)).
-- 🟡 **Real-device debug APK smoke test**: installation, launch, FFI load,
-  permission prompt, and an initial GPS fix confirmed on Android. Full outdoor
-  recording/coverage and updated location controls still need field validation
+- 🟢 **Initial real-device debug APK smoke test**: installation, launch, FFI load,
+  permission prompt, GPS positioning, downloaded maps and outdoor saved coverage
+  confirmed on Android. Longer field testing remains ongoing
   ([#5](https://github.com/utrost/Wanderlust/issues/5)).
 
 **Exit criteria:** choose one real area, render it offline, feed a GPX file in →
@@ -48,20 +49,21 @@ correct per-segment counts out, no phantom streets.
 ## Phase 1 — Walkable MVP (Android) 🟡
 The smallest thing that delivers the core joy: walk → map fills.
 
-- 🟡 **GPS recording** — foreground recording (a walk as a live GPS trace with
-  duration/distance, exportable as GPX) is implemented in the app. *Background*
-  recording with adaptive sampling + battery budget as an explicit acceptance
-  criterion (see [Architecture](ARCHITECTURE.md#background-gps--a-first-class-risk))
-  is still the open, first-class risk.
+- 🟡 **GPS recording** — foreground and user-started Android screen-off
+  recording implemented with notification, scoped wake lock and SQLite journaling.
+  Hidden display/matching work is deferred until return. Real-phone battery and
+  long-walk trace acceptance remain open; process death recovers committed fixes
+  rather than silently restarting. See [recording](SCREEN_OFF_RECORDING.md).
+- 🟡 **Reliable APK updates** — persistent certificate, fail-closed credential
+  loading, increasing build numbers and signature checks implemented. Secret
+  provisioning awaits explicit approval. See [updates](ANDROID_UPDATES.md).
 - 🟡 **Persistent walk state**: raw walks now use a SQLite recording journal
   with interruption recovery and save retries. Per-walk edge memberships and
-  durable counts and GPX imports are implemented for the bundled network
+  durable counts and GPX imports are implemented across bundled and downloaded networks
   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
-- 🟡 **Filling map**: persisted counts now drive real Bremen street color/width
-  after saving a walk. Live location/accuracy marker, recenter, area reset, and
-  GPS HUD are implemented. Continuous updates during recording and the richer
-  PMTiles basemap remain pending
-  ([#7](https://github.com/utrost/Wanderlust/issues/7)).
+- 🟢 **Filling street map**: live provisional colour/section counts, saved counts,
+  GPS marker/recenter, calm optional details and adjustable line thickness exist.
+  Parks and water render offline; labels and richer basemap styling remain open.
 - 🟡 **Area selection**: GPS-centered 1–25 km-per-side street downloads (4 km default), persistent
   offline map picker, and per-area coverage implemented. Admin boundaries, drawn
   rectangles, and per-area PMTiles remain open. See [nearby maps](NEARBY_MAPS.md).
@@ -105,24 +107,23 @@ The one routing-adjacent feature, deliberately last.
 
 ## Immediate next steps
 
-1. **Real-device APK smoke test** — download the latest `wanderlust-debug-apk`
-   CI artifact and sideload it on Android. Verify launch, FFI status chip,
-   permission request, foreground recording, distance/point updates, stop, and
-   [import/export/backup document dialogs](IMPORT_EXPORT.md#phone-acceptance-checks)
-   ([#5](https://github.com/utrost/Wanderlust/issues/5)).
-2. **First real test area** — use **Bremen center**, anchored on the Roland /
-   Marktplatz (`53.0759058, 8.8073262`) with an initial 1.5 km radius bbox
-   (`8.784897,53.062431,8.829756,53.089380`) for the OSM extract → PMTiles +
-   street GeoJSON pipeline proof (the street snapshot is now bundled and tested)
-   ([#6](https://github.com/utrost/Wanderlust/issues/6)).
-3. **Offline render proof** — load that PMTiles file through MapLibre in the app
-   ([#8](https://github.com/utrost/Wanderlust/issues/8)).
-4. **Validate recorded walk to counts on device** — the implementation and
-   real-FFI integration test exist; verify actual GPS → saved counts → redraw
-   ([#7](https://github.com/utrost/Wanderlust/issues/7)).
-5. **Background GPS spike** — only after the foreground loop works, measure
-   screen-off recording, app-kill resilience, trace quality, and battery drain
-   ([#9](https://github.com/utrost/Wanderlust/issues/9)).
+1. **Finish persistent signing provisioning** — approve upload of the prepared
+   private test key to the repository's Actions secret; then publish the first
+   persistent-key APK. Existing temporary-key installs need one final migration.
+2. **Validate pocket recording on the real phone** — screen locked and another
+   app open, then Stop, force-stop recovery, notification refusal and GPS disabled.
+   Target a one-hour walk with no unexplained moving gaps over 30 seconds and
+   ≤5 percentage points battery use, compared with idle; see the
+   [acceptance protocol](SCREEN_OFF_RECORDING.md).
+3. **Field matching quality** — evaluate parallel streets, crossings, park paths
+   and weak GPS against actual walks. Preserve uncertain gaps rather than falsely
+   colouring neighbouring streets.
+4. **Map download reliability** — large/dense areas, clear progress/failure handling
+   and an explicit fresh-location option before selecting download bounds.
+5. **Backup completeness and phone dialogs** — include settings and optionally
+   offline maps; exercise Android import/export/restore selectors on device.
+6. **Map presentation** — street/place labels and clearer area names; evaluate
+   MapLibre/PMTiles against the existing offline renderer before adopting it.
 
 ---
 
@@ -130,8 +131,8 @@ The one routing-adjacent feature, deliberately last.
 
 Tracked here until decided; each blocks the phase noted.
 
-- **Android smoke-test result** — whether the CI-built APK actually loads the
-  native geo-core and records foreground GPS on Uwe's device. *(Phase 0)*
+- **Screen-off field result** — sustained trace quality and battery consumption
+  on the actual Android phone. Initial foreground smoke testing is complete. *(Phase 1)*
 - **Onboarding flow** — area selection + the optional GPX-import step. *(Phase 1)*
 - **The completeness denominator** — what counts as "walkable" in an area (both
   sides of a divided road? park paths absent from OSM? private roads?). Directly
@@ -155,5 +156,5 @@ These are permanent non-goals, not backlog. See
 ## Latest phone-feedback slice
 
 Implemented calm-by-default recording details with persisted settings, live street
-colour and section counts during walks, and offline decorative parks/water with
-refresh for older downloads. See [calm walking](CALM_WALKING.md).
+colour and section counts during walks, offline decorative parks/water with
+refresh for older downloads, configurable finer lines and 1–25 km map sides. See [calm walking](CALM_WALKING.md).

@@ -27,7 +27,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // Proves the native geo-core loads and matches on the device.
   late final Future<GeoDiagnostic> _liveMatch = runSampleMatch();
 
@@ -52,6 +52,7 @@ class _MapScreenState extends State<MapScreen> {
   int _centerRequest = 0;
   int _areaRequest = 0;
   Timer? _gpsClock;
+  bool _visible = true;
 
   Position? get _currentFix {
     final recorded = _recorder.latestPosition;
@@ -78,7 +79,7 @@ class _MapScreenState extends State<MapScreen> {
       _gpsError = null;
     });
     try {
-      final error = await DeviceLocationSource().authorize();
+      final error = await DeviceLocationSource(forRecording: false).authorize();
       if (!mounted) return;
       if (error != null) {
         setState(
@@ -179,10 +180,16 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _recorder.addListener(_walkChanged);
     _coverage.initialize();
     _recorder.initialize();
     unawaited(_loadPreferences());
+    _startGpsClock();
+  }
+
+  void _startGpsClock() {
+    _gpsClock?.cancel();
     _gpsClock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && !_recorder.isRecording && _currentFix != null) {
         setState(() {});
@@ -191,7 +198,24 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Permission dialogs temporarily make the activity inactive; they must not
+    // cancel the user-initiated start. Hidden/paused mean it is actually away.
+    if (state == AppLifecycleState.inactive) return;
+    final visible = state == AppLifecycleState.resumed;
+    _visible = visible;
+    _coverage.setPreviewActive(visible);
+    _recorder.setForeground(visible);
+    if (visible) {
+      _startGpsClock();
+    } else {
+      _gpsClock?.cancel();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _gpsClock?.cancel();
     _recorder.removeListener(_walkChanged);
     // Finish pending coverage work before the recorder closes the shared DB.
@@ -201,6 +225,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _walkChanged() {
+    if (!_visible) return;
     if (mounted) setState(() {});
     if (_recorder.isRecording) {
       final walk = _recorder.recordingSnapshot;

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'walk_store.dart';
@@ -21,6 +22,32 @@ abstract class LocationSource {
 }
 
 class DeviceLocationSource implements LocationSource {
+  DeviceLocationSource({this.forRecording = true});
+  final bool forRecording;
+  static const _notificationChannel = MethodChannel('wanderlust/walking');
+
+  /// A user-started location service keeps this stream alive with the screen
+  /// off. Cancellation releases both GPS and the service's partial wake lock.
+  static LocationSettings settingsFor(TargetPlatform platform) =>
+      platform == TargetPlatform.android
+      ? AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+          intervalDuration: const Duration(seconds: 5),
+          foregroundNotificationConfig: const ForegroundNotificationConfig(
+            notificationTitle: 'Walk in progress',
+            notificationText: 'Recording your route. Tap to return and stop.',
+            notificationChannelName: 'Walk recording',
+            notificationIcon: AndroidResource(name: 'ic_walk_notification'),
+            enableWakeLock: true,
+            setOngoing: true,
+          ),
+        )
+      : const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+        );
+
   @override
   Future<RecorderError?> authorize() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
@@ -30,18 +57,21 @@ class DeviceLocationSource implements LocationSource {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    return permission == LocationPermission.denied ||
-            permission == LocationPermission.deniedForever
-        ? RecorderError.permissionDenied
-        : null;
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return RecorderError.permissionDenied;
+    }
+    if (forRecording && defaultTargetPlatform == TargetPlatform.android) {
+      // Notification denial does not revoke location permission. Android still
+      // exposes the active foreground service in its active-apps controls.
+      await _notificationChannel.invokeMethod<bool>('prepareRecording');
+    }
+    return null;
   }
 
   @override
   Stream<Position> positions() => Geolocator.getPositionStream(
-    locationSettings: const LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 5,
-    ),
+    locationSettings: settingsFor(defaultTargetPlatform),
   );
 }
 
@@ -66,6 +96,7 @@ class WalkRecorder extends ChangeNotifier {
   int? _walkId;
   double _distance = 0;
   bool _disposed = false;
+  bool _foreground = true;
   bool _initialized = false;
   bool _pendingSave = false;
   bool get needsSaveRetry => _pendingSave;
@@ -99,6 +130,22 @@ class WalkRecorder extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  /// GPS and journaling continue while hidden; the display clock need not wake
+  /// Dart every second. Elapsed time is derived from timestamps on return.
+  void setForeground(bool value) {
+    _foreground = value;
+    _updateTicker();
+    if (value) _notify();
+  }
+
+  void _updateTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (_foreground && isRecording && !_disposed) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _notify());
+    }
+  }
+
   Future<void> initialize() => _initializing ??= _initialize();
   Future<void> _initialize() async {
     try {
@@ -130,7 +177,7 @@ class WalkRecorder extends ChangeNotifier {
       }
       if (!_initialized) return false;
       lastError = await _location.authorize();
-      if (lastError != null || _disposed) return false;
+      if (lastError != null || _disposed || !_foreground) return false;
       final startedAt = _now();
       try {
         _walkId = await _store.begin(startedAt);
@@ -139,6 +186,11 @@ class WalkRecorder extends ChangeNotifier {
         return false;
       }
       if (_disposed) return false;
+      if (!_foreground) {
+        await _store.finish(_walkId!, _now(), 'interrupted');
+        _savedWalks = await _store.recoverAndList();
+        return false;
+      }
       _points.clear();
       _distance = 0;
       _startedAt = startedAt;
@@ -150,7 +202,7 @@ class WalkRecorder extends ChangeNotifier {
         onError: (Object error, StackTrace stack) => _locationEnded(),
         onDone: _locationEnded,
       );
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _notify());
+      _updateTicker();
       _notify();
       return true;
     } catch (_) {

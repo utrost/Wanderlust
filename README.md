@@ -11,12 +11,11 @@ personal territory grow.
 It is the opposite of a fitness tracker. You are not an athlete here — you are a
 cartographer of your own world.
 
-> **Status: pre-alpha scaffold.** Wanderlust now contains a Rust geo-core, a
-> Flutter Android-first app scaffold, foreground GPS recording, FFI wiring, and a
-> CI-built debug APK. It now also has real offline Bremen street geometry and
-> persistent per-walk coverage. The product is not yet a walkable MVP: the richer
-> offline basemap, GPX import, export/backup, and background GPS are still open. See [Current state](#current-state) and
-> [Roadmap](docs/ROADMAP.md).
+> **Status: Android pre-alpha, in phone testing.** Offline street downloads,
+> live coverage, parks/water, calm settings, GPX import/export and walk
+> backup/restore are implemented. Android screen-off recording is implemented;
+> real-phone battery and longer-walk validation remain open. See
+> [Roadmap](docs/ROADMAP.md) and [screen-off recording](docs/SCREEN_OFF_RECORDING.md).
 
 ---
 
@@ -31,9 +30,9 @@ Implemented, with automated checks configured in CI:
   matching, and integration tests.
 - **Flutter app scaffold** (`app/`) that renders the filling-map surface, calls
   the real Rust geo-core through FFI on startup when the native library is
-  bundled, and shows the result in a status chip.
-- **Foreground walk recording**: permission flow, elapsed time, distance, and
-  point count; fixes are journaled to SQLite with timestamps and accuracy.
+  bundled, with diagnostics available in Settings.
+- **Walk recording**: permission flow, distance, optional elapsed time/GPS
+  samples, and an Android foreground service for screen-off walks; fixes are journaled to SQLite with timestamps and accuracy.
   Saved walks survive restarts, interrupted sessions are recovered, and failed
   saves can be retried. Saved GPX is viewable/copyable in the app.
 - **Matching safeguards**: GPX segment/time boundaries, conservative ambiguity
@@ -49,13 +48,16 @@ Implemented, with automated checks configured in CI:
 counts, and an offline pan/zoom street view driven by saved walks now exist.
 See [implementation and evaluation](docs/BREMEN_SLICE.md).
 
-Still not implemented:
+Still open:
 
-- Offline PMTiles + MapLibre rendering of a real selected area.
-- Field validation of matching on real noisy GPS traces.
-- Continuous map updates during a walk (coverage currently updates after saving).
-- GPX import, user export, and ZIP backup flows.
-- Background GPS with battery and app-kill resilience.
+- Real-phone battery and long-walk validation for screen-off recording.
+- Field validation of matching on varied, noisy GPS traces.
+- Richer offline basemap/labels (PMTiles + MapLibre remains a possible approach).
+- Backups including maps/settings, and compressed/streaming archives.
+- Continuous recording after OS process termination (committed fixes recover).
+
+Test APKs now have a persistent-signing build path and increasing version codes.
+Credential provisioning is awaiting approval; see [Android updates](docs/ANDROID_UPDATES.md).
 
 ---
 

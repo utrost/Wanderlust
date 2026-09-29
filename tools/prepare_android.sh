@@ -13,16 +13,8 @@ cd "$ROOT/app"
 
 flutter create --org com.wanderlust --project-name wanderlust --platforms=android .
 
-# Location permissions (idempotent — flutter create won't have added them).
-MANIFEST="android/app/src/main/AndroidManifest.xml"
-if ! grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
-  perl -0pi -e 's/(<manifest[^>]*>)/$1\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>/' "$MANIFEST"
-fi
-
-# User-initiated nearby map downloads also need internet in release builds.
-if ! grep -q "android.permission.INTERNET" "$MANIFEST"; then
-  perl -0pi -e 's/(<manifest[^>]*>)/$1\n    <uses-permission android:name="android.permission.INTERNET"\/>/' "$MANIFEST"
-fi
+# Idempotent permissions, notification icon, and notification permission bridge.
+python3 "$ROOT/tools/configure_android.py" android
 
 # Cross-compile geo-ffi (libwanderlust_geo.so) into jniLibs for the shipped ABIs.
 cargo ndk -t arm64-v8a -t x86_64 \

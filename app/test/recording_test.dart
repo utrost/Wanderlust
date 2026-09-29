@@ -1,21 +1,23 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:wanderlust/recording/walk_recorder.dart';
 import 'package:wanderlust/recording/walk_store.dart';
 
 Position fix(int seconds) => Position(
-    longitude: 8.8 + seconds * 0.00001,
-    latitude: 53.07,
-    timestamp: DateTime.utc(2026, 7, 11, 9, 0, seconds),
-    accuracy: 4,
-    altitude: 0,
-    altitudeAccuracy: 0,
-    heading: 0,
-    headingAccuracy: 0,
-    speed: 0,
-    speedAccuracy: 0);
+  longitude: 8.8 + seconds * 0.00001,
+  latitude: 53.07,
+  timestamp: DateTime.utc(2026, 7, 11, 9, 0, seconds),
+  accuracy: 4,
+  altitude: 0,
+  altitudeAccuracy: 0,
+  heading: 0,
+  headingAccuracy: 0,
+  speed: 0,
+  speedAccuracy: 0,
+);
 
 class FakeLocation implements LocationSource {
   final stream = StreamController<Position>.broadcast();
@@ -60,14 +62,78 @@ class MemoryStore implements WalkStore {
 
   @override
   Future<List<SavedWalk>> recoverAndList() async => [
-        for (final id in points.keys)
-          SavedWalk(id, starts[id]!, null, statuses[id]!, points[id]!)
-      ];
+    for (final id in points.keys)
+      SavedWalk(id, starts[id]!, null, statuses[id]!, points[id]!),
+  ];
   @override
   Future<void> close() async {}
 }
 
 void main() {
+  test(
+    'Android recording requests screen-off service without a Wi-Fi lock',
+    () {
+      final settings =
+          DeviceLocationSource.settingsFor(TargetPlatform.android)
+              as AndroidSettings;
+      expect(settings.intervalDuration, const Duration(seconds: 5));
+      expect(settings.distanceFilter, 5);
+      expect(settings.foregroundNotificationConfig!.enableWakeLock, isTrue);
+      expect(settings.foregroundNotificationConfig!.enableWifiLock, isFalse);
+      expect(settings.foregroundNotificationConfig!.setOngoing, isTrue);
+      expect(
+        DeviceLocationSource.settingsFor(TargetPlatform.iOS),
+        isNot(isA<AndroidSettings>()),
+      );
+    },
+  );
+
+  test('screen off keeps journaling but suspends display ticks', () async {
+    final source = FakeLocation();
+    final store = MemoryStore();
+    final recorder = WalkRecorder(location: source, store: store);
+    await recorder.start();
+    recorder.setForeground(false);
+    var notifications = 0;
+    recorder.addListener(() => notifications++);
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(notifications, 0);
+    source.stream.add(fix(1));
+    source.stream.add(fix(5));
+    await Future<void>.delayed(Duration.zero);
+    expect(store.points[1], hasLength(2));
+    expect(recorder.isRecording, isTrue);
+    recorder.setForeground(true);
+    final beforeTick = notifications;
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(notifications, beforeTick + 1);
+    await recorder.stop();
+    expect(source.stream.hasListener, isFalse);
+    expect(store.statuses[1], 'completed');
+    recorder.dispose();
+    await source.stream.close();
+  });
+
+  test(
+    'leaving app during authorization never starts a background service',
+    () async {
+      final source = FakeLocation()..authorization = Completer();
+      final store = MemoryStore();
+      final recorder = WalkRecorder(location: source, store: store);
+      final starting = recorder.start();
+      recorder.setForeground(false);
+      source.authorization!.complete(null);
+      expect(await starting, isFalse);
+      expect(store.nextId, 0);
+      expect(source.stream.hasListener, isFalse);
+      recorder.setForeground(true);
+      expect(await recorder.start(), isTrue);
+      await recorder.stop();
+      recorder.dispose();
+      await source.stream.close();
+    },
+  );
+
   test('overlapping starts authorize and create only one walk', () async {
     final source = FakeLocation()..authorization = Completer();
     final store = MemoryStore();
@@ -82,27 +148,35 @@ void main() {
     await source.stream.close();
   });
 
-  test('stop freezes elapsed, drains writes, and preserves GPX metadata',
-      () async {
-    final source = FakeLocation();
-    final store = MemoryStore();
-    var now = DateTime.utc(2026, 7, 11, 9);
-    final recorder =
-        WalkRecorder(location: source, store: store, now: () => now);
-    await recorder.start();
-    source.stream.add(fix(1));
-    source.stream.add(fix(5));
-    await Future<void>.delayed(Duration.zero);
-    now = now.add(const Duration(seconds: 10));
-    await recorder.stop();
-    now = now.add(const Duration(minutes: 1));
-    expect(recorder.elapsed, const Duration(seconds: 10));
-    expect(store.points[1], hasLength(2));
-    expect(recorder.toGpx(), contains('<time>2026-07-11T09:00:01.000Z</time>'));
-    expect(recorder.toGpx(), contains('<wl:accuracy>4.0</wl:accuracy>'));
-    recorder.dispose();
-    await source.stream.close();
-  });
+  test(
+    'stop freezes elapsed, drains writes, and preserves GPX metadata',
+    () async {
+      final source = FakeLocation();
+      final store = MemoryStore();
+      var now = DateTime.utc(2026, 7, 11, 9);
+      final recorder = WalkRecorder(
+        location: source,
+        store: store,
+        now: () => now,
+      );
+      await recorder.start();
+      source.stream.add(fix(1));
+      source.stream.add(fix(5));
+      await Future<void>.delayed(Duration.zero);
+      now = now.add(const Duration(seconds: 10));
+      await recorder.stop();
+      now = now.add(const Duration(minutes: 1));
+      expect(recorder.elapsed, const Duration(seconds: 10));
+      expect(store.points[1], hasLength(2));
+      expect(
+        recorder.toGpx(),
+        contains('<time>2026-07-11T09:00:01.000Z</time>'),
+      );
+      expect(recorder.toGpx(), contains('<wl:accuracy>4.0</wl:accuracy>'));
+      recorder.dispose();
+      await source.stream.close();
+    },
+  );
 
   for (final diskFailure in [false, true]) {
     test('${diskFailure ? 'storage' : 'GPS'} failure stops safely', () async {
@@ -118,40 +192,43 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(recorder.state, RecorderState.idle);
       expect(
-          recorder.lastError,
-          diskFailure
-              ? RecorderError.storageFailed
-              : RecorderError.locationFailed);
+        recorder.lastError,
+        diskFailure
+            ? RecorderError.storageFailed
+            : RecorderError.locationFailed,
+      );
       expect(store.statuses[1], 'interrupted');
       recorder.dispose();
       await source.stream.close();
     });
   }
 
-  test('failed save retains trace and retries without duplicating points',
-      () async {
-    final source = FakeLocation();
-    final store = MemoryStore();
-    final recorder = WalkRecorder(location: source, store: store);
-    await recorder.start();
-    source.stream.add(fix(1));
-    await Future<void>.delayed(Duration.zero);
-    store.failAppend = true;
-    source.stream.add(fix(2));
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    expect(recorder.needsSaveRetry, isTrue);
-    expect(await recorder.start(), isFalse);
-    expect(recorder.pointCount, 2);
-    store.failAppend = false;
-    await recorder.retrySave();
-    expect(store.points[1], hasLength(2));
-    expect(recorder.needsSaveRetry, isFalse);
-    expect(await recorder.start(), isTrue);
-    await recorder.stop();
-    expect(store.points[1], hasLength(2));
-    recorder.dispose();
-    await source.stream.close();
-  });
+  test(
+    'failed save retains trace and retries without duplicating points',
+    () async {
+      final source = FakeLocation();
+      final store = MemoryStore();
+      final recorder = WalkRecorder(location: source, store: store);
+      await recorder.start();
+      source.stream.add(fix(1));
+      await Future<void>.delayed(Duration.zero);
+      store.failAppend = true;
+      source.stream.add(fix(2));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(recorder.needsSaveRetry, isTrue);
+      expect(await recorder.start(), isFalse);
+      expect(recorder.pointCount, 2);
+      store.failAppend = false;
+      await recorder.retrySave();
+      expect(store.points[1], hasLength(2));
+      expect(recorder.needsSaveRetry, isFalse);
+      expect(await recorder.start(), isTrue);
+      await recorder.stop();
+      expect(store.points[1], hasLength(2));
+      recorder.dispose();
+      await source.stream.close();
+    },
+  );
 
   test('stream completion retains a recoverable interrupted walk', () async {
     final source = FakeLocation();
@@ -167,19 +244,21 @@ void main() {
     recorder.dispose();
   });
 
-  test('disposing during permission request never starts GPS or creates a walk',
-      () async {
-    final source = FakeLocation()..authorization = Completer();
-    final store = MemoryStore();
-    final recorder = WalkRecorder(location: source, store: store);
-    final starting = recorder.start();
-    await Future<void>.delayed(Duration.zero);
-    recorder.dispose();
-    source.authorization!.complete(null);
-    expect(await starting, isFalse);
-    expect(store.nextId, 0);
-    await source.stream.close();
-  });
+  test(
+    'disposing during permission request never starts GPS or creates a walk',
+    () async {
+      final source = FakeLocation()..authorization = Completer();
+      final store = MemoryStore();
+      final recorder = WalkRecorder(location: source, store: store);
+      final starting = recorder.start();
+      await Future<void>.delayed(Duration.zero);
+      recorder.dispose();
+      source.authorization!.complete(null);
+      expect(await starting, isFalse);
+      expect(store.nextId, 0);
+      await source.stream.close();
+    },
+  );
 
   test('permission denial creates no session and can be retried', () async {
     final source = FakeLocation()..error = RecorderError.permissionDenied;
