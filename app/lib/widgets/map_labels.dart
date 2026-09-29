@@ -53,8 +53,9 @@ List<PlacedMapLabel> layoutMapLabels(
     final painter = mapLabelText(c.$1, c.$3, textScale);
     final width = painter.width, height = painter.height;
     painter.dispose();
-    if (!c.$3 && (visibleLengths[c.$1] ?? 0) < math.max(60, width * 1.3))
+    if (!c.$3 && (visibleLengths[c.$1] ?? 0) < math.max(60, width * 1.3)) {
       continue;
+    }
     final rect = Rect.fromCenter(
       center: c.$2,
       width: width + 8,
