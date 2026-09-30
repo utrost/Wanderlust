@@ -27,6 +27,7 @@ class WalkLibraryScreen extends StatefulWidget {
     this.showSamples = false,
     this.networks = const [],
     this.fillSmallGaps = false,
+    this.showStreetNames = true,
   });
   final SqliteWalkStore store;
   final Future<void> Function() onChanged;
@@ -34,6 +35,7 @@ class WalkLibraryScreen extends StatefulWidget {
   final bool showSamples;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
+  final bool showStreetNames;
 
   @override
   State<WalkLibraryScreen> createState() => _WalkLibraryScreenState();
@@ -185,6 +187,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                     walk: walk,
                                     networks: widget.networks,
                                     fillSmallGaps: widget.fillSmallGaps,
+                                    showStreetNames: widget.showStreetNames,
                                   ),
                                 ),
                               ),

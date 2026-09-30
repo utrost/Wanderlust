@@ -15,11 +15,13 @@ class WalkReviewScreen extends StatefulWidget {
     required this.walk,
     this.networks = const [],
     this.fillSmallGaps = false,
+    this.showStreetNames = true,
     this.match = matchWalkReview,
   });
   final SavedWalk walk;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
+  final bool showStreetNames;
   final ReviewMatcher match;
   @override
   State<WalkReviewScreen> createState() => _WalkReviewScreenState();
@@ -167,6 +169,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
           child: viewport == null
               ? const Center(child: Text('Loading map…'))
               : AreaMap(
+                  showStreetNames: widget.showStreetNames,
                   network: viewport!,
                   coverageScreenWidth: 4,
                   networks: maps,

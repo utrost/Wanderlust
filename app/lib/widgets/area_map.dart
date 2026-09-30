@@ -35,6 +35,7 @@ class AreaMap extends StatefulWidget {
     required this.counts,
     this.networks = const [],
     this.walkedLineWidth = 3,
+    this.showStreetNames = true,
     this.coverageScreenWidth,
     this.position,
     this.stale = false,
@@ -46,6 +47,7 @@ class AreaMap extends StatefulWidget {
   });
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
+  final bool showStreetNames;
   final double? coverageScreenWidth;
   final AreaNetwork network;
   final Map<int, int> counts;
@@ -169,6 +171,7 @@ class _AreaMapState extends State<AreaMap> {
                   networks: widget.networks,
                   counts: widget.counts,
                   walkedLineWidth: widget.walkedLineWidth,
+                  showStreetNames: widget.showStreetNames,
                   coverageScreenWidth: widget.coverageScreenWidth,
                   transform: _transform.value.clone(),
                   trace: widget.trace,
@@ -267,6 +270,7 @@ class AreaMapPainter extends CustomPainter {
     required this.counts,
     this.networks = const [],
     this.walkedLineWidth = 3,
+    this.showStreetNames = true,
     this.coverageScreenWidth,
     this.transform,
     this.trace = const [],
@@ -275,6 +279,7 @@ class AreaMapPainter extends CustomPainter {
   });
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
+  final bool showStreetNames;
   final double? coverageScreenWidth;
   final Matrix4? transform;
   final AreaNetwork network;
@@ -385,7 +390,7 @@ class AreaMapPainter extends CustomPainter {
         maps.toList(),
         size,
         project,
-        streets: mapSpanKm(network) / zoom <= 2,
+        streets: showStreetNames && mapSpanKm(network) / zoom <= 2,
         textScale: textScale,
       ),
       textScale,
@@ -409,6 +414,7 @@ class AreaMapPainter extends CustomPainter {
       oldDelegate.counts != counts ||
       oldDelegate.networks != networks ||
       oldDelegate.walkedLineWidth != walkedLineWidth ||
+      oldDelegate.showStreetNames != showStreetNames ||
       oldDelegate.coverageScreenWidth != coverageScreenWidth ||
       oldDelegate.trace != trace ||
       oldDelegate.inferred != inferred ||

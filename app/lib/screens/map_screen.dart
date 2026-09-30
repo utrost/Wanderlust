@@ -292,6 +292,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             networks: _coverage.networks,
                             counts: _coverage.displayCounts,
                             walkedLineWidth: _preferences.walkedLineWidth,
+                            showStreetNames: _preferences.showStreetNames,
                             position: _currentFix,
                             stale:
                                 _currentFix != null &&
@@ -660,6 +661,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           showSamples: _preferences.showSamples,
           networks: _coverage.networks,
           fillSmallGaps: _preferences.fillSmallGaps,
+          showStreetNames: _preferences.showStreetNames,
           onChanged: () async {
             await _recorder.refreshSavedWalks();
             await _coverage.synchronize(_recorder.savedWalks);

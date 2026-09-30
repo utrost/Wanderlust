@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'about_screen.dart';
+import '../theme/heat_ramp.dart';
 import '../settings/walk_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -139,6 +140,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : (v) => change(value.copyWith(detailedGps: v)),
         ),
         const Divider(),
+        SwitchListTile(
+          title: const Text('Show street names'),
+          subtitle: const Text(
+            'Applies to the main map and saved-walk review. Place and park names remain visible.',
+          ),
+          value: value.showStreetNames,
+          onChanged: busy
+              ? null
+              : (v) => change(value.copyWith(showStreetNames: v)),
+        ),
+        const ListTile(
+          title: Text('Your walking heatmap'),
+          subtitle: Text(
+            'Streets deepen in colour with each separate walk. A section counts once per walk, even if you pass it several times. The current walk adds a live preview.',
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Wrap(
+            spacing: 20,
+            runSpacing: 12,
+            children: [
+              for (final count in [1, 5, 20, 100])
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 4,
+                      color: HeatRamp.color(count, dark: false),
+                    ),
+                    const SizedBox(height: 6),
+                    Text('$count ${count == 1 ? 'walk' : 'walks'}'),
+                  ],
+                ),
+            ],
+          ),
+        ),
         const ListTile(
           title: Text('Walking with the screen off'),
           subtitle: Text(

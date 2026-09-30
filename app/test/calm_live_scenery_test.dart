@@ -128,6 +128,7 @@ void main() {
           'showTime': true,
           'showSamples': true,
           'showGps': false,
+          'showStreetNames': true,
           'detailedGps': false,
           'fillSmallGaps': false,
           'walkedLineWidth': 3.0,

@@ -156,3 +156,15 @@ Flutter supplies its dependency notices; `tools/generate_licenses.py` bundles
 licences from the enabled Rust dependency sources and copies the repository
 licence. Android preparation regenerates these assets after compiling the native
 matcher; run it when updating Cargo dependencies.
+
+**Settings → Show street names** toggles road labels on both the main map and
+saved-walk review. Place and park names remain visible. The choice persists
+between launches; existing installations retain street names by default.
+
+The main heatmap counts each street section once per distinct walk. Repeated GPS
+fixes or multiple passes within one recording do not add visits. A new walk adds
+one live preview visit, confirmed on saving; overlapping offline maps are
+combined without double-counting the same walk. The warm colour deepens on a
+logarithmic scale up to 1,000 walks. Settings includes a colour key for 1, 5, 20
+and 100 walks. Saved-walk review shows that individual walk rather than the
+accumulated heatmap.
