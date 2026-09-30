@@ -101,6 +101,13 @@ available for testers changing signing channels.
 
 ## Submission material and outstanding gates
 
+The GitHub repository is currently **private** (checked 2026-09-30). Public
+F-Droid source access, usable public support/source links and a public privacy
+policy require a publication decision. Do not assume a GitHub source-file URL
+works for people outside the repository. Changing repository visibility exposes
+its history as well as the current code; review that separately before publishing.
+
+
 - `fastlane/metadata/android/en-US/`: store copy and artwork. Capture screenshots
   from the final candidate with synthetic or explicitly approved personal data.
 - `app/assets/legal/privacy.txt`: policy available offline in About. Matching

@@ -63,6 +63,8 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
 
+      - uses: android-actions/setup-android@v3
+
       - name: Point cargo-ndk at the runner's NDK
         run: |
           sdkmanager "ndk;$NDK_VERSION"

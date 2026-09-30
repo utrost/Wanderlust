@@ -25,7 +25,7 @@ debug fallback, pinned dependency/toolchain versions, release APK/AAB workflow,
 16 KB native packaging checks, launcher artwork and store-copy drafts.
 
 Still required before publication: production signing choice and credentials,
-public privacy-policy hosting, Play Console declarations/account setup, final
+public source access and privacy-policy hosting, Play Console declarations/account setup, final
 store screenshots, F-Droid build-server validation and real-phone release-candidate
 field tests. See [release procedure and gates](ANDROID_UPDATES.md#store-candidates-010).
 
