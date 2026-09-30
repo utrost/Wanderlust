@@ -162,3 +162,10 @@ continued. A regression test verifies it never reuses the recording stream.
 
 Store screenshots use synthetic emulator positions/notes, not the user's traces.
 Artwork and copy are drafts for review before store submission.
+
+F-Droid scanner 2.4.5 found no known non-free classes in the unsigned release APK.
+Scanning a clean source archive initially flagged the compressed OSM input fixture
+`data/bremen/source.osm.gz`; the draft recipe now removes this build-test input
+(which is not packaged by the app). With that removal the source scan reported
+zero fatal findings, without scanner exemptions. This is not full F-Droid build
+server validation or an audit of every dependency licence.

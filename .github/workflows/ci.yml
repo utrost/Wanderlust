@@ -64,6 +64,10 @@ jobs:
         run: cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          cmdline-tools-version: '12266719'
+          log-accepted-android-sdk-licenses: false
 
       - name: Point cargo-ndk at the runner's NDK
         run: |

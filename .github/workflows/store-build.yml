@@ -35,6 +35,10 @@ jobs:
           targets: aarch64-linux-android,x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          cmdline-tools-version: '12266719'
+          log-accepted-android-sdk-licenses: false
 
       - name: Install pinned Android tooling
         run: |

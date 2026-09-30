@@ -29,6 +29,10 @@ Builds:
     versionCode: 100001
     commit: v0.1.0
     disable: Awaiting first release tag and build-server validation
+    # OSM input fixture used by the network-generation tests, not by the app.
+    # Remove rather than adding a scanner exemption for compressed archives.
+    rm:
+      - data/bremen/source.osm.gz
     output: app/build/app/outputs/flutter-apk/app-release.apk
     ndk: 28.2.13676358
     build:
