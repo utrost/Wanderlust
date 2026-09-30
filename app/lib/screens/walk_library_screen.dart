@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../memories/memory_backup.dart';
+import '../memories/memory_photos.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,12 +11,10 @@ import 'walk_review_screen.dart';
 import '../transfer/walk_codec.dart';
 import '../transfer/walk_files.dart';
 
-List<SavedWalk> _readBackup(Uint8List bytes) =>
-    WalkCodec.importBackup(WalkCodec.decodeBytes(bytes));
+MemoryBackup _readBackup(Uint8List bytes) => MemoryBackup.decode(bytes);
 SavedWalk _readGpx(Uint8List bytes) =>
     WalkCodec.importGpx(WalkCodec.decodeBytes(bytes));
-Uint8List _writeBackup(List<SavedWalk> walks) =>
-    Uint8List.fromList(utf8.encode(WalkCodec.exportBackup(walks)));
+Uint8List _writeBackup(MemoryBackup backup) => MemoryBackup.encode(backup);
 Uint8List _writeGpx(SavedWalk walk) =>
     Uint8List.fromList(utf8.encode(WalkCodec.exportGpx(walk)));
 
@@ -28,6 +28,7 @@ class WalkLibraryScreen extends StatefulWidget {
     this.networks = const [],
     this.fillSmallGaps = false,
     this.showStreetNames = true,
+    this.showMemories = true,
   });
   final SqliteWalkStore store;
   final Future<void> Function() onChanged;
@@ -36,6 +37,7 @@ class WalkLibraryScreen extends StatefulWidget {
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
   final bool showStreetNames;
+  final bool showMemories;
 
   @override
   State<WalkLibraryScreen> createState() => _WalkLibraryScreenState();
@@ -79,12 +81,17 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   Future<void> _import(bool backup) async {
     final bytes = await _files.pick();
     if (bytes == null) return;
-    final walks = backup
+    final bundle = backup
         ? await compute(_readBackup, bytes)
-        : [await compute(_readGpx, bytes)];
+        : MemoryBackup([await compute(_readGpx, bytes)], const []);
+    for (final memory in bundle.memories) {
+      if (memory.photo != null) await validatePhoto(memory.photo!);
+    }
+    final walks = bundle.walks;
     final added = await widget.store.mergeWalks(
       walks,
       deduplicateTrace: !backup,
+      memories: bundle.memories,
     );
     await _load();
     // Raw data is committed before matching. A matching failure cannot lose it.
@@ -94,13 +101,18 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _backup() async {
-    final bytes = await compute(_writeBackup, _walks);
+    final bytes = await compute(
+      _writeBackup,
+      MemoryBackup(_walks, await widget.store.memories.exportAll()),
+    );
     final saved = await _files.save(
       'wanderlust-backup.json',
       'application/json',
       bytes,
     );
-    if (saved) _message = 'Backup saved (${_walks.length} walks).';
+    if (saved) {
+      _message = 'Backup saved: ${_walks.length} walks, memories and photos.';
+    }
   }
 
   Future<void> _export(SavedWalk walk) async {
@@ -125,7 +137,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
             child: Column(
               children: [
                 const Text(
-                  'Import GPX tracks or restore a Wanderlust backup. Restore adds missing walks and keeps your existing walks.',
+                  'Import GPX tracks or restore a Wanderlust backup. Backups include memories and photos. Restore adds missing items and keeps existing local entries.',
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -150,7 +162,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                   ],
                 ),
                 const Text(
-                  'Exports contain your location history. Choose where to save them.',
+                  'Backups include notes, locations and photos (up to 128 MiB). GPX contains only the walk. Choose where to save exports.',
                   style: TextStyle(fontSize: 12),
                 ),
                 if (_busy)
@@ -188,6 +200,8 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                     networks: widget.networks,
                                     fillSmallGaps: widget.fillSmallGaps,
                                     showStreetNames: widget.showStreetNames,
+                                    memoryStore: widget.store.memories,
+                                    showMemories: widget.showMemories,
                                   ),
                                 ),
                               ),

@@ -6,6 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import '../data/area_network.dart';
 import '../theme/heat_ramp.dart';
 import 'map_labels.dart';
+import '../memories/memory.dart';
+import 'memory_markers.dart';
 import 'walk_overlay.dart';
 
 /// Offline street geometry, with exactly the ids and coordinates used by Rust.
@@ -36,6 +38,8 @@ class AreaMap extends StatefulWidget {
     this.networks = const [],
     this.walkedLineWidth = 3,
     this.showStreetNames = true,
+    this.memories = const [],
+    this.onMemory,
     this.coverageScreenWidth,
     this.position,
     this.stale = false,
@@ -48,6 +52,8 @@ class AreaMap extends StatefulWidget {
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
   final bool showStreetNames;
+  final List<WalkMemory> memories;
+  final void Function(WalkMemory)? onMemory;
   final double? coverageScreenWidth;
   final AreaNetwork network;
   final Map<int, int> counts;
@@ -181,6 +187,19 @@ class _AreaMapState extends State<AreaMap> {
               ),
             ),
           ),
+          if (widget.onMemory != null && widget.memories.isNotEmpty)
+            AnimatedBuilder(
+              animation: _transform,
+              builder: (context, _) => MemoryMarkers(
+                memories: widget.memories,
+                size: _size!,
+                open: widget.onMemory!,
+                project: (p) => MatrixUtils.transformPoint(
+                  _transform.value,
+                  mapPoint(widget.network, p, _size!),
+                ),
+              ),
+            ),
           if (widget.position case final position?)
             IgnorePointer(
               child: Semantics(

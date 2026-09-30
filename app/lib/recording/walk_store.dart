@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../memories/memory_store.dart';
+import '../memories/memory.dart';
 
 import 'saved_walk.dart';
 import '../settings/walk_preferences.dart';
@@ -32,6 +34,17 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
   final String? _path;
   Future<Database>? _opening;
 
+  late final MemoryStore memories = MemoryStore(() => _db);
+  Future<String?> walkUid(int id) async {
+    final rows = await (await _db).query(
+      'recorded_walk',
+      columns: ['uid'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return rows.isEmpty ? null : rows.single['uid'] as String;
+  }
+
   Future<Database> get _db => _opening ??= _open();
   Future<Database> _open() async {
     try {
@@ -41,7 +54,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
       return await _factory.openDatabase(
         file,
         options: OpenDatabaseOptions(
-          version: 5,
+          version: 6,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
           },
@@ -56,12 +69,14 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
             await _createTransfer(db);
             await _createAreas(db);
             await _createPreferences(db);
+            await MemoryStore.create(db);
           },
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 2) await _createCoverage(db);
             if (oldVersion < 3) await _createTransfer(db);
             if (oldVersion < 4) await _createAreas(db);
             if (oldVersion < 5) await _createPreferences(db);
+            if (oldVersion < 6) await MemoryStore.create(db);
           },
         ),
       );
@@ -278,6 +293,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
+    List<WalkMemory> memories = const [],
   }) async {
     return (await _db).transaction((txn) async {
       final existing = await _list(txn);
@@ -322,6 +338,23 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
         byUid[walk.uid] = walk;
         traces.add(walk.traceKey);
         added++;
+      }
+      for (final memory in memories) {
+        final existingMemory = await txn.query(
+          'memory',
+          columns: ['id'],
+          where: 'id = ? AND draft = ?',
+          whereArgs: [memory.id, memory.draft ? 1 : 0],
+        );
+        if (existingMemory.isEmpty) {
+          await MemoryStore.writeTo(
+            txn,
+            WalkMemory.fromJson({
+              ...memory.toJson(),
+              'pendingPhoto': false,
+            }, complete: true),
+          );
+        }
       }
       return added;
     });

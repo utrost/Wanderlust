@@ -4,6 +4,7 @@ class WalkPreferences {
     this.showSamples = false,
     this.showGps = false,
     this.showStreetNames = true,
+    this.showMemories = true,
     this.detailedGps = false,
     this.fillSmallGaps = false,
     this.walkedLineWidth = 3,
@@ -13,6 +14,7 @@ class WalkPreferences {
   final bool showSamples;
   final bool showGps;
   final bool showStreetNames;
+  final bool showMemories;
   final bool detailedGps;
   final bool fillSmallGaps;
 
@@ -25,6 +27,7 @@ class WalkPreferences {
     bool? showSamples,
     bool? showGps,
     bool? showStreetNames,
+    bool? showMemories,
     bool? detailedGps,
     bool? fillSmallGaps,
     double? walkedLineWidth,
@@ -34,6 +37,7 @@ class WalkPreferences {
     showSamples: showSamples ?? this.showSamples,
     showGps: showGps ?? this.showGps,
     showStreetNames: showStreetNames ?? this.showStreetNames,
+    showMemories: showMemories ?? this.showMemories,
     detailedGps: detailedGps ?? this.detailedGps,
     fillSmallGaps: fillSmallGaps ?? this.fillSmallGaps,
     walkedLineWidth: walkedLineWidth ?? this.walkedLineWidth,
@@ -45,6 +49,7 @@ class WalkPreferences {
     'showSamples': showSamples,
     'showGps': showGps,
     'showStreetNames': showStreetNames,
+    'showMemories': showMemories,
     'detailedGps': detailedGps,
     'fillSmallGaps': fillSmallGaps,
     'walkedLineWidth': walkedLineWidth,
@@ -58,6 +63,7 @@ class WalkPreferences {
       showSamples: json['showSamples'] == true,
       showGps: json['showGps'] == true,
       showStreetNames: json['showStreetNames'] != false,
+      showMemories: json['showMemories'] != false,
       detailedGps: json['detailedGps'] == true,
       fillSmallGaps: json['fillSmallGaps'] == true,
       walkedLineWidth:

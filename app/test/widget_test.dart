@@ -1,3 +1,5 @@
+import 'memory_fakes.dart';
+import 'package:wanderlust/memories/memory_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +14,9 @@ import 'coverage_test.dart' show networkJson;
 import 'nearby_maps_test.dart' show smallNetwork;
 
 class BootStore extends SqliteWalkStore {
+  final _memories = FakeMemoryStore();
+  @override
+  MemoryStore get memories => _memories;
   BootStore({String? source}) {
     if (source != null) {
       maps[AreaNetwork.parse(source).version] = source;

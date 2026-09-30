@@ -4,6 +4,9 @@ import 'walk_library_screen.dart';
 import 'offline_maps_screen.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
+import 'memories_screen.dart';
+import '../memories/memory.dart';
+import '../memories/memory_photos.dart';
 import '../settings/walk_preferences.dart';
 
 import 'package:flutter/material.dart';
@@ -61,6 +64,108 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final maps = await _store.listAreas();
       return maps.isEmpty ? null : _store.readArea(maps.first.version);
     },
+  );
+
+  List<WalkMemory> _memories = [];
+  bool _memoryReady = false;
+  bool _addingMemory = false;
+  String? _memoryError;
+  Future<void> _loadMemories({bool recover = false}) async {
+    try {
+      if (recover) {
+        try {
+          await DeviceMemoryPhotos().recover(_store.memories);
+        } catch (_) {
+          if (mounted) {
+            setState(
+              () => _memoryError =
+                  'Photo recovery needs attention. Open Memories to continue your draft.',
+            );
+          }
+        }
+      }
+      final items = await _store.memories.list();
+      if (mounted) setState(() => _memories = items);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () =>
+              _memoryError = 'Could not load memories. Tap Memories to retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _memoryReady = true);
+    }
+  }
+
+  Future<void> _editMemory(WalkMemory memory, {bool isNew = false}) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            MemoryEditor(store: _store.memories, memory: memory, isNew: isNew),
+      ),
+    );
+    if (mounted) setState(() => _memoryError = null);
+    await _loadMemories();
+  }
+
+  Future<void> _addMemory() async {
+    if (_addingMemory) return;
+    _addingMemory = true;
+    // Freeze the fix and walk association before any asynchronous navigation.
+    final fix = _currentFix;
+    final walkId = _recorder.recordingSnapshot?.id;
+    try {
+      final uid = walkId == null ? null : await _store.walkUid(walkId);
+      if (!mounted) return;
+      await _editMemory(WalkMemory.create(walkUid: uid, fix: fix), isNew: true);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _memoryError = 'Could not open a memory. Please retry.');
+      }
+    } finally {
+      _addingMemory = false;
+    }
+  }
+
+  Future<void> _showMemories() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MemoriesScreen(store: _store.memories, add: _addMemory),
+      ),
+    );
+    if (mounted) setState(() => _memoryError = null);
+    await _loadMemories();
+  }
+
+  Widget _memoryControls() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        children: [
+          TextButton.icon(
+            onPressed: _memoryReady ? _addMemory : null,
+            icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+            label: const Text('Add memory'),
+          ),
+          TextButton.icon(
+            onPressed: _memoryReady ? _showMemories : null,
+            icon: const Icon(Icons.collections_bookmark_outlined, size: 18),
+            label: Text(
+              _memories.any((m) => m.draft) ? 'Memories · draft' : 'Memories',
+            ),
+          ),
+        ],
+      ),
+      if (_memoryError != null)
+        Text(
+          _memoryError!,
+          style: const TextStyle(fontSize: 12),
+          textAlign: TextAlign.center,
+        ),
+    ],
   );
 
   WalkPreferences _preferences = const WalkPreferences();
@@ -214,6 +319,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    unawaited(_loadMemories(recover: true));
     WidgetsBinding.instance.addObserver(this);
     _recorder.addListener(_walkChanged);
     _coverage.initialize();
@@ -291,6 +397,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             network: _coverage.network!,
                             networks: _coverage.networks,
                             counts: _coverage.displayCounts,
+                            memories: _preferences.showMemories
+                                ? _memories
+                                : const [],
+                            onMemory: (m) => _editMemory(m),
                             walkedLineWidth: _preferences.walkedLineWidth,
                             showStreetNames: _preferences.showStreetNames,
                             position: _currentFix,
@@ -400,6 +510,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 _coverageStatus(),
+                                _memoryControls(),
                                 if (_recorder.lastError != null)
                                   Text(
                                     _errorMessage(_recorder.lastError!),
@@ -487,6 +598,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     child: const Text('Retry loading maps'),
                   ),
                 ],
+                _memoryControls(),
                 TextButton(
                   onPressed: _showSettings,
                   child: const Text('Settings'),
@@ -662,13 +774,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           networks: _coverage.networks,
           fillSmallGaps: _preferences.fillSmallGaps,
           showStreetNames: _preferences.showStreetNames,
+          showMemories: _preferences.showMemories,
           onChanged: () async {
             await _recorder.refreshSavedWalks();
+            await _loadMemories();
             await _coverage.synchronize(_recorder.savedWalks);
           },
         ),
       ),
     );
+    await _loadMemories();
   }
 
   String _twoDigits(int n) => n.toString().padLeft(2, '0');

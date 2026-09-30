@@ -322,6 +322,8 @@ void main() {
         final before = (await store.listSaved()).single.toBackup();
         await store.close();
         final db = await databaseFactoryFfi.openDatabase(path);
+        await db.execute('DROP TABLE memory_photo');
+        await db.execute('DROP TABLE memory');
         await db.execute('DROP TABLE walk_preferences');
         await db.execute('DROP TABLE offline_selection');
         await db.execute('DROP TABLE offline_area');

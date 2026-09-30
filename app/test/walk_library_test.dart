@@ -1,3 +1,6 @@
+import 'package:wanderlust/memories/memory.dart';
+import 'memory_fakes.dart';
+import 'package:wanderlust/memories/memory_store.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -9,6 +12,9 @@ import 'package:wanderlust/transfer/walk_files.dart';
 import 'transfer_test.dart' show segmentedGpx;
 
 class LibraryStore extends SqliteWalkStore {
+  final _memories = FakeMemoryStore();
+  @override
+  MemoryStore get memories => _memories;
   final walks = <SavedWalk>[];
   @override
   Future<List<SavedWalk>> listSaved() async => List.of(walks);
@@ -16,6 +22,7 @@ class LibraryStore extends SqliteWalkStore {
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
+    List<WalkMemory> memories = const [],
   }) async {
     var count = 0;
     for (final walk in incoming) {

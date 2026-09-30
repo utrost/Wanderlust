@@ -114,6 +114,8 @@ void main() {
         expect((await store.readPreferences()).showTime, isFalse);
         await store.close();
         final db = await databaseFactoryFfi.openDatabase(path);
+        await db.execute('DROP TABLE memory_photo');
+        await db.execute('DROP TABLE memory');
         await db.execute('DROP TABLE walk_preferences');
         await db.execute('PRAGMA user_version = 4');
         await db.close();
@@ -129,6 +131,7 @@ void main() {
           'showSamples': true,
           'showGps': false,
           'showStreetNames': true,
+          'showMemories': true,
           'detailedGps': false,
           'fillSmallGaps': false,
           'walkedLineWidth': 3.0,

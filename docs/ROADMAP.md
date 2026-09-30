@@ -9,7 +9,9 @@ Status legend: 🔴 not started · 🟡 in progress · 🟢 done.
 Current status: **Android pre-alpha in field testing**. The core walk → street
 colour loop has been confirmed on the tester's phone. Offline maps, GPS controls,
 live colouring, parks/water, calm settings, adjustable line width and 1–25 km
-map sides are implemented. GPX import/export and raw-walk backup/restore exist.
+map sides are implemented. GPX import/export and raw-walk backup/restore exist. Notes and photos are implemented
+with offline memory pins, drafts, saved-walk associations and full backup/restore
+([UX concept](MEMORIES.md)); actual-phone validation remains open.
 Screen-off recording and persistent APK signing are implemented, and the signing
 credential is provisioned. Actual-phone battery testing remains open.
 See [screen-off recording](SCREEN_OFF_RECORDING.md), [Android updates](ANDROID_UPDATES.md)

@@ -168,3 +168,18 @@ combined without double-counting the same walk. The warm colour deepens on a
 logarithmic scale up to 1,000 walks. Settings includes a colour key for 1, 5, 20
 and 100 walks. Saved-walk review shows that individual walk rather than the
 accumulated heatmap.
+
+### Notes and photos during a walk
+
+**Add memory** saves a note, one optional photo and an optional location without
+stopping your walk. **Memories** opens the library; saved-walk review offers the
+entries linked to that walk. Tap a map marker to open an entry. Back keeps edits
+as a draft; Save publishes them. Camera interruption recovery is supported on
+Android. A missing or stale GPS fix never prevents a note and is not silently
+used for its pin.
+
+Everything stays in app-private storage. Settings → Show memory markers hides
+pins without removing entries. Create backup includes memories, drafts and actual
+photo bytes; old walk-only backups still restore. GPX does not include memories.
+The complete bundle limit is 128 MiB, with at most 80 MiB of photo bytes; oversized
+exports fail explicitly. See the [UX concept and workflows](docs/MEMORIES.md).

@@ -150,6 +150,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? null
               : (v) => change(value.copyWith(showStreetNames: v)),
         ),
+        SwitchListTile(
+          title: const Text('Show memory markers'),
+          subtitle: const Text(
+            'Keep notes and photos in your library while hiding their map pins.',
+          ),
+          value: value.showMemories,
+          onChanged: busy
+              ? null
+              : (v) => change(value.copyWith(showMemories: v)),
+        ),
         const ListTile(
           title: Text('Your walking heatmap'),
           subtitle: Text(

@@ -5,6 +5,9 @@ import '../recording/saved_walk.dart';
 import '../review/walk_review.dart';
 import '../widgets/area_map.dart';
 import '../widgets/walk_overlay.dart';
+import '../memories/memory.dart';
+import '../memories/memory_store.dart';
+import 'memories_screen.dart';
 
 typedef ReviewMatcher =
     Future<WalkReviewResult> Function(List<String>, SavedWalk, bool);
@@ -16,18 +19,42 @@ class WalkReviewScreen extends StatefulWidget {
     this.networks = const [],
     this.fillSmallGaps = false,
     this.showStreetNames = true,
+    this.memoryStore,
+    this.showMemories = true,
     this.match = matchWalkReview,
   });
   final SavedWalk walk;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
   final bool showStreetNames;
+  final MemoryStore? memoryStore;
+  final bool showMemories;
   final ReviewMatcher match;
   @override
   State<WalkReviewScreen> createState() => _WalkReviewScreenState();
 }
 
 class _WalkReviewScreenState extends State<WalkReviewScreen> {
+  List<WalkMemory> memories = [];
+  Future<void> _loadMemories() async {
+    if (widget.memoryStore == null) return;
+    try {
+      final items = await widget.memoryStore!.list(walkUid: widget.walk.uid);
+      if (mounted) setState(() => memories = items);
+    } catch (_) {
+      /* Library offers a retry; route review remains usable. */
+    }
+  }
+
+  Future<void> _openMemory(WalkMemory m) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MemoryEditor(store: widget.memoryStore!, memory: m),
+      ),
+    );
+    await _loadMemories();
+  }
+
   bool gps = true, matched = true, inferred = true, busy = true;
   late bool fill = widget.fillSmallGaps;
   late final trace = reviewTrace(widget.walk);
@@ -41,6 +68,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadMemories();
   }
 
   Future<void> _load() async {
@@ -142,6 +170,22 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
                   _load();
                 },
         ),
+        if (widget.memoryStore != null)
+          TextButton.icon(
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => MemoriesScreen(
+                    store: widget.memoryStore!,
+                    walkUid: widget.walk.uid,
+                  ),
+                ),
+              );
+              await _loadMemories();
+            },
+            icon: const Icon(Icons.collections_bookmark_outlined),
+            label: const Text('Memories from this walk'),
+          ),
         if (busy) const LinearProgressIndicator(),
         if (error != null)
           Padding(
@@ -170,6 +214,8 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
               ? const Center(child: Text('Loading map…'))
               : AreaMap(
                   showStreetNames: widget.showStreetNames,
+                  memories: widget.showMemories ? memories : const [],
+                  onMemory: widget.memoryStore == null ? null : _openMemory,
                   network: viewport!,
                   coverageScreenWidth: 4,
                   networks: maps,
