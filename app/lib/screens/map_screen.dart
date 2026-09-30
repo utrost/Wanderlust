@@ -580,7 +580,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 else
                   TextButton(
                     onPressed: _showSavedWalks,
-                    child: const Text('Saved walks and import'),
+                    child: const Text('Walk history and import'),
                   ),
               ],
             ],
@@ -780,7 +780,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
               ),
               IconButton(
-                tooltip: 'Saved walks (${_recorder.savedWalks.length})',
+                tooltip: 'Walk history (${_recorder.savedWalks.length})',
                 onPressed:
                     _recorder.isRecording ||
                         _recorder.isBusy ||

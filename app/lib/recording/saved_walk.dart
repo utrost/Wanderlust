@@ -13,7 +13,9 @@ class SavedWalk {
     this.uid = '',
     this.segmentStarts = const [],
     this.untimed = const [],
+    this.favourite = false,
   });
+  final bool favourite;
   final int id;
   final String uid;
   final DateTime startedAt;
@@ -47,7 +49,20 @@ class SavedWalk {
         .toString();
   }
 
-  Map<String, Object?> toBackup() => {
+  SavedWalk withFavourite(bool value) => SavedWalk(
+    id,
+    startedAt,
+    endedAt,
+    status,
+    points,
+    uid: uid,
+    segmentStarts: segmentStarts,
+    untimed: untimed,
+    favourite: value,
+  );
+
+  Map<String, Object?> toBackup({bool includeFavourite = true}) => {
+    if (includeFavourite) 'favourite': favourite,
     'uid': uid,
     'startedAt': startedAt.toUtc().toIso8601String(),
     'endedAt': endedAt?.toUtc().toIso8601String(),

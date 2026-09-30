@@ -260,6 +260,9 @@ class WalkCodec {
         if (!RegExp(r'^[a-f0-9]{32}$').hasMatch(uid) || !uids.add(uid)) {
           throw const FormatException('Invalid or repeated walk identity.');
         }
+        if (r.containsKey('favourite') && r['favourite'] is! bool) {
+          throw const FormatException('Invalid favourite flag.');
+        }
         final status = r['status'];
         if (status != 'completed' && status != 'interrupted') {
           throw const FormatException('Invalid walk status.');
@@ -362,6 +365,7 @@ class WalkCodec {
             status as String,
             points,
             uid: uid,
+            favourite: r['favourite'] == true,
             segmentStarts: starts,
             untimed: untimed,
           ),

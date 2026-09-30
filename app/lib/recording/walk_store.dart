@@ -279,6 +279,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
           uid: row['uid'] as String,
           segmentStarts: (meta['segmentStarts'] as List? ?? []).cast<int>(),
           untimed: (meta['untimed'] as List? ?? []).cast<int>(),
+          favourite: meta['favourite'] == true,
         ),
       );
     }
@@ -287,6 +288,29 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
 
   /// Read without recovering: library operations must never stop a live journal.
   Future<List<SavedWalk>> listSaved() async => (await _db).transaction(_list);
+
+  /// A library preference only: leaves raw fixes and coverage memberships alone.
+  Future<void> setFavourite(String uid, bool favourite) async {
+    await (await _db).transaction((txn) async {
+      final rows = await txn.query(
+        'recorded_walk',
+        columns: ['trace_metadata'],
+        where: 'uid = ?',
+        whereArgs: [uid],
+      );
+      if (rows.isEmpty) throw StateError('Walk is no longer available');
+      final metadata =
+          jsonDecode(rows.single['trace_metadata'] as String)
+              as Map<String, dynamic>;
+      metadata['favourite'] = favourite;
+      await txn.update(
+        'recorded_walk',
+        {'trace_metadata': jsonEncode(metadata)},
+        where: 'uid = ?',
+        whereArgs: [uid],
+      );
+    });
+  }
 
   /// One transaction for the whole validated file. Local IDs are remapped;
   /// backup identities survive restore and recordings with identical traces.
@@ -310,7 +334,8 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
         if (deduplicateTrace && traces.contains(walk.traceKey)) continue;
         final previous = byUid[walk.uid];
         if (previous != null) {
-          if (jsonEncode(previous.toBackup()) != jsonEncode(walk.toBackup())) {
+          if (jsonEncode(previous.toBackup(includeFavourite: false)) !=
+              jsonEncode(walk.toBackup(includeFavourite: false))) {
             throw const FormatException(
               'A walk identity conflicts with existing data.',
             );
@@ -325,6 +350,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
           'trace_metadata': jsonEncode({
             'segmentStarts': walk.segmentStarts,
             'untimed': walk.untimed,
+            'favourite': walk.favourite,
           }),
         });
         final batch = txn.batch();

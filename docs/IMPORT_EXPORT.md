@@ -1,6 +1,6 @@
 # GPX import, export, and backup/restore
 
-Implemented in the **Saved walks** screen. Finish recording (and any pending save
+Implemented in the **Walk history** screen. Finish recording (and any pending save
 retry) before opening the library. The Android system document picker handles
 opening and saving files; the app does not request broad storage access.
 
@@ -86,7 +86,7 @@ SHA-256: `12b59931cc0da8844ff7621bce41f96b3869285365f41d16503347aa12c752e8`.
 
 ## Phone acceptance checks
 
-1. Open **Saved walks → Import GPX** and select
+1. Open **Walk history → Import GPX** and select
    `data/bremen/evaluation/schlachte.synthetic.gpx` copied to the phone. Confirm
    one walk appears and Bremen streets fill. Import it again: zero added.
 2. Export the walk as GPX. Open the saved file in the phone's file manager,

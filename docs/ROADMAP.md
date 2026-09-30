@@ -219,3 +219,11 @@ walks, making 1, 2, 5 and 10 visits easier to distinguish. Higher counts continu
 to deepen through 1,000. Tap the existing street-count button for a scrollable
 legend; Settings uses the same 1/2/5/10/100 key. Matching, visit counts and stroke
 widths are unchanged. Check the early-visit contrast on the actual phone outdoors.
+
+### Walk history and favourites (implemented)
+
+“Saved walks” is now “Walk history”. Every recorded trip remains part of the
+heatmap without an automatic GPX export. Optional stars and a Favourites filter
+keep memorable walks easy to find. Favourite status persists locally and in full
+backups; restoring into existing history keeps local choices. Filtering does not
+limit backup contents or affect counts, matching, or raw GPS data.

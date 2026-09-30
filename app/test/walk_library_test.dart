@@ -1,3 +1,4 @@
+import 'package:wanderlust/transfer/walk_codec.dart';
 import 'package:wanderlust/memories/memory_backup.dart';
 import 'coverage_test.dart' show networkJson;
 import 'package:wanderlust/settings/walk_preferences.dart';
@@ -20,6 +21,14 @@ class LibraryStore extends SqliteWalkStore {
   @override
   MemoryStore get memories => _memories;
   final walks = <SavedWalk>[];
+  bool failFavourite = false;
+  @override
+  Future<void> setFavourite(String uid, bool value) async {
+    if (failFavourite) throw StateError('Disk full');
+    final i = walks.indexWhere((w) => w.uid == uid);
+    walks[i] = walks[i].withFavourite(value);
+  }
+
   int mergeCalls = 0;
   WalkPreferences? restoredPreferences;
   List<String> restoredMaps = [];
@@ -206,6 +215,81 @@ void main() {
       await perform(tester, find.text('Restore backup'), replaceSettings: true);
       expect(store.mergeCalls, 2);
       expect(store.restoredPreferences!.mapSizeKm, 12);
+    },
+  );
+  testWidgets(
+    'favourites filter hides everyday walks without exporting or removing them',
+    (tester) async {
+      final store = LibraryStore()
+        ..walks.add(WalkCodec.importGpx(segmentedGpx));
+      final files = TestFiles();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WalkLibraryScreen(
+            store: store,
+            files: files,
+            onChanged: () async =>
+                fail('Starring must not trigger coverage recomputation'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Walk history'), findsOneWidget);
+      await tester.tap(find.text('Favourites'));
+      await tester.pumpAndSettle();
+      expect(find.text('Star a walk to find it here.'), findsOneWidget);
+      await tester.tap(find.text('All walks'));
+      await tester.pumpAndSettle();
+      store.failFavourite = true;
+      await tester.tap(find.byTooltip('Add to favourites'));
+      await tester.pumpAndSettle();
+      expect(store.walks.single.favourite, isFalse);
+      expect(find.textContaining('Could not complete'), findsOneWidget);
+      store.failFavourite = false;
+      await tester.tap(find.byTooltip('Add to favourites'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favourites'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Remove from favourites'), findsOneWidget);
+      await tester.tap(find.byTooltip('Remove from favourites'));
+      await tester.pumpAndSettle();
+      expect(find.text('Star a walk to find it here.'), findsOneWidget);
+      expect(store.walks, hasLength(1));
+      expect(files.saved, isNull);
+      // A backup still includes all walks while viewing an empty favourites list.
+      await perform(tester, find.text('Create backup'));
+      expect(MemoryBackup.decode(files.saved!).walks, hasLength(1));
+    },
+  );
+  testWidgets(
+    'history remains scrollable with enlarged text on a small screen',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final store = LibraryStore()
+        ..walks.add(WalkCodec.importGpx(segmentedGpx));
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.8)),
+            child: child!,
+          ),
+          home: WalkLibraryScreen(
+            store: store,
+            files: TestFiles(),
+            onChanged: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.byTooltip('Add to favourites'), 250);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add to favourites'));
+      await tester.pumpAndSettle();
+      expect(store.walks.single.favourite, isTrue);
+      expect(tester.takeException(), isNull);
     },
   );
 }

@@ -52,6 +52,16 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   WalkPreferences? _restoredPreferences;
   bool _busy = true;
   bool _loaded = false;
+  bool _favouritesOnly = false;
+  List<SavedWalk> get _visibleWalks => _favouritesOnly
+      ? _walks.where((walk) => walk.favourite).toList()
+      : _walks;
+
+  Future<void> _toggleFavourite(SavedWalk walk) async {
+    await widget.store.setFavourite(walk.uid, !walk.favourite);
+    await _load();
+  }
+
   String? _message;
 
   @override
@@ -206,113 +216,167 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: Scaffold(
-      appBar: AppBar(title: const Text('Saved walks')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
+      appBar: AppBar(title: const Text('Walk history')),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
             child: Column(
               children: [
-                const Text(
-                  'Import GPX tracks or restore a Wanderlust backup. Backups include memories, photos, settings and offline maps. Restore adds missing items and keeps existing local entries.',
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    FilledButton.tonal(
-                      onPressed: _busy || !_loaded
-                          ? null
-                          : () => _run(() => _import(false)),
-                      child: const Text('Import GPX'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _busy || !_loaded
-                          ? null
-                          : () => _run(() => _import(true)),
-                      child: const Text('Restore backup'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _busy || !_loaded ? null : () => _run(_backup),
-                      child: const Text('Create backup'),
-                    ),
-                  ],
-                ),
-                const Text(
-                  'Compressed backups include your maps and settings (up to 128 MiB expanded). GPX contains only the walk. Choose where to save exports.',
-                  style: TextStyle(fontSize: 12),
-                ),
-                if (_busy)
-                  const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: LinearProgressIndicator(),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Every recorded walk counts towards your heatmap. Favourites simply help you find special walks. GPX files are created only when you export.',
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          FilledButton.tonal(
+                            onPressed: _busy || !_loaded
+                                ? null
+                                : () => _run(() => _import(false)),
+                            child: const Text('Import GPX'),
+                          ),
+                          OutlinedButton(
+                            onPressed: _busy || !_loaded
+                                ? null
+                                : () => _run(() => _import(true)),
+                            child: const Text('Restore backup'),
+                          ),
+                          OutlinedButton(
+                            onPressed: _busy || !_loaded
+                                ? null
+                                : () => _run(_backup),
+                            child: const Text('Create backup'),
+                          ),
+                        ],
+                      ),
+                      const Text(
+                        'Compressed backups include your maps and settings (up to 128 MiB expanded). GPX contains only the walk. Choose where to save exports.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      if (_busy)
+                        const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: LinearProgressIndicator(),
+                        ),
+                      if (_message != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            _message!,
+                            key: const Key('transfer-message'),
+                          ),
+                        ),
+                      if (!_busy && !_loaded)
+                        TextButton(
+                          onPressed: () => _run(_load),
+                          child: const Text('Retry loading walks'),
+                        ),
+                    ],
                   ),
-                if (_message != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(_message!, key: const Key('transfer-message')),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
-                if (!_busy && !_loaded)
-                  TextButton(
-                    onPressed: () => _run(_load),
-                    child: const Text('Retry loading walks'),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All walks'),
+                        selected: !_favouritesOnly,
+                        onSelected: _busy
+                            ? null
+                            : (_) => setState(() => _favouritesOnly = false),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Favourites'),
+                        avatar: const Icon(Icons.star, size: 18),
+                        selected: _favouritesOnly,
+                        onSelected: _busy
+                            ? null
+                            : (_) => setState(() => _favouritesOnly = true),
+                      ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
-          Expanded(
-            child: _walks.isEmpty
-                ? const Center(child: Text('No saved walks yet'))
-                : ListView.builder(
-                    itemCount: _walks.length,
-                    itemBuilder: (context, index) {
-                      final walk = _walks[index];
-                      return ListTile(
-                        onTap: _busy
-                            ? null
-                            : () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => WalkReviewScreen(
-                                    walk: walk,
-                                    networks: _networks,
-                                    fillSmallGaps:
-                                        _restoredPreferences?.fillSmallGaps ??
-                                        widget.fillSmallGaps,
-                                    showStreetNames:
-                                        _restoredPreferences?.showStreetNames ??
-                                        widget.showStreetNames,
-                                    memoryStore: widget.store.memories,
-                                    showMemories:
-                                        _restoredPreferences?.showMemories ??
-                                        widget.showMemories,
-                                  ),
+          _visibleWalks.isEmpty
+              ? SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      _favouritesOnly
+                          ? 'Star a walk to find it here.'
+                          : 'No walks yet',
+                    ),
+                  ),
+                )
+              : SliverList.builder(
+                  itemCount: _visibleWalks.length,
+                  itemBuilder: (context, index) {
+                    final walk = _visibleWalks[index];
+                    return ListTile(
+                      onTap: _busy
+                          ? null
+                          : () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => WalkReviewScreen(
+                                  walk: walk,
+                                  networks: _networks,
+                                  fillSmallGaps:
+                                      _restoredPreferences?.fillSmallGaps ??
+                                      widget.fillSmallGaps,
+                                  showStreetNames:
+                                      _restoredPreferences?.showStreetNames ??
+                                      widget.showStreetNames,
+                                  memoryStore: widget.store.memories,
+                                  showMemories:
+                                      _restoredPreferences?.showMemories ??
+                                      widget.showMemories,
                                 ),
                               ),
-                        leading: const Icon(Icons.route_outlined),
-                        title: Text(
-                          walk.untimed.length == walk.points.length &&
-                                  walk.points.isNotEmpty
-                              ? 'Undated track'
-                              : walk.startedAt
-                                    .toLocal()
-                                    .toString()
-                                    .split('.')
-                                    .first,
+                            ),
+                      leading: IconButton(
+                        tooltip: walk.favourite
+                            ? 'Remove from favourites'
+                            : 'Add to favourites',
+                        onPressed: _busy
+                            ? null
+                            : () => _run(() => _toggleFavourite(walk)),
+                        icon: Icon(
+                          walk.favourite ? Icons.star : Icons.star_border,
                         ),
-                        subtitle: Text(
-                          '${walk.status} · Tap to review${(_restoredPreferences?.showSamples ?? widget.showSamples) ? ' · ${walk.points.length} GPS samples' : ''}',
-                        ),
-                        trailing: IconButton(
-                          tooltip: 'Export GPX',
-                          onPressed: _busy
-                              ? null
-                              : () => _run(() => _export(walk)),
-                          icon: const Icon(Icons.file_download_outlined),
-                        ),
-                      );
-                    },
-                  ),
-          ),
+                      ),
+                      title: Text(
+                        walk.untimed.length == walk.points.length &&
+                                walk.points.isNotEmpty
+                            ? 'Undated track'
+                            : walk.startedAt
+                                  .toLocal()
+                                  .toString()
+                                  .split('.')
+                                  .first,
+                      ),
+                      subtitle: Text(
+                        '${walk.status} · Tap to review${(_restoredPreferences?.showSamples ?? widget.showSamples) ? ' · ${walk.points.length} GPS samples' : ''}',
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'Export GPX',
+                        onPressed: _busy
+                            ? null
+                            : () => _run(() => _export(walk)),
+                        icon: const Icon(Icons.file_download_outlined),
+                      ),
+                    );
+                  },
+                ),
         ],
       ),
     ),

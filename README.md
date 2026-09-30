@@ -122,7 +122,7 @@ Licensed under the **GNU Affero General Public License v3.0** — see
 client that never talks to a server; see
 [ADR-0006](docs/adr/0006-license.md).
 
-GPX import/export and local backup/restore are available from **Saved walks**.
+GPX import/export and local backup/restore are available from **Walk history**.
 See [formats, limits, and phone acceptance checks](docs/IMPORT_EXPORT.md).
 
 On first launch, choose **Set up my map → Find my location → Download nearby map**.
@@ -153,7 +153,7 @@ between confidently matched parts of a walk. It updates both live and saved
 walks; switch it off to remove the extra estimates. Ambiguous routes and long GPS
 outages remain unfilled. See [matching evidence](docs/MATCHING_EVIDENCE.md).
 
-**Saved walks → tap a walk** opens a read-only review with GPS, matched streets
+**Walk history → tap a walk** opens a read-only review with GPS, matched streets
 and dashed inferred gaps. Preview gap filling there without changing your saved
 coverage. Street labels work with existing maps; refresh downloaded maps to add
 place labels and clearer area names. See [walk review](docs/WALK_REVIEW.md).
@@ -207,3 +207,12 @@ exceeding the limit fails explicitly without creating an incomplete backup.
 In a memory editor, **Choose on map** lets you position or move a pin without GPS.
 Tap a location inside a downloaded map and confirm **Use this spot**. Cancelling
 leaves the previous pin untouched. Add a note or photo before saving the memory.
+
+### Walk history and favourites
+
+Every recorded walk is kept privately in Walk history and contributes to matching
+and the heatmap. A GPX file is created only by explicitly choosing Export GPX.
+Star a walk to find it in Favourites; removing its star does not remove its
+heatmap contribution. Full backups always include all walks, even when the
+Favourites filter is selected, and retain stars on a fresh restore. Existing
+local favourite choices take precedence when merging a backup.

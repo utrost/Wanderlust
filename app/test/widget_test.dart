@@ -431,7 +431,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip('Add memory'), findsOneWidget);
       expect(find.byTooltip('Memories'), findsOneWidget);
-      expect(find.byTooltip('Saved walks (0)'), findsOneWidget);
+      expect(find.byTooltip('Walk history (0)'), findsOneWidget);
       expect(find.textContaining('street sections explored'), findsNothing);
       expect(find.text('Start walk'), findsOneWidget);
       expect(tester.takeException(), isNull);
