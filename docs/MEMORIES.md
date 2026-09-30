@@ -25,7 +25,10 @@ accurate within 50 metres. The editor freezes that location: walking further or
 spending time taking a picture must not move the memory. Without a suitable fix,
 show “No location attached”; offer an explicit Use current location action or
 save without a pin. Never silently use a stale fix or infer a photo's location.
-Location is optional and may be removed. No GPS permission request just to type.
+Use current location reuses a fresh walking fix when available, otherwise waits
+up to 30 seconds for a usable GPS reading. Stale or inaccurate early readings
+do not abort the request. GPS-off, permission, accuracy and timeout failures
+have specific retry guidance. Location is optional and may be removed. No GPS permission request just to type.
 
 Saving returns to the previous screen. Back keeps a private draft (including
 edits to an existing memory), surfaced in the library as “Draft · Continue”.

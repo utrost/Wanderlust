@@ -3,24 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import '../memories/memory.dart';
 import '../memories/memory_store.dart';
 import '../memories/memory_photos.dart';
-import '../recording/walk_recorder.dart';
-
-Future<Position> locateMemory() async {
-  final error = await DeviceLocationSource(forRecording: false).authorize();
-  if (error != null) {
-    throw StateError('Location permission or GPS is unavailable.');
-  }
-  final fix = await Geolocator.getCurrentPosition(
-    locationSettings: const LocationSettings(
-      accuracy: LocationAccuracy.high,
-      timeLimit: Duration(seconds: 20),
-    ),
-  );
-  if (!WalkMemory.usableFix(fix, DateTime.now())) {
-    throw StateError('No accurate recent fix yet.');
-  }
-  return fix;
-}
+import '../memories/memory_location.dart';
 
 class MemoryEditor extends StatefulWidget {
   const MemoryEditor({
@@ -48,6 +31,7 @@ class _MemoryEditorState extends State<MemoryEditor> {
   late final MemoryPhotos photos = widget.photos ?? DeviceMemoryPhotos();
   bool busy = false, loaded = false, dirty = false, allowPop = false;
   String? error;
+  bool locating = false;
   @override
   void initState() {
     super.initState();
@@ -68,6 +52,8 @@ class _MemoryEditorState extends State<MemoryEditor> {
     });
     try {
       await action();
+    } on MemoryLocationError catch (e) {
+      if (mounted) setState(() => error = e.message);
     } on FormatException catch (e) {
       if (mounted) setState(() => error = e.message.toString());
     } catch (_) {
@@ -258,17 +244,29 @@ class _MemoryEditorState extends State<MemoryEditor> {
                         onPressed: busy || !loaded
                             ? null
                             : () => _run(() async {
-                                final fix = await widget.locate();
-                                if (!WalkMemory.usableFix(fix, DateTime.now())) {
-                                  throw const FormatException(
-                                    'No accurate recent fix. You can save without a pin and retry later.',
-                                  );
+                                setState(() => locating = true);
+                                try {
+                                  final fix = await widget.locate();
+                                  if (!WalkMemory.usableFix(
+                                    fix,
+                                    DateTime.now(),
+                                  )) {
+                                    throw const MemoryLocationError(
+                                      'No accurate recent fix. Try again outdoors; you can save without a pin.',
+                                    );
+                                  }
+                                  value = value.copyWith(fix: fix);
+                                  dirty = true;
+                                } finally {
+                                  if (mounted) setState(() => locating = false);
                                 }
-                                value = value.copyWith(fix: fix);
-                                dirty = true;
                               }),
                         icon: const Icon(Icons.my_location),
-                        label: const Text('Use current location'),
+                        label: Text(
+                          locating
+                              ? 'Finding your location…'
+                              : 'Use current location',
+                        ),
                       ),
                       if (value.hasLocation)
                         TextButton(

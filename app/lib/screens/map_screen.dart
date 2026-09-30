@@ -7,6 +7,7 @@ import 'about_screen.dart';
 import 'memories_screen.dart';
 import '../memories/memory.dart';
 import '../memories/memory_photos.dart';
+import '../memories/memory_location.dart';
 import '../settings/walk_preferences.dart';
 
 import 'package:flutter/material.dart';
@@ -101,8 +102,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _editMemory(WalkMemory memory, {bool isNew = false}) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            MemoryEditor(store: _store.memories, memory: memory, isNew: isNew),
+        builder: (_) => MemoryEditor(
+          store: _store.memories,
+          memory: memory,
+          isNew: isNew,
+          locate: () => locateMemory(current: () => _currentFix),
+        ),
       ),
     );
     if (mounted) setState(() => _memoryError = null);
