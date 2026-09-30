@@ -177,3 +177,13 @@ GitHub CI for `232a399` passed, including the test APK release (build 1037).
 The store candidate built and passed APK/AAB verification on the runner; only
 Actions artifact upload failed because the account storage quota was full.
 Manual candidates now use draft GitHub release assets to avoid that limitation.
+
+
+Store artwork uses a 512 × 512 RGBA icon, a 1024 × 500 RGB feature graphic,
+and two 1080 × 1920 RGB phone screenshots. Screenshots were recaptured directly
+at that emulator display size, rather than cropping the app UI. The helper
+`tools/capture_store_screenshot.py --serial SERIAL OUTPUT.png` reads the Android
+framebuffer and exports an opaque PNG; set the emulator display with
+`adb -s SERIAL shell wm size 1080x1920` and restore it with `wm size reset`.
+`tools/generate_store_artwork.py` renders the original icon/feature artwork.
+Both helpers require Pillow. See [Play preview asset requirements](https://support.google.com/googleplay/android-developer/answer/9866151).

@@ -15,7 +15,7 @@ def mark(draw, left, top, scale):
         draw.ellipse((x-width/2, y-width/2, x+width/2, y+width/2), fill=INK)
     draw.ellipse((left+48*scale, top+23*scale, left+60*scale, top+35*scale), fill=WARM)
 
-icon = Image.new('RGB', (1024, 1024), BG)
+icon = Image.new('RGBA', (1024, 1024), BG)
 mark(ImageDraw.Draw(icon), 0, 0, 1024 / 108)
 icon.resize((512, 512), Image.Resampling.LANCZOS).save(OUT / 'icon.png')
 feature = Image.new('RGB', (2048, 1000), BG)
