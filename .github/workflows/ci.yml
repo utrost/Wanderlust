@@ -16,8 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read pinned toolchain
+        run: sed '/^#/d; /^$/d' tools/toolchain.env >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: ${{ env.RUST_VERSION }}
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Rebuild and test street network
@@ -25,12 +28,12 @@ jobs:
       - name: Format
         run: cargo fmt --check
       - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       - name: Evaluate real Bremen network with synthetic traces
         run: |
-          cargo build --release -p geo-ffi
+          cargo build --release --locked -p geo-ffi
           python3 tools/evaluate_matching.py --check
           python3 tools/evaluate_matching.py --step-m 5 --check --output tools/out/evaluation-5m
           python3 tools/evaluate_matching.py --fill-small-gaps --check --output tools/out/gaps-3m
@@ -41,35 +44,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read pinned toolchain
+        run: sed '/^#/d; /^$/d' tools/toolchain.env >> "$GITHUB_ENV"
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-linux-android,x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target"
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
+        run: cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
 
       - name: Point cargo-ndk at the runner's NDK
-        run: echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        run: |
+          sdkmanager "ndk;$NDK_VERSION"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
 
       - name: Prepare Android (scaffold + permissions + native geo-core)
         run: bash tools/prepare_android.sh
 
       - name: Pub get
         working-directory: app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Analyze
         working-directory: app
         run: flutter analyze
       - name: Build host library for real FFI integration test
-        run: cargo build --release -p geo-ffi
+        run: cargo build --release --locked -p geo-ffi
       - name: Test (including real Rust FFI and SQLite)
         working-directory: app
         env:

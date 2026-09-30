@@ -40,21 +40,7 @@ Future<Position> locateMemory({
         'Could not access GPS. Check location settings and retry.',
       );
     }
-    final source =
-        positions ??
-        () => Geolocator.getPositionStream(
-          locationSettings: defaultTargetPlatform == TargetPlatform.android
-              ? AndroidSettings(
-                  accuracy: LocationAccuracy.high,
-                  distanceFilter: 0,
-                  intervalDuration: const Duration(seconds: 2),
-                  forceLocationManager: true,
-                )
-              : const LocationSettings(
-                  accuracy: LocationAccuracy.high,
-                  distanceFilter: 0,
-                ),
-        );
+    final source = positions ?? () => _independentPositions(timeout);
     final result = Completer<Position>();
     Position? rejected;
     final timer = Timer(timeout, () {
@@ -115,6 +101,31 @@ Future<Position> locateMemory({
   } catch (_) {
     throw const MemoryLocationError(
       'Could not read your location. Check GPS and precise-location permission, then retry.',
+    );
+  }
+}
+
+/// Geolocator shares getPositionStream across listeners, including its initial
+/// distance filter. A stationary walker therefore needs a separate native
+/// request. Each request has its own ID and timeout and cannot cancel recording.
+Stream<Position> _independentPositions(Duration timeout) async* {
+  final watch = Stopwatch()..start();
+  while (watch.elapsed < timeout) {
+    final remaining = timeout - watch.elapsed;
+    yield await Geolocator.getCurrentPosition(
+      locationSettings: defaultTargetPlatform == TargetPlatform.android
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 0,
+              intervalDuration: const Duration(seconds: 2),
+              forceLocationManager: true,
+              timeLimit: remaining,
+            )
+          : LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 0,
+              timeLimit: remaining,
+            ),
     );
   }
 }

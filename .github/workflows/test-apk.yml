@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read pinned toolchain
+        run: sed '/^#/d; /^$/d' tools/toolchain.env >> "$GITHUB_ENV"
 
       - name: Install persistent test signing key
         env:
@@ -33,11 +35,13 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-linux-android,x86_64-linux-android
 
       - uses: Swatinem/rust-cache@v2
@@ -45,17 +49,19 @@ jobs:
           workspaces: ". -> target"
 
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
+        run: cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
 
       - name: Point cargo-ndk at the runner's NDK
-        run: echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+        run: |
+          sdkmanager "ndk;$NDK_VERSION"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
 
       - name: Prepare Android (scaffold + permissions + native geo-core)
         run: bash tools/prepare_android.sh
 
       - name: Pub get
         working-directory: app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Analyze
         working-directory: app

@@ -84,6 +84,14 @@ class _AboutScreenState extends State<AboutScreen> {
           title: Text('Created by'),
           subtitle: Text('Uwe Trostheide'),
         ),
+        ListTile(
+          title: const Text('Privacy'),
+          subtitle: const Text('Location, photos and backups · Read offline'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const _PrivacyScreen()),
+          ),
+        ),
         _address('Source code', 'https://github.com/utrost/Wanderlust'),
         ListTile(
           title: const Text('App licence'),
@@ -147,6 +155,26 @@ class _AppLicenseScreenState extends State<_AppLicenseScreen> {
           child: SelectableText(snapshot.data!),
         );
       },
+    ),
+  );
+}
+
+class _PrivacyScreen extends StatelessWidget {
+  const _PrivacyScreen();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Privacy')),
+    body: FutureBuilder<String>(
+      future: rootBundle.loadString('assets/legal/privacy.txt'),
+      builder: (context, snapshot) => snapshot.hasError
+          ? const Center(child: Text('Could not load the privacy policy.'))
+          : snapshot.hasData
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: SelectableText(snapshot.data!),
+            )
+          : const Center(child: CircularProgressIndicator()),
     ),
   );
 }

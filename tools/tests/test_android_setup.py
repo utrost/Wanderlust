@@ -31,6 +31,18 @@ class AndroidSetupTest(unittest.TestCase):
             self.assertNotIn('android.permission.ACCESS_BACKGROUND_LOCATION', permissions)
             self.assertIsNotNone(root.find('application/activity'))
             self.assertTrue((manifest.parent / 'kotlin/com/wanderlust/wanderlust/MainActivity.kt').exists())
+            application = root.find('application')
+            self.assertEqual(application.get(f'{{{module.ANDROID}}}allowBackup'), 'false')
+            for filename, sections in [('backup_rules.xml', [None]),
+                                       ('data_extraction_rules.xml', ['cloud-backup', 'device-transfer'])]:
+                rules = ET.parse(manifest.parent / 'res/xml' / filename).getroot()
+                for section in sections:
+                    excludes = (rules if section is None else rules.find(section)).findall('exclude')
+                    domains = {e.get('domain') for e in excludes if e.get('path') == '.'}
+                    self.assertTrue({'database', 'file', 'root', 'sharedpref', 'external',
+                                     'device_root', 'device_file', 'device_database', 'device_sharedpref'} <= domains)
+            gradle = (Path(directory) / 'app/build.gradle.kts').read_text()
+            self.assertNotIn('signingConfigs.getByName("debug")', gradle)
 
     def test_missing_or_wrong_signing_key_never_replaces_existing_key(self):
         module = load('install_test_signing')

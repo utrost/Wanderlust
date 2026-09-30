@@ -1,0 +1,66 @@
+name: Store candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'geo-*/**'
+      - 'tools/**'
+      - 'Cargo.lock'
+      - '.github/workflows/store-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read pinned toolchain
+        run: sed '/^#/d; /^$/d' tools/toolchain.env >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Install pinned Android tooling
+        run: |
+          sdkmanager "ndk;$NDK_VERSION" "build-tools;36.0.0" "platforms;android-36"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
+      - name: Prepare and test
+        run: |
+          bash tools/prepare_android.sh
+          python3 -m unittest discover -s tools/tests -v
+          cargo build --release --locked -p geo-ffi
+          cd app
+          flutter pub get --enforce-lockfile
+          flutter analyze
+          WANDERLUST_NATIVE_TESTS=1 LD_LIBRARY_PATH="$GITHUB_WORKSPACE/target/release" flutter test
+      - name: Build unsigned production artifacts
+        working-directory: app
+        run: |
+          flutter build apk --release --target-platform android-arm64,android-x64 --build-number "$((100000 + GITHUB_RUN_NUMBER))"
+          flutter build appbundle --release --target-platform android-arm64,android-x64 --build-number "$((100000 + GITHUB_RUN_NUMBER))"
+      - name: Verify production artifacts
+        run: |
+          python3 tools/verify_store_build.py app/build/app/outputs/flutter-apk/app-release.apk --build-tools "$ANDROID_HOME/build-tools/36.0.0"
+          python3 tools/verify_store_build.py app/build/app/outputs/bundle/release/app-release.aab
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-store-candidate
+          path: |
+            app/build/app/outputs/flutter-apk/app-release.apk
+            app/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error

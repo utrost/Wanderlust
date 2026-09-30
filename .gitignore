@@ -1,15 +1,12 @@
 # Rust
 /target
 **/*.rs.bk
-# Library workspace: let consumers resolve versions (binaries would commit this).
-Cargo.lock
 
 # Flutter / Dart
 app/.dart_tool/
 app/.flutter-plugins
 app/.flutter-plugins-dependencies
 app/build/
-app/pubspec.lock
 # Generated per-platform scaffolding (recreated via `flutter create` — see app/README.md)
 app/android/
 app/ios/
@@ -29,6 +26,7 @@ tools/out/
 __pycache__/
 
 # Generated Flutter project metadata / IDE files
+app/.gitignore
 app/.metadata
 app/.idea/
 app/*.iml
@@ -37,3 +35,6 @@ app/*.iml
 .local/signing/
 *.keystore
 *.jks
+
+# Local release signing configuration (credentials come from environment).
+key.properties

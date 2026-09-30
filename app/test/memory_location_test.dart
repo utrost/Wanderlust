@@ -10,7 +10,52 @@ import 'package:wanderlust/screens/memories_screen.dart';
 import 'recording_test.dart' show fix;
 import 'memory_fakes.dart';
 
+class IndependentLocation extends GeolocatorPlatform {
+  int requests = 0;
+  final settings = <LocationSettings>[];
+
+  @override
+  Stream<Position> getPositionStream({LocationSettings? locationSettings}) =>
+      throw StateError('Must not reuse the recording stream');
+
+  @override
+  Future<Position> getCurrentPosition({
+    LocationSettings? locationSettings,
+  }) async {
+    settings.add(locationSettings!);
+    requests++;
+    return positionAt(
+      Position.fromMap({
+        ...fix(1).toJson(),
+        'accuracy': requests == 1 ? 100.0 : 5.0,
+      }),
+      DateTime.now(),
+    );
+  }
+}
+
 void main() {
+  test(
+    'stationary memory uses bounded independent requests, retries poor accuracy',
+    () async {
+      final original = GeolocatorPlatform.instance;
+      final platform = IndependentLocation();
+      GeolocatorPlatform.instance = platform;
+      addTearDown(() => GeolocatorPlatform.instance = original);
+      final result = await locateMemory(authorize: () async => null);
+      expect(result.accuracy, 5);
+      expect(platform.requests, 2);
+      expect(
+        platform.settings.every(
+          (s) =>
+              s.distanceFilter == 0 &&
+              s.timeLimit != null &&
+              s.timeLimit! <= const Duration(seconds: 30),
+        ),
+        isTrue,
+      );
+    },
+  );
   test('a fresh recording fix needs no extra GPS request', () async {
     final now = DateTime.now(), p = positionAt(fix(1), DateTime.now());
     expect(

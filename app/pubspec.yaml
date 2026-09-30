@@ -1,7 +1,7 @@
 name: wanderlust
 description: "Paint the streets you've walked. Offline-first, private walking map."
 publish_to: "none"
-version: 0.0.1+1
+version: 0.1.0+1
 
 environment:
   sdk: ">=3.11.0 <4.0.0"
@@ -28,6 +28,11 @@ dependencies:
   #   maplibre_gl        offline vector basemap — MapLibre Native + PMTiles (ADR-0005)
   #   flutter_rust_bridge   codegen alternative to the hand-written FFI binding
 
+# Source-only Android provider; no proprietary Google Play Services in either store.
+dependency_overrides:
+  geolocator_android:
+    path: vendor/geolocator_android
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -37,6 +42,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/legal/privacy.txt
     - assets/legal/AGPL-3.0.txt
     - assets/legal/rust-licenses.json
     # Sample street network + walk, matched live through the Rust geo-core on

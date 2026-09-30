@@ -17,6 +17,18 @@ credential is provisioned. Actual-phone battery testing remains open.
 See [screen-off recording](SCREEN_OFF_RECORDING.md), [Android updates](ANDROID_UPDATES.md)
 and [nearby maps](NEARBY_MAPS.md).
 
+## Store release readiness — in progress
+
+Implemented: Android platform-only location provider, offline privacy policy,
+explicit automatic-backup exclusions, production signing configuration without
+debug fallback, pinned dependency/toolchain versions, release APK/AAB workflow,
+16 KB native packaging checks, launcher artwork and store-copy drafts.
+
+Still required before publication: production signing choice and credentials,
+public privacy-policy hosting, Play Console declarations/account setup, final
+store screenshots, F-Droid build-server validation and real-phone release-candidate
+field tests. See [release procedure and gates](ANDROID_UPDATES.md#store-candidates-010).
+
 ---
 
 ## Phase 0 — Foundations 🟡

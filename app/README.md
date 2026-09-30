@@ -4,24 +4,21 @@ The cross-platform UI layer (ADR-0003). Android-first (ADR-0002); the heavy,
 correctness-critical geo logic lives in the Rust [`geo-core`](../geo-core/) and
 is linked via FFI.
 
-> **Pre-alpha.** The filling map now uses real bundled Bremen street geometry
-> and saved per-walk coverage. Foreground GPS records
-> durable walks in SQLite, including interruption recovery and failed-save
-> retries. The saved-walk library imports/exports GPX and creates/restores JSON
-> backups through native document dialogs. See [import/export](../docs/IMPORT_EXPORT.md). Startup runs a bundled walk
-> through Rust FFI; tapping a failed status chip reveals the underlying error.
-> GPS-centered street-map downloads and an offline area picker extend coverage
-> outside the bundled center; see [nearby maps](../docs/NEARBY_MAPS.md).
-> A richer PMTiles basemap, continuous recording-time updates, and background
-> recording remain open. See [coverage evaluation](../docs/BREMEN_SLICE.md).
-> See [recording and matching behavior](../docs/RECORDING.md).
+> **Pre-alpha in field testing.** Offline map downloads, live street heatmaps,
+> repeat-visit colouring, screen-off recording, walk history, GPX exchange,
+> full backups and notes/photos with map pins are implemented. New users download
+> their first map around their location. See [the roadmap](../docs/ROADMAP.md).
+> Android uses a source-only fork of Geolocator's platform provider without a
+> Google Play Services dependency. Real-phone battery and release testing continue.
 
 The Test APK workflow publishes a **debug APK** as a GitHub prerelease on every
 push to `main`. Download the `.apk` from [Releases](https://github.com/utrost/Wanderlust/releases)
 to sideload on Android without a local Flutter setup. The workflow summary also
 links to the release.
 
-Requires Flutter 3.41+ / Dart 3.11+ for the document-picker and XML dependencies.
+Use the exact toolchain versions in `../tools/toolchain.env`. Production APK/AAB
+builds and remaining submission gates are documented in
+[Android releases](../docs/ANDROID_UPDATES.md#store-candidates-010).
 
 ## First-time setup
 

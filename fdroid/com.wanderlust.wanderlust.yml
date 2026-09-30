@@ -1,0 +1,40 @@
+# Submission draft. Enable only after building in fdroidserver and choosing a tag.
+Disabled: Pending tagged release and F-Droid build-server validation
+Categories:
+  - Sports & Health
+License: AGPL-3.0-or-later
+AuthorName: Uwe Trostheide
+SourceCode: https://github.com/utrost/Wanderlust
+IssueTracker: https://github.com/utrost/Wanderlust/issues
+RepoType: git
+Repo: https://github.com/utrost/Wanderlust.git
+AutoName: Wanderlust
+
+MaintainerNotes: |-
+  Flutter app with Rust JNI libraries built from source using cargo-ndk.
+  geolocator_android is a vendored MIT source fork; proprietary Google Play
+  Services code and dependency are removed, not excluded by scanner exceptions.
+  tools/toolchain.env pins the SDKs; Cargo.lock and app/pubspec.lock pin packages.
+  Candidate workflow: .github/workflows/store-build.yml.
+  Build-server adaptation must provision the pinned Flutter SDK, Rust targets,
+  cargo-ndk and Android NDK before calling tools/prepare_android.sh. Populate
+  offline caches in the preparation stage; do not bypass dependency scanning.
+  Unsigned release APKs are intentional. No upstream signing credential needed.
+  Privacy text: app/assets/legal/privacy.txt; public HTML: docs/privacy.html.
+
+# This is deliberately disabled until the tag exists and toolchains are
+# provisioned/scanned in the F-Droid preparation environment.
+Builds:
+  - versionName: 0.1.0
+    versionCode: 100001
+    commit: v0.1.0
+    disable: Awaiting first release tag and build-server validation
+    output: app/build/app/outputs/flutter-apk/app-release.apk
+    ndk: 28.2.13676358
+    build:
+      - bash tools/prepare_android.sh
+      - cd app
+      - flutter build apk --release --no-pub --target-platform android-arm64,android-x64 --build-number 100001
+
+AutoUpdateMode: None
+UpdateCheckMode: None

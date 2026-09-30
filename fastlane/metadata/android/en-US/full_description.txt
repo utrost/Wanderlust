@@ -1,0 +1,14 @@
+Explore at your own pace. Wanderlust colours the streets you walk and deepens their colour when you return. There are no scores to chase, accounts to create or advertisements.
+
+• Download nearby OpenStreetMap streets for offline walks, from 1 to 25 km per side.
+• See explored streets colour in as you walk, with warmer colours for repeat visits.
+• Keep notes and photos of small things worth remembering, with optional map pins.
+• Find favourite walks in your history. Every recorded walk counts towards your map.
+• Choose whether to show street names, distance, timing and GPS details.
+• Export GPX when you want it. Make and restore full backups, including memories and maps.
+
+Location is used with your permission. A visible notification accompanies screen-off recording. Routes and memories are stored locally. Downloading a map sends the requested area to the Overpass map service. The app includes no analytics or Google Play Services dependency.
+
+Wanderlust is early software. GPS accuracy and battery behaviour vary by device; street matching may leave gaps. Force-stopping the app or the operating system ending its process can interrupt recording. Previously committed readings are recovered when you reopen it.
+
+Free and open source under AGPL-3.0-or-later. Map data © OpenStreetMap contributors, ODbL.

@@ -8,6 +8,14 @@ import 'package:wanderlust/screens/settings_screen.dart';
 import 'package:wanderlust/settings/walk_preferences.dart';
 
 void main() {
+  testWidgets('Privacy is readable offline from About', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AboutScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Privacy'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Wanderlust privacy policy'), findsOneWidget);
+    expect(find.textContaining('device transfer'), findsOneWidget);
+  });
   testWidgets(
     'Settings opens About with installed version and offline licence',
     (tester) async {
