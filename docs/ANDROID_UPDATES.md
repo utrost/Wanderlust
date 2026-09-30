@@ -54,8 +54,10 @@ downloaded map bytes, selection, coverage and a non-default preference. See
 ## Store candidates (0.1.0)
 
 `Store candidate` is a separate, manually dispatched workflow. It builds an
-optimised, **unsigned** APK and AAB and uploads Actions artifacts. It does not
-publish a GitHub release or submit to either store. Build numbers use a separate
+optimised, **unsigned** APK and AAB and saves them in a **draft GitHub release**
+for manual runs. This avoids the account's full Actions artifact-storage quota.
+Pull requests verify the build with best-effort Actions artifact upload. Neither
+path publishes a public release or submits to a store. Build numbers use a separate
 100000 + workflow-run sequence, above the test series. Do not install a high-code
 candidate on your daily device if you intend to return to lower-code test builds.
 
@@ -169,3 +171,9 @@ Scanning a clean source archive initially flagged the compressed OSM input fixtu
 (which is not packaged by the app). With that removal the source scan reported
 zero fatal findings, without scanner exemptions. This is not full F-Droid build
 server validation or an audit of every dependency licence.
+
+
+GitHub CI for `232a399` passed, including the test APK release (build 1037).
+The store candidate built and passed APK/AAB verification on the runner; only
+Actions artifact upload failed because the account storage quota was full.
+Manual candidates now use draft GitHub release assets to avoid that limitation.
