@@ -48,6 +48,7 @@ class AreaMap extends StatefulWidget {
     this.trace = const [],
     this.inferred = const {},
     this.fitCoordinates = const [],
+    this.onInteractionStart,
   });
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
@@ -64,6 +65,7 @@ class AreaMap extends StatefulWidget {
   final List<List<Offset>> trace;
   final Set<int> inferred;
   final List<Offset> fitCoordinates;
+  final VoidCallback? onInteractionStart;
 
   @override
   State<AreaMap> createState() => _AreaMapState();
@@ -165,7 +167,10 @@ class _AreaMapState extends State<AreaMap> {
             boundaryMargin: const EdgeInsets.all(double.infinity),
             minScale: 1,
             maxScale: 12 * mapZoomFactor(widget.network),
-            onInteractionStart: (_) => _pendingCenter = false,
+            onInteractionStart: (_) {
+              _pendingCenter = false;
+              widget.onInteractionStart?.call();
+            },
             child: const SizedBox.expand(),
           ),
           IgnorePointer(

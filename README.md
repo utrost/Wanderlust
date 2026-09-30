@@ -132,6 +132,17 @@ offline; add more through **Offline maps**. Choose
 size. Walked-line thickness is adjustable in Settings.
 See [download behavior and phone checks](docs/NEARBY_MAPS.md).
 
+The map recenters on a current GPS fix when you open the app or return from
+another app, if location access is already allowed. During a walk it uses the
+recording's next fresh fix. Panning while a fix is loading keeps your chosen
+view; the location button centers again on demand. New installations still
+start with local map setup before requesting location access.
+
+Map actions sit on opaque panels for readability. Tap the map name to manage
+offline maps; the location-status icon opens GPS details. The bottom icons show
+explored sections, add a memory, open memories, and open saved walks. Long-press
+icons for labels. Start/Stop remains labelled, and map-edge warnings stay visible.
+
 **Settings → Detailed GPS** requests updates every 2 seconds / 2 metres instead
 of 5 seconds / 5 metres, starting with the next walk. It uses more battery.
 Street colouring now requires movement along the street in a compatible direction;

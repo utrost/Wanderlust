@@ -181,6 +181,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   int _areaRequest = 0;
   Timer? _gpsClock;
   bool _visible = true;
+  bool _centerWhenFresh = false;
+  int _cameraIntent = 0;
+
+  void _browseMap() {
+    _cameraIntent++;
+    _centerWhenFresh = false;
+  }
+
+  Future<void> _autoCenter() async {
+    if (!mounted || !_visible || _coverage.network == null) return;
+    await _centerOnMe(automatic: true);
+  }
 
   Position? get _currentFix {
     final recorded = _recorder.latestPosition;
@@ -193,13 +205,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     return _previewPosition;
   }
 
-  Future<void> _centerOnMe() async {
+  Future<void> _centerOnMe({bool automatic = false}) async {
     if (_locating) return;
+    final intent = ++_cameraIntent;
     if (_recorder.isRecording) {
       setState(() {
-        _centerRequest++;
+        _centerWhenFresh = true;
         _gpsError = null;
       });
+      _centerOnFreshRecordingFix();
       return;
     }
     setState(() {
@@ -207,7 +221,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _gpsError = null;
     });
     try {
-      final error = await DeviceLocationSource(forRecording: false).authorize();
+      // Returning to the app must not open a permission dialog. The explicit
+      // location button and first-map setup still request permission normally.
+      if (automatic) {
+        if (!await Geolocator.isLocationServiceEnabled()) return;
+        final permission = await Geolocator.checkPermission();
+        if (permission != LocationPermission.whileInUse &&
+            permission != LocationPermission.always) {
+          return;
+        }
+      }
+      final error = automatic
+          ? null
+          : await DeviceLocationSource(forRecording: false).authorize();
       if (!mounted) return;
       if (error != null) {
         setState(
@@ -217,12 +243,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         );
         return;
       }
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
+      final position =
+          await (widget.locate?.call() ??
+              Geolocator.getCurrentPosition(
+                locationSettings: const LocationSettings(
+                  accuracy: LocationAccuracy.high,
+                  timeLimit: Duration(seconds: 20),
+                ),
+              ));
       if (!position.latitude.isFinite ||
           !position.longitude.isFinite ||
           position.latitude.abs() > 90 ||
@@ -231,10 +259,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           position.accuracy < 0) {
         throw const FormatException('Invalid location fix');
       }
+      if (isOldFix(position, DateTime.now())) {
+        throw TimeoutException('Waiting for a current fix');
+      }
       if (!mounted) return;
       setState(() {
         _previewPosition = position;
-        _centerRequest++;
+        if (_visible && intent == _cameraIntent) _centerRequest++;
       });
     } on TimeoutException {
       if (mounted) {
@@ -327,7 +358,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     unawaited(_loadMemories(recover: true));
     WidgetsBinding.instance.addObserver(this);
     _recorder.addListener(_walkChanged);
-    _coverage.initialize();
+    unawaited(_coverage.initialize().then((_) => _autoCenter()));
     _recorder.initialize();
     unawaited(_loadPreferences());
     _startGpsClock();
@@ -348,12 +379,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     // cancel the user-initiated start. Hidden/paused mean it is actually away.
     if (state == AppLifecycleState.inactive) return;
     final visible = state == AppLifecycleState.resumed;
+    final returning = visible && !_visible;
     _visible = visible;
     _coverage.setPreviewActive(visible);
     _recorder.setForeground(visible);
     if (visible) {
       _startGpsClock();
+      if (returning) unawaited(_autoCenter());
     } else {
+      _centerWhenFresh = false;
       _gpsClock?.cancel();
     }
   }
@@ -369,8 +403,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  void _centerOnFreshRecordingFix() {
+    final fix = _recorder.latestPosition;
+    if (_centerWhenFresh && fix != null && !isOldFix(fix, DateTime.now())) {
+      _centerWhenFresh = false;
+      _centerRequest++;
+    }
+  }
+
   void _walkChanged() {
     if (!_visible) return;
+    _centerOnFreshRecordingFix();
     if (mounted) setState(() {});
     if (_recorder.isRecording) {
       final walk = _recorder.recordingSnapshot;
@@ -387,173 +430,84 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: WanderlustColors.paperBg,
-      body: ListenableBuilder(
-        listenable: _coverage,
-        builder: (context, _) => _coverage.network == null
-            ? _welcome()
-            : Stack(
-                fit: StackFit.expand,
-                children: [
-                  ListenableBuilder(
-                    listenable: _coverage,
-                    builder: (context, _) => _coverage.network == null
-                        ? const Center(child: Text('Loading saved streets…'))
-                        : AreaMap(
-                            network: _coverage.network!,
-                            networks: _coverage.networks,
-                            counts: _coverage.displayCounts,
-                            memories: _preferences.showMemories
-                                ? _memories
-                                : const [],
-                            onMemory: (m) => _editMemory(m),
-                            walkedLineWidth: _preferences.walkedLineWidth,
-                            showStreetNames: _preferences.showStreetNames,
-                            position: _currentFix,
-                            stale:
-                                _currentFix != null &&
-                                isOldFix(_currentFix!, DateTime.now()),
-                            centerRequest: _centerRequest,
-                            areaRequest: _areaRequest,
-                          ),
-                  ),
-                  SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ListenableBuilder(
-                                  listenable: _coverage,
-                                  builder: (context, _) => InkWell(
-                                    onTap: _showMaps,
-                                    child: _areaChip(),
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Settings',
-                                onPressed: _showSettings,
-                                icon: const Icon(Icons.settings_outlined),
-                              ),
-                              IconButton.filledTonal(
-                                tooltip: 'Show map area',
-                                onPressed: () => setState(() => _areaRequest++),
-                                icon: const Icon(Icons.map_outlined),
-                              ),
-                              IconButton.filledTonal(
-                                tooltip: 'Center on me',
-                                onPressed: _locating ? null : _centerOnMe,
-                                icon: _locating
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.my_location),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ListenableBuilder(
-                            listenable: _coverage,
-                            builder: (context, _) => GpsHud(
-                              position: _currentFix,
-                              now: DateTime.now(),
-                              recording: _recorder.isRecording,
-                              locating: _locating,
-                              network: _coverage.network,
+      body: SafeArea(
+        child: ListenableBuilder(
+          listenable: _coverage,
+          builder: (context, _) => _coverage.network == null
+              ? _welcome()
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ListenableBuilder(
+                      listenable: _coverage,
+                      builder: (context, _) => _coverage.network == null
+                          ? const Center(child: Text('Loading saved streets…'))
+                          : AreaMap(
+                              network: _coverage.network!,
                               networks: _coverage.networks,
-                              error: _gpsError,
-                              details: _preferences.showGps,
+                              counts: _coverage.displayCounts,
+                              memories: _preferences.showMemories
+                                  ? _memories
+                                  : const [],
+                              onMemory: (m) => _editMemory(m),
+                              walkedLineWidth: _preferences.walkedLineWidth,
+                              showStreetNames: _preferences.showStreetNames,
+                              position: _currentFix,
+                              stale:
+                                  _currentFix != null &&
+                                  isOldFix(_currentFix!, DateTime.now()),
+                              centerRequest: _centerRequest,
+                              areaRequest: _areaRequest,
+                              onInteractionStart: _browseMap,
                             ),
-                          ),
-                          ListenableBuilder(
-                            listenable: _coverage,
-                            builder: (context, _) {
-                              final p = _currentFix;
-                              final extent = MapExtent(_coverage.networks);
-                              final coordinate = p == null
-                                  ? null
-                                  : Offset(p.longitude, p.latitude);
-                              final outside =
-                                  coordinate != null &&
-                                  !extent.contains(coordinate);
-                              final nearEdge =
-                                  coordinate != null &&
-                                  !isOldFix(p!, DateTime.now()) &&
-                                  extent.distanceToBoundary(coordinate) <= 500;
-                              return Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: _showMaps,
-                                  icon: Icon(
-                                    outside || nearEdge
-                                        ? Icons.download_outlined
-                                        : Icons.map_outlined,
-                                    size: 18,
+                    ),
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _mapToolbar(),
+                            const SizedBox(height: 8),
+                            _locationControl(),
+                            const Spacer(),
+                            ListenableBuilder(
+                              listenable: _recorder,
+                              builder: (context, _) => Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _mapDock(),
+                                  const SizedBox(height: 8),
+                                  Center(
+                                    child: _recorder.isBusy
+                                        ? const CircularProgressIndicator()
+                                        : _recorder.isRecording
+                                        ? _recordingPanel()
+                                        : FilledButton.icon(
+                                            onPressed: _recorder.needsSaveRetry
+                                                ? _recorder.retrySave
+                                                : _onStartWalk,
+                                            icon: const Icon(
+                                              Icons.directions_walk,
+                                            ),
+                                            label: Text(
+                                              _recorder.needsSaveRetry
+                                                  ? 'Retry saving walk'
+                                                  : 'Start walk',
+                                            ),
+                                          ),
                                   ),
-                                  label: Text(
-                                    outside
-                                        ? 'Download a map here'
-                                        : nearEdge
-                                        ? 'Download more streets'
-                                        : 'Offline maps',
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          const Spacer(),
-                          ListenableBuilder(
-                            listenable: _recorder,
-                            builder: (context, _) => Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _coverageStatus(),
-                                _memoryControls(),
-                                if (_recorder.lastError != null)
-                                  Text(
-                                    _errorMessage(_recorder.lastError!),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                TextButton(
-                                  onPressed:
-                                      _recorder.isRecording ||
-                                          _recorder.isBusy ||
-                                          _recorder.needsSaveRetry
-                                      ? null
-                                      : _showSavedWalks,
-                                  child: Text(
-                                    'Saved walks (${_recorder.savedWalks.length})',
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Center(
-                                  child: _recorder.isBusy
-                                      ? const CircularProgressIndicator()
-                                      : _recorder.isRecording
-                                      ? _recordingPanel()
-                                      : GestureDetector(
-                                          onTap: _recorder.needsSaveRetry
-                                              ? _recorder.retrySave
-                                              : _onStartWalk,
-                                          child: _startWalkPill(),
-                                        ),
-                                ),
-                              ],
+                                  _attribution(),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -630,34 +584,228 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     ),
   );
 
-  Widget _areaChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-        color: WanderlustColors.paperCard.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _coverage.network?.name ?? 'No downloaded map',
-            style: WanderlustTheme.serif.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: WanderlustColors.ink,
+  Widget _surface(Widget child) => Material(
+    color: WanderlustColors.paperCard,
+    elevation: 2,
+    shadowColor: Colors.black26,
+    borderRadius: BorderRadius.circular(24),
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
+
+  Widget _mapToolbar() => _surface(
+    Row(
+      children: [
+        Expanded(
+          child: TextButton.icon(
+            onPressed: _showMaps,
+            icon: const Tooltip(
+              message: 'Offline maps',
+              child: Icon(Icons.map_outlined),
+            ),
+            label: Text(
+              (_coverage.network?.name ?? 'Offline maps').split(' · ').first,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          Text(
-            '${_coverage.networks.length} offline ${_coverage.networks.length == 1 ? 'map' : 'maps'} · tap to manage',
-            style: TextStyle(fontSize: 10.5, color: WanderlustColors.inkMuted),
-          ),
-        ],
+        ),
+        IconButton(
+          tooltip: 'Settings',
+          onPressed: _showSettings,
+          icon: const Icon(Icons.settings_outlined),
+        ),
+        IconButton(
+          tooltip: 'Show map area',
+          onPressed: () {
+            _browseMap();
+            setState(() => _areaRequest++);
+          },
+          icon: const Icon(Icons.zoom_out_map),
+        ),
+        IconButton(
+          tooltip: 'Center on me',
+          onPressed: _locating ? null : () => _centerOnMe(),
+          icon: _locating
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.my_location),
+        ),
+      ],
+    ),
+  );
+
+  void _showLocationDetails() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GpsHud(
+              position: _currentFix,
+              now: DateTime.now(),
+              recording: _recorder.isRecording,
+              locating: _locating,
+              network: _coverage.network,
+              networks: _coverage.networks,
+              error: _gpsError,
+            ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                unawaited(_centerOnMe());
+              },
+              icon: const Icon(Icons.my_location),
+              label: const Text('Center on me'),
+            ),
+          ],
+        ),
       ),
+    ),
+  );
+
+  Widget _locationControl() {
+    final p = _currentFix;
+    final old = p != null && isOldFix(p, DateTime.now());
+    final coordinate = p == null ? null : Offset(p.longitude, p.latitude);
+    final extent = MapExtent(_coverage.networks);
+    final outside = coordinate != null && !extent.contains(coordinate);
+    final near =
+        coordinate != null &&
+        !old &&
+        extent.distanceToBoundary(coordinate) <= 500;
+    final status = _gpsError != null
+        ? 'Location needs attention'
+        : _locating
+        ? 'Finding your location…'
+        : p == null
+        ? 'Location unavailable'
+        : old
+        ? 'Last known location'
+        : 'Location ready';
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _surface(
+          IconButton(
+            tooltip: '$status · Location details',
+            onPressed: _showLocationDetails,
+            icon: Icon(
+              _gpsError != null
+                  ? Icons.location_off_outlined
+                  : old || p == null
+                  ? Icons.location_searching
+                  : Icons.gps_fixed,
+            ),
+          ),
+        ),
+        if (_preferences.showGps && p != null)
+          _surface(
+            TextButton(
+              onPressed: _showLocationDetails,
+              child: Text(
+                '±${p.accuracy.round()} m${old ? ' · Last fix' : ''}',
+              ),
+            ),
+          ),
+        if (outside || near)
+          _surface(
+            TextButton.icon(
+              onPressed: _showMaps,
+              icon: const Icon(Icons.download_outlined),
+              label: Text(outside ? 'Map needed here' : 'Map edge nearby'),
+            ),
+          ),
+      ],
     );
   }
+
+  Widget _mapDock() => _surface(
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton.icon(
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (_) => SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: _coverageStatus(),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.route_outlined),
+                label: Tooltip(
+                  message: 'Street sections explored',
+                  child: Text('${_coverage.displayCounts.length}'),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Add memory',
+                onPressed: _memoryReady ? _addMemory : null,
+                icon: const Icon(Icons.add_location_alt_outlined),
+              ),
+              IconButton(
+                tooltip: 'Memories',
+                onPressed: _memoryReady ? _showMemories : null,
+                icon: Badge(
+                  isLabelVisible: _memories.any((m) => m.draft),
+                  child: const Icon(Icons.collections_bookmark_outlined),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Saved walks (${_recorder.savedWalks.length})',
+                onPressed:
+                    _recorder.isRecording ||
+                        _recorder.isBusy ||
+                        _recorder.needsSaveRetry
+                    ? null
+                    : _showSavedWalks,
+                icon: const Icon(Icons.history),
+              ),
+            ],
+          ),
+          if (_memoryError != null)
+            Text(_memoryError!, textAlign: TextAlign.center),
+          if (_recorder.lastError != null)
+            Text(
+              _errorMessage(_recorder.lastError!),
+              textAlign: TextAlign.center,
+            ),
+          if (_coverage.error != null || _coverage.liveError != null)
+            _coverageStatus(),
+        ],
+      ),
+    ),
+  );
+
+  Widget _attribution() => _surface(
+    InkWell(
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const AboutScreen())),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Text(
+          '© OpenStreetMap contributors · ODbL',
+          style: TextStyle(fontSize: 10),
+        ),
+      ),
+    ),
+  );
 
   Widget _geoStatusChip() => IconButton(
     tooltip: 'Geo-core diagnostic',
@@ -722,15 +870,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             ),
             child: Text('${error.stage} · Details'),
           ),
-        TextButton(
-          onPressed: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute<void>(builder: (_) => const AboutScreen())),
-          child: const Text(
-            '© OpenStreetMap contributors · ODbL',
-            style: TextStyle(fontSize: 10),
-          ),
-        ),
       ],
     ),
   );
@@ -800,7 +939,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
       decoration: BoxDecoration(
-        color: WanderlustColors.paperCard.withValues(alpha: 0.94),
+        color: WanderlustColors.paperCard,
         borderRadius: BorderRadius.circular(100),
         border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
         boxShadow: [
@@ -840,64 +979,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(width: 14),
-          GestureDetector(
-            onTap: () => _recorder.stop(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: WanderlustColors.accent,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Text(
-                'Stop',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFFBF8F2),
-                ),
-              ),
-            ),
+          FilledButton.icon(
+            onPressed: () => _recorder.stop(),
+            icon: const Icon(Icons.stop, size: 18),
+            label: const Text('Stop'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _startWalkPill() {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: WanderlustColors.paperCard.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.directions_walk,
-              size: 16,
-              color: WanderlustColors.accent,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              _recorder.needsSaveRetry ? 'Retry saving walk' : 'Start walk',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: WanderlustColors.ink,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
