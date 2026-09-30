@@ -18,12 +18,12 @@ List<PlacedMapLabel> layoutMapLabels(
   required bool streets,
   double textScale = 1,
 }) {
-  final candidates = <(String, Offset, bool, double)>[];
+  final candidates = <(String, Offset, bool, double, Offset)>[];
   final visibleLengths = <String, double>{};
   final seenEdges = <int>{};
   for (final map in maps) {
     for (final p in map.places) {
-      candidates.add((p.name, project(p.point), true, 0));
+      candidates.add((p.name, project(p.point), true, 0, Offset.zero));
     }
     if (!streets) continue;
     for (final edge in map.edges) {
@@ -37,7 +37,14 @@ List<PlacedMapLabel> layoutMapLabels(
         if (!(Offset.zero & size).contains(mid)) continue;
         final length = (b - a).distance;
         visibleLengths.update(name, (v) => v + length, ifAbsent: () => length);
-        candidates.add((name, mid, false, length));
+        if (length == 0) continue;
+        final direction = b - a;
+        var normal = Offset(-direction.dy, direction.dx) / length;
+        // Stable placement even when an OSM way has the opposite direction.
+        if (normal.dy > 0 || (normal.dy == 0 && normal.dx < 0)) {
+          normal = -normal;
+        }
+        candidates.add((name, mid, false, length, normal));
       }
     }
   }
@@ -57,7 +64,12 @@ List<PlacedMapLabel> layoutMapLabels(
       continue;
     }
     final rect = Rect.fromCenter(
-      center: c.$2,
+      center:
+          c.$2 +
+          c.$5 *
+              (c.$5.dx.abs() * (width + 8) / 2 +
+                  c.$5.dy.abs() * (height + 4) / 2 +
+                  5),
       width: width + 8,
       height: height + 4,
     );

@@ -372,9 +372,6 @@ class AreaMapPainter extends CustomPainter {
     final painted =
         edges.values.where((edge) => (counts[edge.id] ?? 0) > 0).toList()
           ..sort((a, b) => counts[a.id]!.compareTo(counts[b.id]!));
-    for (final edge in painted) {
-      draw(edge, counts[edge.id]!);
-    }
     canvas.restore();
     Offset project(Offset p) => MatrixUtils.transformPoint(
       transform ?? Matrix4.identity(),
@@ -393,6 +390,15 @@ class AreaMapPainter extends CustomPainter {
       ),
       textScale,
     );
+    // Labels must never erase walked coverage, including other streets that
+    // cross a label's background. Street labels are offset from their own road.
+    canvas.save();
+    if (transform != null) canvas.transform(transform!.storage);
+    canvas.translate(12, 80);
+    for (final edge in painted) {
+      draw(edge, counts[edge.id]!);
+    }
+    canvas.restore();
     paintWalkOverlay(canvas, maps.toList(), inferred, trace, project);
     canvas.restore();
   }
