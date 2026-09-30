@@ -68,6 +68,7 @@ class WalkMemory {
     Uint8List? photo,
     bool removePhoto = false,
     Position? fix,
+    ({double latitude, double longitude})? pin,
     bool removeLocation = false,
   }) => WalkMemory(
     id: id,
@@ -79,9 +80,13 @@ class WalkMemory {
     pendingPhoto: pendingPhoto ?? this.pendingPhoto,
     photo: removePhoto ? null : photo ?? this.photo,
     photoLength: removePhoto ? 0 : photo?.length ?? photoLength,
-    latitude: removeLocation ? null : fix?.latitude ?? latitude,
-    longitude: removeLocation ? null : fix?.longitude ?? longitude,
-    accuracy: removeLocation ? null : fix?.accuracy ?? accuracy,
+    latitude: removeLocation
+        ? null
+        : pin?.latitude ?? fix?.latitude ?? latitude,
+    longitude: removeLocation
+        ? null
+        : pin?.longitude ?? fix?.longitude ?? longitude,
+    accuracy: removeLocation || pin != null ? null : fix?.accuracy ?? accuracy,
   );
   Map<String, dynamic> toJson({bool includePhoto = true}) => {
     'id': id,

@@ -8,25 +8,24 @@ opening and saving files; the app does not request broad storage access.
 
 - **Import GPX**: choose a UTF-8 GPX track file. One file becomes one saved walk,
   including all of its track segments. Import commits the walk before updating
-  Bremen street coverage. Walks outside the bundled area are retained even when
+  downloaded street coverage. Walks outside saved maps are retained even when
   they paint no streets. Download/select the corresponding nearby map to match
   these saved walks later; see [nearby maps](NEARBY_MAPS.md).
 - **Export GPX**: use the download button beside a walk and choose a destination.
   GPX includes coordinates, elevation, available timestamps, track breaks, and
   Wanderlust's horizontal-accuracy extension. It is an interchange format, not
   a lossless copy of arbitrary third-party names, waypoints, or extensions.
-- **Create backup**: save `wanderlust-backup.json`. This retains all saved walks,
-  statuses, session dates, complete stored GPS measurements/flags, segment breaks,
-  missing-time markers, and stable walk identities. It does not contain the
-  bundled street asset or derived coverage: the app rebuilds coverage after restore.
+- **Create backup**: save `wanderlust-backup.json.gz`. This retains saved walks,
+  complete GPS measurements, segment breaks, stable identities, memories/photos,
+  settings and downloaded maps. Derived coverage is rebuilt after restore.
 - **Restore backup**: choose a Wanderlust backup. Restore merges missing walk
   identities in a single transaction; it never clears the existing library.
   Repeated restores are idempotent. A conflicting identity rejects the entire
   merge, preserving the previous library and coverage.
 
 Canceling either picker makes no change. A failed file save leaves the original
-walks available for another attempt. Backup and GPX files contain location history
-in plain text; the destination is chosen by the user, including any storage
+walks available for another attempt. Backups are compressed but not encrypted;
+GPX is plain text. Both contain location history; the destination is chosen by the user, including any storage
 providers they have installed. Wanderlust itself does not upload these files.
 
 ## Validation and duplicate handling
@@ -103,3 +102,25 @@ SHA-256: `12b59931cc0da8844ff7621bce41f96b3869285365f41d16503347aa12c752e8`.
 
 Implementation references: [file picker API](https://pub.dev/packages/file_picker)
 and [Dart XML parser](https://pub.dev/packages/xml).
+
+## Complete compressed backups (version 3)
+
+Create backup now writes `wanderlust-backup.json.gz`: walks, memories/drafts and
+photos, settings, and all downloaded street maps. A SHA-256 checksum covers the
+JSON payload. Gzip reduces file size; decompression enforces the same 128 MiB
+expanded-data limit before JSON parsing. Photos retain their 80 MiB combined
+limit. Streaming larger collections is future work, not silently omitted data.
+
+Restore accepts gzip version 3 and older uncompressed version 1/2 files. Its
+preview offers optional offline maps and an unchecked **Replace my settings**
+option. Existing walks/memories/maps and selected map take precedence. On a new
+installation the backed-up selected map becomes active. Walks, memories, maps and
+selected settings commit in one transaction. If merged maps exceed eight, the
+restore fails without partial changes; retry without maps or remove an unused
+map first. Coverage is recomputed from restored raw walks.
+
+Android API 35 emulator validation: saved a compressed backup through the system
+document picker, cleared only the isolated test app's data, restored through the
+picker with settings selected, and verified the offline map, selection, settings
+and all three test memories in SQLite. A manually placed pin retained its
+coordinates and null GPS accuracy. Actual-phone provider testing remains open.

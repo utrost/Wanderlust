@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../data/area_network.dart';
+import 'memory_pin_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import '../memories/memory.dart';
 import '../memories/memory_store.dart';
@@ -13,12 +15,14 @@ class MemoryEditor extends StatefulWidget {
     this.isNew = false,
     this.photos,
     this.locate = locateMemory,
+    this.networks = const [],
   });
   final MemoryStore store;
   final WalkMemory memory;
   final bool isNew;
   final MemoryPhotos? photos;
   final Future<Position> Function() locate;
+  final List<AreaNetwork> networks;
   @override
   State<MemoryEditor> createState() => _MemoryEditorState();
 }
@@ -234,7 +238,7 @@ class _MemoryEditorState extends State<MemoryEditor> {
                   const SizedBox(height: 16),
                   Text(
                     value.hasLocation
-                        ? 'Location attached · ±${value.accuracy?.round() ?? 0} m\n${value.latitude!.toStringAsFixed(5)}, ${value.longitude!.toStringAsFixed(5)}'
+                        ? '${value.accuracy == null ? 'Pin placed on map' : 'Location attached · ±${value.accuracy!.round()} m'}\n${value.latitude!.toStringAsFixed(5)}, ${value.longitude!.toStringAsFixed(5)}'
                         : 'No location attached. You can save without a pin.',
                   ),
                   Wrap(
@@ -267,6 +271,39 @@ class _MemoryEditorState extends State<MemoryEditor> {
                               ? 'Finding your location…'
                               : 'Use current location',
                         ),
+                      ),
+                      TextButton.icon(
+                        onPressed: busy || !loaded
+                            ? null
+                            : () => _run(() async {
+                                if (widget.networks.isEmpty) {
+                                  throw const FormatException(
+                                    'Download an offline map first, then choose a spot on it.',
+                                  );
+                                }
+                                final pin = await Navigator.of(context)
+                                    .push<Offset>(
+                                      MaterialPageRoute(
+                                        builder: (_) => MemoryPinScreen(
+                                          networks: widget.networks,
+                                          initial: value.hasLocation
+                                              ? Offset(
+                                                  value.longitude!,
+                                                  value.latitude!,
+                                                )
+                                              : null,
+                                        ),
+                                      ),
+                                    );
+                                if (pin != null) {
+                                  value = value.copyWith(
+                                    pin: (latitude: pin.dy, longitude: pin.dx),
+                                  );
+                                  dirty = true;
+                                }
+                              }),
+                        icon: const Icon(Icons.pin_drop_outlined),
+                        label: const Text('Choose on map'),
                       ),
                       if (value.hasLocation)
                         TextButton(
@@ -323,9 +360,11 @@ class MemoriesScreen extends StatefulWidget {
     required this.store,
     this.walkUid,
     this.add,
+    this.networks = const [],
   });
   final MemoryStore store;
   final String? walkUid;
+  final List<AreaNetwork> networks;
   final Future<void> Function()? add;
   @override
   State<MemoriesScreen> createState() => _MemoriesScreenState();
@@ -410,8 +449,11 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
                 onTap: () async {
                   await Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) =>
-                          MemoryEditor(store: widget.store, memory: m),
+                      builder: (_) => MemoryEditor(
+                        store: widget.store,
+                        memory: m,
+                        networks: widget.networks,
+                      ),
                     ),
                   );
                   await _load();

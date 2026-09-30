@@ -58,15 +58,15 @@ separate draft so the published entry stays unchanged until Save.
 Photo input is limited to 8 MiB and 32 megapixels; the picker requests a 1600 px
 copy. Notes are limited to 4,000 characters. No change to the original gallery
 photo. This first version supports one photo per memory; albums, tags, search,
-manual map placement and individual sharing are later slices.
+individual sharing are later slices. **Choose on map** now supports manual pin placement on downloaded maps without GPS: tap a spot, then confirm. Back cancels the selection; choosing a new spot clears the old GPS accuracy rather than presenting it as measured.
 
 ## Backup / restore
 
-Create backup includes saved walks, memories, drafts and photo bytes, with an
+Create backup includes saved walks, memories, drafts, photo bytes, settings and offline maps, with an
 integrity checksum. Restore supports earlier walk-only backups. Validate the
 entire file before writes and merge walks and memories in one transaction;
 existing memory identities win on conflict (never overwrite newer local edits).
-The new bundle has a 128 MiB limit (at most 80 MiB of photo bytes before base64 encoding) and retains the existing walk limits. Oversize
+New backups use gzip-compressed version-3 JSON. Older uncompressed version-1/2 files remain supported. Restore previews optional maps and settings; existing map selection is retained and replacing settings requires an explicit checkbox. The expanded bundle has a 128 MiB limit (at most 80 MiB of photo bytes before base64 encoding) and retains the existing walk limits. Oversize
 exports fail explicitly rather than omitting photos. GPX remains a walk-only
 export; the UI says that memories require the full backup. Backups may contain
 photo metadata as well as notes and locations. Finish recording before backing up

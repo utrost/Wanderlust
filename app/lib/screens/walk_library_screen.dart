@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../recording/walk_store.dart';
 import '../data/area_network.dart';
+import '../settings/walk_preferences.dart';
 import 'walk_review_screen.dart';
 import '../transfer/walk_codec.dart';
 import '../transfer/walk_files.dart';
@@ -14,7 +15,8 @@ import '../transfer/walk_files.dart';
 MemoryBackup _readBackup(Uint8List bytes) => MemoryBackup.decode(bytes);
 SavedWalk _readGpx(Uint8List bytes) =>
     WalkCodec.importGpx(WalkCodec.decodeBytes(bytes));
-Uint8List _writeBackup(MemoryBackup backup) => MemoryBackup.encode(backup);
+Uint8List _writeBackup(MemoryBackup backup) =>
+    MemoryBackup.encode(backup, compressed: true);
 Uint8List _writeGpx(SavedWalk walk) =>
     Uint8List.fromList(utf8.encode(WalkCodec.exportGpx(walk)));
 
@@ -46,6 +48,8 @@ class WalkLibraryScreen extends StatefulWidget {
 class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   late final WalkFiles _files = widget.files ?? DeviceWalkFiles();
   List<SavedWalk> _walks = [];
+  late List<AreaNetwork> _networks = widget.networks;
+  WalkPreferences? _restoredPreferences;
   bool _busy = true;
   bool _loaded = false;
   String? _message;
@@ -87,31 +91,104 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     for (final memory in bundle.memories) {
       if (memory.photo != null) await validatePhoto(memory.photo!);
     }
+    var restoreMaps = bundle.maps.isNotEmpty;
+    var restoreSettings = false;
+    if (backup && (bundle.maps.isNotEmpty || bundle.preferences != null)) {
+      if (!mounted) return;
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, update) => AlertDialog(
+            title: const Text('Restore backup'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${bundle.walks.length} walks · ${bundle.memories.length} memories and drafts',
+                ),
+                const Text('Existing walks and memories are kept.'),
+                if (bundle.maps.isNotEmpty)
+                  CheckboxListTile(
+                    title: Text('Include ${bundle.maps.length} offline maps'),
+                    value: restoreMaps,
+                    onChanged: (v) => update(() => restoreMaps = v!),
+                  ),
+                if (bundle.preferences != null)
+                  CheckboxListTile(
+                    title: const Text('Replace my settings'),
+                    value: restoreSettings,
+                    onChanged: (v) => update(() => restoreSettings = v!),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Restore'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (approved != true) return;
+    }
     final walks = bundle.walks;
     final added = await widget.store.mergeWalks(
       walks,
       deduplicateTrace: !backup,
       memories: bundle.memories,
+      maps: restoreMaps ? bundle.maps : const [],
+      preferences: restoreSettings ? bundle.preferences : null,
+      activeMap: restoreMaps ? bundle.activeMap : null,
     );
     await _load();
+    if (restoreSettings) _restoredPreferences = bundle.preferences;
+    if (restoreMaps) {
+      _networks = [
+        for (final area in await widget.store.listAreas())
+          if (await widget.store.readArea(area.version) case final source?)
+            AreaNetwork.parse(source),
+      ];
+    }
     // Raw data is committed before matching. A matching failure cannot lose it.
     await widget.onChanged();
     _message =
-        '$added walk${added == 1 ? '' : 's'} added; ${walks.length - added} already saved. Streets update for walks inside the selected map.';
+        '$added walk${added == 1 ? '' : 's'} added; ${walks.length - added} already saved. '
+        '${backup ? 'Backup restored with memories${restoreMaps ? ', offline maps' : ''}${restoreSettings ? ' and settings' : ''}.' : 'Streets update for walks inside saved maps.'}';
   }
 
   Future<void> _backup() async {
+    final maps = <String>[];
+    for (final area in await widget.store.listAreas()) {
+      final source = await widget.store.readArea(area.version);
+      if (source == null) throw StateError('Saved map is unavailable');
+      maps.add(source);
+    }
+    final selected = await widget.store.readActiveArea();
     final bytes = await compute(
       _writeBackup,
-      MemoryBackup(_walks, await widget.store.memories.exportAll()),
+      MemoryBackup(
+        _walks,
+        await widget.store.memories.exportAll(),
+        maps: maps,
+        preferences: await widget.store.readPreferences(),
+        activeMap: selected == null
+            ? null
+            : AreaNetwork.parse(selected).version,
+      ),
     );
     final saved = await _files.save(
-      'wanderlust-backup.json',
-      'application/json',
+      'wanderlust-backup.json.gz',
+      'application/gzip',
       bytes,
     );
     if (saved) {
-      _message = 'Backup saved: ${_walks.length} walks, memories and photos.';
+      _message =
+          'Backup saved: ${_walks.length} walks, memories, photos, settings and ${maps.length} maps.';
     }
   }
 
@@ -137,7 +214,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
             child: Column(
               children: [
                 const Text(
-                  'Import GPX tracks or restore a Wanderlust backup. Backups include memories and photos. Restore adds missing items and keeps existing local entries.',
+                  'Import GPX tracks or restore a Wanderlust backup. Backups include memories, photos, settings and offline maps. Restore adds missing items and keeps existing local entries.',
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -162,7 +239,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                   ],
                 ),
                 const Text(
-                  'Backups include notes, locations and photos (up to 128 MiB). GPX contains only the walk. Choose where to save exports.',
+                  'Compressed backups include your maps and settings (up to 128 MiB expanded). GPX contains only the walk. Choose where to save exports.',
                   style: TextStyle(fontSize: 12),
                 ),
                 if (_busy)
@@ -197,11 +274,17 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                 MaterialPageRoute<void>(
                                   builder: (_) => WalkReviewScreen(
                                     walk: walk,
-                                    networks: widget.networks,
-                                    fillSmallGaps: widget.fillSmallGaps,
-                                    showStreetNames: widget.showStreetNames,
+                                    networks: _networks,
+                                    fillSmallGaps:
+                                        _restoredPreferences?.fillSmallGaps ??
+                                        widget.fillSmallGaps,
+                                    showStreetNames:
+                                        _restoredPreferences?.showStreetNames ??
+                                        widget.showStreetNames,
                                     memoryStore: widget.store.memories,
-                                    showMemories: widget.showMemories,
+                                    showMemories:
+                                        _restoredPreferences?.showMemories ??
+                                        widget.showMemories,
                                   ),
                                 ),
                               ),
@@ -217,7 +300,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                     .first,
                         ),
                         subtitle: Text(
-                          '${walk.status} · Tap to review${widget.showSamples ? ' · ${walk.points.length} GPS samples' : ''}',
+                          '${walk.status} · Tap to review${(_restoredPreferences?.showSamples ?? widget.showSamples) ? ' · ${walk.points.length} GPS samples' : ''}',
                         ),
                         trailing: IconButton(
                           tooltip: 'Export GPX',

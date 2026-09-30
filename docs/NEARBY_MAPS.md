@@ -44,8 +44,9 @@ without introducing a separate map whose streets cannot receive walk coverage.
 - Up to eight downloaded maps can be kept, each at most 16 MiB. Remove unused
   downloads in the picker. Removing the selected download selects another saved map,
   or returns to setup when none remain; raw walks and derived coverage records are retained.
-- A walk backup contains the raw walks, not downloaded maps. After reinstalling,
-  restore the walks and download the desired areas again to rebuild coverage.
+- Complete compressed backups include downloaded maps and settings alongside
+  raw walks and memories. Restore can include those maps without a download.
+  Older walk-only backups still need the desired areas downloaded again.
 
 Schema v4 adds `offline_area` and `offline_selection`. The foreign key prevents
 selection of missing maps and clears selection when the selected cache is removed.

@@ -294,6 +294,9 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
     List<WalkMemory> memories = const [],
+    List<String> maps = const [],
+    WalkPreferences? preferences,
+    String? activeMap,
   }) async {
     return (await _db).transaction((txn) async {
       final existing = await _list(txn);
@@ -355,6 +358,40 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
             }, complete: true),
           );
         }
+      }
+      // Maps, settings, walks and memories commit together or not at all.
+      final savedMaps = await txn.query('offline_area', columns: ['version']);
+      final versions = savedMaps.map((r) => r['version'] as String).toSet();
+      for (final source in maps) {
+        if (utf8.encode(source).length > 16 * 1024 * 1024) {
+          throw const FormatException('Offline map exceeds 16 MiB.');
+        }
+        final area = AreaNetwork.parse(source);
+        if (!versions.add(area.version)) continue;
+        if (versions.length > 8) {
+          throw const FormatException(
+            'Restore would exceed eight maps. Restore without maps or remove an unused map first.',
+          );
+        }
+        await txn.insert('offline_area', {
+          'version': area.version,
+          'name': area.name,
+          'geojson': source,
+          'downloaded_at': DateTime.now().toUtc().toIso8601String(),
+          'bytes': utf8.encode(source).length,
+        });
+      }
+      if (activeMap != null && versions.contains(activeMap)) {
+        await txn.rawUpdate(
+          'UPDATE offline_selection SET version = ? WHERE id = 1 AND version IS NULL',
+          [activeMap],
+        );
+      }
+      if (preferences != null) {
+        await txn.insert('walk_preferences', {
+          'id': 1,
+          'json': jsonEncode(preferences.toJson()),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       return added;
     });

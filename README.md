@@ -53,7 +53,7 @@ Still open:
 - Real-phone battery and long-walk validation for screen-off recording.
 - Field validation of matching on varied, noisy GPS traces.
 - Richer offline basemap/labels (PMTiles + MapLibre remains a possible approach).
-- Backups including maps/settings, and compressed/streaming archives.
+- Streaming backups beyond the current 128 MiB expanded limit; maps/settings and gzip compression are implemented.
 - Continuous recording after OS process termination (committed fixes recover).
 
 Test APKs now have a persistent-signing build path and increasing version codes.
@@ -194,3 +194,14 @@ pins without removing entries. Create backup includes memories, drafts and actua
 photo bytes; old walk-only backups still restore. GPX does not include memories.
 The complete bundle limit is 128 MiB, with at most 80 MiB of photo bytes; oversized
 exports fail explicitly. See the [UX concept and workflows](docs/MEMORIES.md).
+
+Complete backups are saved as `wanderlust-backup.json.gz` and include saved walks,
+memories/photos, settings and offline maps. Restore also accepts older JSON
+backups. It merges missing items, preserves your current map selection, and only
+replaces settings if you select that option. Maps can be excluded during restore.
+The expanded backup is limited to 128 MiB, including at most 80 MiB of photos;
+exceeding the limit fails explicitly without creating an incomplete backup.
+
+In a memory editor, **Choose on map** lets you position or move a pin without GPS.
+Tap a location inside a downloaded map and confirm **Use this spot**. Cancelling
+leaves the previous pin untouched. Add a note or photo before saving the memory.

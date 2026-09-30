@@ -1,3 +1,7 @@
+import 'package:wanderlust/memories/memory_backup.dart';
+import 'coverage_test.dart' show networkJson;
+import 'package:wanderlust/settings/walk_preferences.dart';
+import 'package:wanderlust/maps/area_store.dart';
 import 'package:wanderlust/memories/memory.dart';
 import 'memory_fakes.dart';
 import 'package:wanderlust/memories/memory_store.dart';
@@ -16,6 +20,15 @@ class LibraryStore extends SqliteWalkStore {
   @override
   MemoryStore get memories => _memories;
   final walks = <SavedWalk>[];
+  int mergeCalls = 0;
+  WalkPreferences? restoredPreferences;
+  List<String> restoredMaps = [];
+  @override
+  Future<List<OfflineArea>> listAreas() async => [];
+  @override
+  Future<String?> readActiveArea() async => null;
+  @override
+  Future<WalkPreferences> readPreferences() async => const WalkPreferences();
   @override
   Future<List<SavedWalk>> listSaved() async => List.of(walks);
   @override
@@ -23,7 +36,13 @@ class LibraryStore extends SqliteWalkStore {
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
     List<WalkMemory> memories = const [],
+    List<String> maps = const [],
+    WalkPreferences? preferences,
+    String? activeMap,
   }) async {
+    mergeCalls++;
+    restoredPreferences = preferences;
+    restoredMaps = maps;
     var count = 0;
     for (final walk in incoming) {
       if (walks.any((w) => w.uid == walk.uid)) continue;
@@ -52,7 +71,12 @@ class TestFiles implements WalkFiles {
   }
 }
 
-Future<void> perform(WidgetTester tester, Finder finder) async {
+Future<void> perform(
+  WidgetTester tester,
+  Finder finder, {
+  bool cancelRestore = false,
+  bool replaceSettings = false,
+}) async {
   await tester.runAsync(() async {
     await tester.tap(finder);
     // Yield real event-loop time to compute's isolate; fake-time pumpAndSettle
@@ -60,6 +84,14 @@ Future<void> perform(WidgetTester tester, Finder finder) async {
     for (var i = 0; i < 500; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
       await tester.pump();
+      if (find.text('Restore').evaluate().isNotEmpty) {
+        if (replaceSettings) {
+          await tester.tap(find.text('Replace my settings'));
+          await tester.pump();
+        }
+        await tester.tap(find.text(cancelRestore ? 'Cancel' : 'Restore'));
+        await tester.pump();
+      }
       if (find.byType(LinearProgressIndicator).evaluate().isEmpty) return;
     }
     fail('Library operation did not complete');
@@ -96,7 +128,7 @@ void main() {
       expect(files.name, endsWith('.gpx'));
       expect(utf8.decode(files.saved!), contains('</trkseg><trkseg>'));
       await tap(find.text('Create backup'));
-      expect(files.name, 'wanderlust-backup.json');
+      expect(files.name, 'wanderlust-backup.json.gz');
       files.picked = files.saved;
       await tap(find.text('Restore backup'));
       expect(
@@ -140,4 +172,40 @@ void main() {
     expect(find.byKey(const Key('transfer-message')), findsNothing);
     expect(files.saved, isNull);
   });
+  testWidgets(
+    'restore preview cancels safely and replaces settings only when opted in',
+    (tester) async {
+      final store = LibraryStore();
+      final files = TestFiles()
+        ..picked = MemoryBackup.encode(
+          MemoryBackup(
+            [],
+            [],
+            maps: [networkJson()],
+            activeMap: 'test-v1',
+            preferences: const WalkPreferences(mapSizeKm: 12),
+          ),
+          compressed: true,
+        );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WalkLibraryScreen(
+            store: store,
+            files: files,
+            onChanged: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await perform(tester, find.text('Restore backup'), cancelRestore: true);
+      expect(store.mergeCalls, 0);
+      await perform(tester, find.text('Restore backup'));
+      expect(store.mergeCalls, 1);
+      expect(store.restoredMaps, hasLength(1));
+      expect(store.restoredPreferences, isNull);
+      await perform(tester, find.text('Restore backup'), replaceSettings: true);
+      expect(store.mergeCalls, 2);
+      expect(store.restoredPreferences!.mapSizeKm, 12);
+    },
+  );
 }

@@ -49,7 +49,11 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
   Future<void> _openMemory(WalkMemory m) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => MemoryEditor(store: widget.memoryStore!, memory: m),
+        builder: (_) => MemoryEditor(
+          store: widget.memoryStore!,
+          memory: m,
+          networks: widget.networks,
+        ),
       ),
     );
     await _loadMemories();
@@ -176,6 +180,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
               await Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => MemoriesScreen(
+                    networks: widget.networks,
                     store: widget.memoryStore!,
                     walkUid: widget.walk.uid,
                   ),

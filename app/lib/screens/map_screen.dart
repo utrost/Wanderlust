@@ -106,6 +106,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           store: _store.memories,
           memory: memory,
           isNew: isNew,
+          networks: _coverage.networks,
           locate: () => locateMemory(current: () => _currentFix),
         ),
       ),
@@ -136,7 +137,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _showMemories() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => MemoriesScreen(store: _store.memories, add: _addMemory),
+        builder: (_) => MemoriesScreen(
+          store: _store.memories,
+          add: _addMemory,
+          networks: _coverage.networks,
+        ),
       ),
     );
     if (mounted) setState(() => _memoryError = null);
@@ -921,6 +926,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           showMemories: _preferences.showMemories,
           onChanged: () async {
             await _recorder.refreshSavedWalks();
+            await _loadPreferences();
+            await _coverage.refreshMaps();
             await _loadMemories();
             await _coverage.synchronize(_recorder.savedWalks);
           },

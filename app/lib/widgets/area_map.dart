@@ -18,6 +18,18 @@ Size mapDrawingSize(Size size) =>
 Offset mapPoint(AreaNetwork network, Offset coordinate, Size size) =>
     network.project(coordinate, mapDrawingSize(size)) + const Offset(12, 80);
 
+/// Inverse projection for explicit, user-selected memory pins.
+Offset mapCoordinate(AreaNetwork network, Offset point, Size size) {
+  final a = mapPoint(network, Offset(network.bbox[0], network.bbox[1]), size);
+  final b = mapPoint(network, Offset(network.bbox[2], network.bbox[3]), size);
+  return Offset(
+    network.bbox[0] +
+        (point.dx - a.dx) / (b.dx - a.dx) * (network.bbox[2] - network.bbox[0]),
+    network.bbox[1] +
+        (point.dy - a.dy) / (b.dy - a.dy) * (network.bbox[3] - network.bbox[1]),
+  );
+}
+
 // Preserve walking-scale zoom as downloaded footprints grow beyond 4 km.
 double mapSpanKm(AreaNetwork network) {
   final b = network.bbox;
@@ -49,6 +61,7 @@ class AreaMap extends StatefulWidget {
     this.inferred = const {},
     this.fitCoordinates = const [],
     this.onInteractionStart,
+    this.onMapTap,
   });
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
@@ -66,6 +79,7 @@ class AreaMap extends StatefulWidget {
   final Set<int> inferred;
   final List<Offset> fitCoordinates;
   final VoidCallback? onInteractionStart;
+  final ValueChanged<Offset>? onMapTap;
 
   @override
   State<AreaMap> createState() => _AreaMapState();
@@ -162,16 +176,34 @@ class _AreaMapState extends State<AreaMap> {
       return Stack(
         fit: StackFit.expand,
         children: [
-          InteractiveViewer(
-            transformationController: _transform,
-            boundaryMargin: const EdgeInsets.all(double.infinity),
-            minScale: 1,
-            maxScale: 12 * mapZoomFactor(widget.network),
-            onInteractionStart: (_) {
-              _pendingCenter = false;
-              widget.onInteractionStart?.call();
-            },
-            child: const SizedBox.expand(),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: widget.onMapTap == null
+                ? null
+                : (details) {
+                    final coordinate = mapCoordinate(
+                      widget.network,
+                      _transform.toScene(details.localPosition),
+                      _size!,
+                    );
+                    if (coordinate.dx.isFinite &&
+                        coordinate.dy.isFinite &&
+                        coordinate.dx.abs() <= 180 &&
+                        coordinate.dy.abs() <= 90) {
+                      widget.onMapTap!(coordinate);
+                    }
+                  },
+            child: InteractiveViewer(
+              transformationController: _transform,
+              boundaryMargin: const EdgeInsets.all(double.infinity),
+              minScale: 1,
+              maxScale: 12 * mapZoomFactor(widget.network),
+              onInteractionStart: (_) {
+                _pendingCenter = false;
+                widget.onInteractionStart?.call();
+              },
+              child: const SizedBox.expand(),
+            ),
           ),
           IgnorePointer(
             child: AnimatedBuilder(

@@ -73,21 +73,21 @@ The smallest thing that delivers the core joy: walk → map fills.
 - 🟢 **GPX import** — document picker, strict validation, segment/time preservation,
   duplicate detection, and coverage updates. Native phone picker validation pending.
 - 🟡 **Export and backup** — per-walk GPX and versioned JSON backup/merge restore
-  implemented, including atomic restore and corruption checks. GeoJSON with
-  counts and compressed/streaming ZIP archives remain open.
+  implemented, including maps, settings, photos, atomic restore, corruption checks and gzip compression. GeoJSON with
+  counts and streaming archives beyond the current size limit remain open.
   See [behavior and acceptance checks](IMPORT_EXPORT.md).
 
 **Exit criteria:** a real person can pick an area, import history, walk for a
 week, and watch their map fill — fully offline.
 
-## Phase 2 — The life map 🔴
+## Phase 2 — The life map 🟡
 Turn the heatmap into a keepsake.
 
 - 🔴 **First-time sparkle** on never-walked streets.
 - 🔴 **Nested completeness**: street → neighborhood → district → city, with a
   "claimed" seal. Depends on resolving the *completeness denominator* question.
 - 🔴 **Finds**: collectible POIs from OSM.
-- 🔴 **Notes & photos** pinned to positions / finds (local only).
+- 🟢 **Notes & photos** pinned to GPS or manually chosen map positions (local only). Drafts, walk associations and photo backups are implemented; multiple photos, search/tags and sharing remain later slices.
 - 🟡 **Multiple areas**: eight downloadable street maps;
   seamless combined display, distinct-walk overlap counts and a 500 m outer-edge
   warning are implemented;
@@ -110,9 +110,10 @@ The one routing-adjacent feature, deliberately last.
 
 ## Immediate next steps
 
-1. **Migrate to the persistent-key APK** — existing temporary-key installs need
-   one final backup/reinstall/restore. Subsequent builds update in place; do not
-   uninstall between them. See [Android updates](ANDROID_UPDATES.md).
+1. **Validate the complete backup on a phone** — compressed backups now include
+   walks, memories/photos, settings and offline maps. Restore preserves local
+   items and only replaces settings when explicitly selected. Check a round-trip
+   with Android document providers; persistent-key APKs update in place.
 2. **Validate pocket recording on the real phone** — screen locked and another
    app open, then Stop, force-stop recovery, notification refusal and GPS disabled.
    Target a one-hour walk with no unexplained moving gaps over 30 seconds and
@@ -127,8 +128,8 @@ The one routing-adjacent feature, deliberately last.
    the next validation step.
 4. **Map download reliability** — large/dense areas, clear progress/failure handling
    and an explicit fresh-location option before selecting download bounds.
-5. **Backup completeness and phone dialogs** — include settings and optionally
-   offline maps; exercise Android import/export/restore selectors on device.
+5. **Memories field check** — test GPS and manual pins, photos, drafts and restore
+   on a real phone. Multiple photos, search/tags and individual sharing are future work.
 6. **Map presentation** — street/place labels and clearer area names are implemented.
    Refresh older downloads for place labels and automatic area naming. Evaluate
    MapLibre/PMTiles against the existing offline renderer before adopting it.
@@ -194,3 +195,19 @@ as a default map. Existing downloaded maps open offline, with saved walks retain
 Location permission, map size and download are explicit steps; map-free review,
 import, deletion recovery and ongoing Stop/save controls remain available.
 See [NEARBY_MAPS.md](NEARBY_MAPS.md#first-launch-and-no-map-state).
+
+### Complete backups and manual memory pins (implemented)
+
+Backups now use a checksummed version-3 JSON bundle compressed with gzip and
+include settings and offline maps. Legacy JSON walk-only and memory backups still
+restore. A preview lets users omit maps and opt into replacing settings; capacity
+or write failures roll back the entire restore. Existing map selection is kept.
+The expanded archive remains limited to 128 MiB (80 MiB of photos).
+
+Memory editors offer **Choose on map** across the main map, library and walk
+review. Selection uses downloaded maps with pan/zoom, confirmation and cancel;
+manual pins do not claim GPS accuracy. A note or photo is still required.
+
+The latest synthetic matching rerun covered 18 five-metre-sampling cases, with
+and without gap filling: no false-positive edges; noisy-route coverage gaps
+remain. Actual exported phone traces are still needed before further tuning.
