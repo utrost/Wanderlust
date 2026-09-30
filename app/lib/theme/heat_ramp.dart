@@ -1,13 +1,12 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
-/// The walk-count heat ramp — the brand's core visual language, ported from
-/// design/mood-map/map-data.js. Warm single-hue OKLCH ink on a log scale: faint
-/// and thin at 1×, deep and broad near 1000×. Width always carries the same
-/// signal as colour, so the ramp survives colour-vision deficiencies.
+/// Warm single-hue ink: most colour contrast is reserved for the first ten
+/// distinct walks, with a slower tail through 1,000. Stroke widths retain their
+/// existing scale and user-configured cap. Counts and matching are unchanged.
 ///
 /// Flutter has no OKLCH colour, so we convert OKLCH → linear sRGB → gamma sRGB
-/// (Björn Ottosson's transform) to reproduce the exact palette from the mocks.
+/// (Björn Ottosson's transform).
 class HeatRamp {
   static const double _rampMax = 1000;
   static final double _logMax = _log10(_rampMax + 1);
@@ -30,12 +29,15 @@ class HeatRamp {
     if (count <= 0) {
       return dark ? oklch(0.32, 0.012, 75) : oklch(0.86, 0.008, 75);
     }
-    final t = _logT(count);
-    final hue = 66 - t * 20; // gold → rust-brown as it deepens
+    final c = count.clamp(1, _rampMax).toDouble();
+    // 72% of the colour range goes to 1–10 walks. Log interpolation is
+    // continuous at ten, and keeps lifetime counts meaningful beyond it.
+    final t = c <= 10 ? 0.72 * _log10(c) : 0.72 + 0.28 * _log10(c / 10) / 2;
+    final hue = 68 - t * 20;
     if (dark) {
-      return oklch(0.44 + t * 0.46, 0.065 + t * 0.115, hue);
+      return oklch(0.50 + t * 0.40, 0.065 + t * 0.06, hue);
     }
-    return oklch(0.82 - t * 0.52, 0.04 + t * 0.125, hue);
+    return oklch(0.76 - t * 0.50, 0.055 + t * 0.07, hue);
   }
 }
 

@@ -175,10 +175,12 @@ between launches; existing installations retain street names by default.
 The main heatmap counts each street section once per distinct walk. Repeated GPS
 fixes or multiple passes within one recording do not add visits. A new walk adds
 one live preview visit, confirmed on saving; overlapping offline maps are
-combined without double-counting the same walk. The warm colour deepens on a
-logarithmic scale up to 1,000 walks. Settings includes a colour key for 1, 5, 20
-and 100 walks. Saved-walk review shows that individual walk rather than the
-accumulated heatmap.
+combined without double-counting the same walk. Warm colours now have stronger
+contrast between 1, 2, 5 and 10 walks, then deepen more gradually up to 1,000.
+Tap the street-count button on the main map for a compact colour key; the same
+key appears in Settings. It shows 1, 2, 5, 10 and 100 walks. Your line-width
+setting is unchanged. Saved-walk review shows that individual walk rather than
+the accumulated heatmap.
 
 ### Notes and photos during a walk
 

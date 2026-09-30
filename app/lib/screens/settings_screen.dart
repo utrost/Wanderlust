@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'about_screen.dart';
-import '../theme/heat_ramp.dart';
+import '../widgets/heatmap_legend.dart';
 import '../settings/walk_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -160,34 +160,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? null
               : (v) => change(value.copyWith(showMemories: v)),
         ),
-        const ListTile(
-          title: Text('Your walking heatmap'),
-          subtitle: Text(
-            'Streets deepen in colour with each separate walk. A section counts once per walk, even if you pass it several times. The current walk adds a live preview.',
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Wrap(
-            spacing: 20,
-            runSpacing: 12,
-            children: [
-              for (final count in [1, 5, 20, 100])
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 4,
-                      color: HeatRamp.color(count, dark: false),
-                    ),
-                    const SizedBox(height: 6),
-                    Text('$count ${count == 1 ? 'walk' : 'walks'}'),
-                  ],
-                ),
-            ],
-          ),
-        ),
+        const Padding(padding: EdgeInsets.all(16), child: HeatmapLegend()),
         const ListTile(
           title: Text('Walking with the screen off'),
           subtitle: Text(

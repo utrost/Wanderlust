@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../widgets/gps_hud.dart';
+import '../widgets/heatmap_legend.dart';
 import '../maps/map_extent.dart';
 import '../maps/map_download.dart';
 
@@ -746,15 +747,22 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   context: context,
                   showDragHandle: true,
                   builder: (_) => SafeArea(
-                    child: Padding(
+                    child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
-                      child: _coverageStatus(),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _coverageStatus(),
+                          const SizedBox(height: 20),
+                          const HeatmapLegend(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 icon: const Icon(Icons.route_outlined),
                 label: Tooltip(
-                  message: 'Street sections explored',
+                  message: 'Heatmap legend · Street sections explored',
                   child: Text('${_coverage.displayCounts.length}'),
                 ),
               ),

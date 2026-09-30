@@ -211,3 +211,11 @@ manual pins do not claim GPS accuracy. A note or photo is still required.
 The latest synthetic matching rerun covered 18 five-metre-sampling cases, with
 and without gap filling: no false-positive edges; noisy-route coverage gaps
 remain. Actual exported phone traces are still needed before further tuning.
+
+### Clearer repeat-visit heatmap (implemented)
+
+The warm colour scale now reserves most contrast for the first ten distinct
+walks, making 1, 2, 5 and 10 visits easier to distinguish. Higher counts continue
+to deepen through 1,000. Tap the existing street-count button for a scrollable
+legend; Settings uses the same 1/2/5/10/100 key. Matching, visit counts and stroke
+widths are unchanged. Check the early-visit contrast on the actual phone outdoors.
