@@ -71,6 +71,33 @@ class MemoryStore implements WalkStore {
 
 void main() {
   test(
+    'calm mode suppresses clock ticks while raw spikes remain journalled',
+    () async {
+      final source = FakeLocation();
+      final store = MemoryStore();
+      final recorder = WalkRecorder(
+        location: source,
+        store: store,
+        showElapsed: () => false,
+      );
+      await recorder.start();
+      source.stream.add(fix(0));
+      source.stream.add(positionAt(fix(3000), fix(1).timestamp));
+      source.stream.add(positionAt(fix(0), fix(2).timestamp));
+      await Future<void>.delayed(Duration.zero);
+      expect(recorder.distanceMeters, 0);
+      expect(store.points.values.single, hasLength(3));
+      var ticks = 0;
+      recorder.addListener(() => ticks++);
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(ticks, 0);
+      await recorder.stop();
+      recorder.dispose();
+      await source.stream.close();
+    },
+  );
+
+  test(
     'Android recording requests screen-off service without a Wi-Fi lock',
     () {
       final settings =

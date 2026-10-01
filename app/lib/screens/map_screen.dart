@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../application/walking_session.dart';
 
 import 'walk_library_screen.dart';
 import 'offline_maps_screen.dart';
@@ -47,26 +48,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // Proves the native geo-core loads and matches on the device.
   late final Future<GeoDiagnostic> _liveMatch = runSampleMatch();
 
-  late final SqliteWalkStore _store = widget.store ?? SqliteWalkStore();
-  late final WalkRecorder _recorder = WalkRecorder(
-    store: _store,
-    location:
-        widget.location ??
-        DeviceLocationSource(detailedGps: () => _preferences.detailedGps),
+  late final WalkingSession _session = WalkingSession(
+    store: widget.store ?? SqliteWalkStore(),
+    location: widget.location,
+    detailedGps: () => _preferences.detailedGps,
+    showElapsed: () => _preferences.showTime,
   );
-  late final CoverageController _coverage = CoverageController(
-    store: _store,
-    loadSavedNetworks: () async => [
-      for (final area in await _store.listAreas())
-        if (await _store.readArea(area.version) case final source?) source,
-    ],
-    loadNetwork: () async {
-      final selected = await _store.readActiveArea();
-      if (selected != null) return selected;
-      final maps = await _store.listAreas();
-      return maps.isEmpty ? null : _store.readArea(maps.first.version);
-    },
-  );
+  SqliteWalkStore get _store => _session.store;
+  WalkRecorder get _recorder => _session.recorder;
+  CoverageController get _coverage => _session.coverage;
 
   List<WalkMemory> _memories = [];
   bool _memoryReady = false;
@@ -301,6 +291,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             final value = _preferences.copyWith(mapSizeKm: size);
             await _store.savePreferences(value);
             if (mounted) setState(() => _preferences = value);
+            _recorder.refreshDisplayClock();
           },
           activeVersion: _coverage.network?.version,
           onMapsChanged: () => _coverage.refreshMaps(),
@@ -326,6 +317,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final value = await _store.readPreferences();
       if (mounted) {
         setState(() => _preferences = value);
+        _recorder.refreshDisplayClock();
         await _coverage.setFillSmallGaps(
           value.fillSmallGaps,
           _recorder.savedWalks,
@@ -346,6 +338,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             await _store.savePreferences(value);
             final changed = value.fillSmallGaps != _preferences.fillSmallGaps;
             if (mounted) setState(() => _preferences = value);
+            _recorder.refreshDisplayClock();
             if (changed) {
               await _coverage.setFillSmallGaps(
                 value.fillSmallGaps,
@@ -372,9 +365,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _startGpsClock() {
     _gpsClock?.cancel();
+    bool? previousStale;
     _gpsClock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && !_recorder.isRecording && _currentFix != null) {
-        setState(() {});
+        final stale = isOldFix(_currentFix!, DateTime.now());
+        if (_preferences.showGps || stale != previousStale) setState(() {});
+        previousStale = stale;
       }
     });
   }
@@ -404,8 +400,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _gpsClock?.cancel();
     _recorder.removeListener(_walkChanged);
     // Finish pending coverage work before the recorder closes the shared DB.
-    _coverage.dispose();
-    unawaited(_coverage.settled.whenComplete(_recorder.dispose));
+    _session.dispose();
     super.dispose();
   }
 

@@ -193,6 +193,9 @@ class WalkCodec {
   }
 
   static String exportGpx(SavedWalk walk) {
+    if (walk.isSummary) {
+      throw StateError('Load the walk trace before exporting.');
+    }
     final breaks = walk.segmentStarts.toSet();
     final missing = walk.untimed.toSet();
     final b = StringBuffer('<?xml version="1.0" encoding="UTF-8"?>\n')

@@ -7,13 +7,21 @@
 class StreetSegment {
   final double x1, y1, x2, y2;
   final int week, month, year;
-  const StreetSegment(this.x1, this.y1, this.x2, this.y2, this.week, this.month, this.year);
+  const StreetSegment(
+    this.x1,
+    this.y1,
+    this.x2,
+    this.y2,
+    this.week,
+    this.month,
+    this.year,
+  );
 
   int countFor(FillLevel level) => switch (level) {
-        FillLevel.week => week,
-        FillLevel.month => month,
-        FillLevel.year => year,
-      };
+    FillLevel.week => week,
+    FillLevel.month => month,
+    FillLevel.year => year,
+  };
 }
 
 enum FillLevel { week, month, year }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../memories/memory.dart';
+import '../theme/wanderlust_theme.dart';
 
 /// Screen-sized targets; geographic projection is shared with the route painter.
 class MemoryMarkers extends StatelessWidget {
@@ -19,27 +20,27 @@ class MemoryMarkers extends StatelessWidget {
     children: [
       for (final m in memories.where((m) => !m.draft && m.hasLocation))
         if ((Offset.zero & size)
-            .inflate(22)
+            .inflate(24)
             .contains(project(Offset(m.longitude!, m.latitude!))))
           Positioned(
-            left: project(Offset(m.longitude!, m.latitude!)).dx - 22,
-            top: project(Offset(m.longitude!, m.latitude!)).dy - 22,
-            width: 44,
-            height: 44,
+            left: project(Offset(m.longitude!, m.latitude!)).dx - 24,
+            top: project(Offset(m.longitude!, m.latitude!)).dy - 24,
+            width: 48,
+            height: 48,
             child: IconButton(
               tooltip: 'Memory: ${m.title}',
               onPressed: () => open(m),
               icon: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9F6EE),
-                  border: Border.all(color: const Color(0xFF75638C)),
+                  color: WanderlustColors.paperCard,
+                  border: Border.all(color: WanderlustColors.memoryAccent),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   m.hasPhoto ? Icons.photo_outlined : Icons.bookmark_outline,
                   size: 16,
-                  color: const Color(0xFF75638C),
+                  color: WanderlustColors.memoryAccent,
                 ),
               ),
             ),

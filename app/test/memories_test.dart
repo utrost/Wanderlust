@@ -179,6 +179,7 @@ void main() {
       final db = await databaseFactoryFfi.openDatabase(file);
       await db.execute('DROP TABLE memory_photo');
       await db.execute('DROP TABLE memory');
+      await db.execute('ALTER TABLE recorded_walk DROP COLUMN fingerprint');
       await db.execute('PRAGMA user_version = 5');
       await db.close();
       store = SqliteWalkStore(factory: databaseFactoryFfi, databasePath: file);

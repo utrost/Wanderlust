@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'dart:io';
+import 'package:flutter/services.dart';
 
 import 'package:file_picker/file_picker.dart';
 
@@ -9,7 +11,26 @@ abstract class WalkFiles {
   Future<bool> save(String name, String mimeType, Uint8List bytes);
 }
 
-class DeviceWalkFiles implements WalkFiles {
+abstract class ArchiveFiles {
+  Future<File?> pickArchive();
+  Future<bool> saveArchive(File file);
+  Future<void> cancelArchive();
+}
+
+class DeviceWalkFiles implements WalkFiles, ArchiveFiles {
+  static const _backups = MethodChannel('wanderlust/backups');
+  @override
+  Future<File?> pickArchive() async {
+    final path = await _backups.invokeMethod<String>('pick');
+    return path == null ? null : File(path);
+  }
+
+  @override
+  Future<bool> saveArchive(File file) async =>
+      await _backups.invokeMethod<String>('save', {'path': file.path}) != null;
+  @override
+  Future<void> cancelArchive() => _backups.invokeMethod<void>('cancel');
+
   @override
   Future<Uint8List?> pick() async {
     // Some Android document providers label GPX as generic XML/octet-stream.

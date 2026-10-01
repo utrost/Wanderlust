@@ -327,6 +327,7 @@ void main() {
         await db.execute('DROP TABLE walk_preferences');
         await db.execute('DROP TABLE offline_selection');
         await db.execute('DROP TABLE offline_area');
+        await db.execute('ALTER TABLE recorded_walk DROP COLUMN fingerprint');
         await db.execute('PRAGMA user_version = 3');
         await db.close();
         store = SqliteWalkStore(

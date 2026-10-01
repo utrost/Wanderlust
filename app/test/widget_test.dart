@@ -45,6 +45,9 @@ class BootStore extends SqliteWalkStore {
   @override
   Future<List<SavedWalk>> recoverAndList() async => [];
   @override
+  Future<List<SavedWalk>> listSummaries({bool recover = false}) =>
+      recoverAndList();
+  @override
   Future<List<SavedWalk>> listSaved() async => [];
   @override
   Future<void> close() async {}

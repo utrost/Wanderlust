@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/area_network.dart';
 import '../geo/geo_core_ffi.dart';
+import '../geo/matching_worker.dart';
 import '../transfer/walk_codec.dart';
 import '../recording/walk_store.dart';
 import 'coverage_store.dart';
@@ -63,10 +64,12 @@ class CoverageController extends ChangeNotifier {
     Future<String?> Function()? loadNetwork,
     MatchBatch? match,
     this.loadSavedNetworks,
+    this.loadWalk,
     this.liveInterval = const Duration(seconds: 2),
   }) : _store = store,
        _loadNetwork = loadNetwork ?? (() async => null),
        _match = match;
+  final Future<SavedWalk> Function(int)? loadWalk;
   final Duration liveInterval;
   final Future<List<String>> Function()? loadSavedNetworks;
   SavedWalk? _liveWalk;
@@ -77,10 +80,11 @@ class CoverageController extends ChangeNotifier {
   int _liveMatchedPoints = 0;
   int _liveEpoch = 0;
   String? liveError;
-  Map<int, int> get displayCounts => {
+  Map<int, int>? _displayCounts;
+  Map<int, int> get displayCounts => _displayCounts ??= Map.unmodifiable({
     ...counts,
     for (final id in _liveEdges) id: (counts[id] ?? 0) + 1,
-  };
+  });
 
   /// Coalesce fixes; previews never write coverage or mark an unfinished walk saved.
   void updateLive(SavedWalk walk) {
@@ -172,11 +176,12 @@ class CoverageController extends ChangeNotifier {
   final CoverageStore _store;
   final Future<String?> Function() _loadNetwork;
   final MatchBatch? _match;
+  final MatchingWorker _worker = MatchingWorker();
   bool _fillSmallGaps = false;
 
   Future<List<MatchResult>> _runMatch(String network, List<String> walks) =>
       _match?.call(network, walks) ??
-      matchBatchInBackground(network, walks, fillSmallGaps: _fillSmallGaps);
+      _worker.match(network, walks, fillSmallGaps: _fillSmallGaps);
 
   /// Serialize policy changes with matching. Invalidate any in-flight preview,
   /// then rebuild saved memberships and the whole current walk under the policy.
@@ -210,6 +215,7 @@ class CoverageController extends ChangeNotifier {
   }
 
   void _notify() {
+    _displayCounts = null;
     if (!_disposed) notifyListeners();
   }
 
@@ -317,6 +323,14 @@ class CoverageController extends ChangeNotifier {
     return _queue;
   }
 
+  final _prepared = Expando<(String, String)>('prepared traces');
+  (String, String) _prepare(SavedWalk walk) {
+    return _prepared[walk] ??= (() {
+      final gpx = WalkCodec.exportGpx(walk);
+      return (gpx, sha256.convert(utf8.encode(gpx)).toString());
+    })();
+  }
+
   Future<void> _synchronize(List<SavedWalk> walks) async {
     if (_disposed) return;
     busy = true;
@@ -333,17 +347,13 @@ class CoverageController extends ChangeNotifier {
         final pending = <(SavedWalk, String, String)>[];
         for (final walk in walks) {
           if (walk.status == 'recording') continue;
-          final gpx = WalkCodec.exportGpx(walk);
-          final fingerprint = sha256
-              .convert(
-                utf8.encode(
-                  '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}\n$gpx',
-                ),
-              )
-              .toString();
+          final traceHash = walk.fingerprint ?? _prepare(walk).$2;
+          final fingerprint =
+              '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}/$traceHash';
           if (await _store.matchFingerprint(walk.id, area.version) !=
               fingerprint) {
-            pending.add((walk, gpx, fingerprint));
+            final full = walk.isSummary ? await loadWalk!(walk.id) : walk;
+            pending.add((full, _prepare(full).$1, fingerprint));
           }
         }
         // Do not send empty GPX to a parser which correctly rejects empty tracks.
@@ -402,6 +412,7 @@ class CoverageController extends ChangeNotifier {
     _disposed = true;
     _liveTimer?.cancel();
     _liveWalk = null;
+    unawaited(settled.whenComplete(_worker.close));
     super.dispose();
   }
 }

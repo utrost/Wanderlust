@@ -1,5 +1,6 @@
 package com.wanderlust.wanderlust
 
+import android.content.Intent
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -9,10 +10,13 @@ import io.flutter.plugin.common.MethodChannel
 
 /** Notification permission is requested only when the user starts a walk. */
 class MainActivity : FlutterActivity() {
+    private val backupFiles by lazy { BackupFiles(this) }
     private var pendingNotification: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/backups")
+            .setMethodCallHandler(backupFiles::handle)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/about")
             .setMethodCallHandler { call, result ->
                 if (call.method == "version") {
@@ -56,7 +60,14 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!backupFiles.onActivityResult(requestCode, resultCode, data)) {
+            super.onActivityResult(requestCode, resultCode, data)
+        }
+    }
+
     override fun onDestroy() {
+        backupFiles.close()
         pendingNotification?.success(false)
         pendingNotification = null
         super.onDestroy()

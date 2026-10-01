@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../data/area_network.dart';
+import '../theme/wanderlust_theme.dart';
 
 class PlacedMapLabel {
   const PlacedMapLabel(this.text, this.bounds, this.place);
@@ -89,9 +90,8 @@ TextPainter mapLabelText(String text, bool place, double scale) => TextPainter(
   text: TextSpan(
     text: text,
     style: TextStyle(
-      fontFamily: 'Work Sans',
       fontSize: place ? 12 : 10,
-      color: const Color(0xFF665F55),
+      color: WanderlustColors.mapLabel,
       fontWeight: place ? FontWeight.w500 : FontWeight.normal,
     ),
   ),
@@ -103,7 +103,7 @@ void paintMapLabels(Canvas canvas, List<PlacedMapLabel> labels, double scale) {
   for (final label in labels) {
     canvas.drawRRect(
       RRect.fromRectAndRadius(label.bounds, const Radius.circular(3)),
-      Paint()..color = const Color(0xFFF4EEE5).withValues(alpha: 0.85),
+      Paint()..color = WanderlustColors.paperBg.withValues(alpha: 0.85),
     );
     final text = mapLabelText(label.text, label.place, scale);
     text.paint(

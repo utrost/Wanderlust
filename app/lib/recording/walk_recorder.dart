@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'walk_store.dart';
+import 'walk_distance.dart';
 import '../transfer/walk_codec.dart';
 
 enum RecorderError {
@@ -86,9 +87,15 @@ class WalkRecorder extends ChangeNotifier {
     LocationSource? location,
     WalkStore? store,
     DateTime Function()? now,
+    this.showElapsed,
+    this.loadHistory,
   }) : _location = location ?? DeviceLocationSource(),
        _store = store ?? SqliteWalkStore(),
        _now = now ?? DateTime.now;
+  final Future<List<SavedWalk>> Function()? loadHistory;
+  Future<List<SavedWalk>> _history() =>
+      loadHistory?.call() ?? _store.recoverAndList();
+  final bool Function()? showElapsed;
   final LocationSource _location;
   final WalkStore _store;
   final DateTime Function() _now;
@@ -100,7 +107,7 @@ class WalkRecorder extends ChangeNotifier {
   DateTime? _startedAt;
   DateTime? _endedAt;
   int? _walkId;
-  double _distance = 0;
+  WalkDistance _distance = WalkDistance();
   bool _disposed = false;
   bool _foreground = true;
   bool _initialized = false;
@@ -127,7 +134,7 @@ class WalkRecorder extends ChangeNotifier {
           'recording',
           List.unmodifiable(_points),
         );
-  double get distanceMeters => _distance;
+  double get distanceMeters => _distance.meters;
   Duration get elapsed => _startedAt == null
       ? Duration.zero
       : (_endedAt ?? _now()).difference(_startedAt!);
@@ -144,10 +151,15 @@ class WalkRecorder extends ChangeNotifier {
     if (value) _notify();
   }
 
+  void refreshDisplayClock() => _updateTicker();
+
   void _updateTicker() {
     _ticker?.cancel();
     _ticker = null;
-    if (_foreground && isRecording && !_disposed) {
+    if (_foreground &&
+        isRecording &&
+        !_disposed &&
+        (showElapsed?.call() ?? true)) {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _notify());
     }
   }
@@ -155,7 +167,7 @@ class WalkRecorder extends ChangeNotifier {
   Future<void> initialize() => _initializing ??= _initialize();
   Future<void> _initialize() async {
     try {
-      _savedWalks = await _store.recoverAndList();
+      _savedWalks = await _history();
       _initialized = true;
     } catch (_) {
       lastError = RecorderError.storageFailed;
@@ -194,11 +206,11 @@ class WalkRecorder extends ChangeNotifier {
       if (_disposed) return false;
       if (!_foreground) {
         await _store.finish(_walkId!, _now(), 'interrupted');
-        _savedWalks = await _store.recoverAndList();
+        _savedWalks = await _history();
         return false;
       }
       _points.clear();
-      _distance = 0;
+      _distance = WalkDistance();
       _startedAt = startedAt;
       _endedAt = null;
       _writes = Future.value();
@@ -232,15 +244,7 @@ class WalkRecorder extends ChangeNotifier {
       return;
     }
     final sequence = _points.length;
-    if (_points.isNotEmpty) {
-      final previous = _points.last;
-      _distance += Geolocator.distanceBetween(
-        previous.latitude,
-        previous.longitude,
-        point.latitude,
-        point.longitude,
-      );
-    }
+    _distance.add(point);
     _points.add(point);
     final id = _walkId!;
     _writes = _writes
@@ -282,7 +286,7 @@ class WalkRecorder extends ChangeNotifier {
         _endedAt!,
         interrupted || lastError != null ? 'interrupted' : 'completed',
       );
-      _savedWalks = await _store.recoverAndList();
+      _savedWalks = await _history();
     } catch (_) {
       _pendingSave = true;
       lastError = RecorderError.storageFailed;
@@ -310,7 +314,7 @@ class WalkRecorder extends ChangeNotifier {
         await _store.append(_walkId!, i, _points[i]);
       }
       await _store.finish(_walkId!, _endedAt!, 'interrupted');
-      _savedWalks = await _store.recoverAndList();
+      _savedWalks = await _history();
       _pendingSave = false;
       lastError = null;
     } catch (_) {
@@ -332,7 +336,7 @@ class WalkRecorder extends ChangeNotifier {
     if (state != RecorderState.idle || _pendingSave) {
       throw StateError('Finish saving the current walk first.');
     }
-    _savedWalks = await _store.recoverAndList();
+    _savedWalks = await _history();
     _notify();
   }
 

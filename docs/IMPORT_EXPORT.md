@@ -15,7 +15,7 @@ opening and saving files; the app does not request broad storage access.
   GPX includes coordinates, elevation, available timestamps, track breaks, and
   Wanderlust's horizontal-accuracy extension. It is an interchange format, not
   a lossless copy of arbitrary third-party names, waypoints, or extensions.
-- **Create backup**: save `wanderlust-backup.json.gz`. This retains saved walks,
+- **Create backup**: save `wanderlust-backup.wanderlust` on Android. This retains saved walks,
   complete GPS measurements, segment breaks, stable identities, memories/photos,
   settings and downloaded maps. Derived coverage is rebuilt after restore.
 - **Restore backup**: choose a Wanderlust backup. Restore merges missing walk
@@ -24,7 +24,7 @@ opening and saving files; the app does not request broad storage access.
   merge, preserving the previous library and coverage.
 
 Canceling either picker makes no change. A failed file save leaves the original
-walks available for another attempt. Backups are compressed but not encrypted;
+walks available for another attempt. Backups are not encrypted;
 GPX is plain text. Both contain location history; the destination is chosen by the user, including any storage
 providers they have installed. Wanderlust itself does not upload these files.
 
@@ -124,3 +124,21 @@ document picker, cleared only the isolated test app's data, restored through the
 picker with settings selected, and verified the offline map, selection, settings
 and all three test memories in SQLite. A manually placed pin retained its
 coordinates and null GPS accuracy. Actual-phone provider testing remains open.
+
+## Streaming Android backups (version 4)
+
+Android now creates `wanderlust-backup.wanderlust`. Walks and photos are separate
+checksummed records rather than one large JSON/base64 payload. The previous
+80 MiB combined-photo limit no longer applies to new archives. Individual photos
+remain limited to 8 MiB and the entire archive to 2 GiB. Backups are not encrypted.
+
+Export and restore show progress and allow cancellation before the restore
+transaction begins. The Android document picker streams bytes from/to private
+cache files. Restore validates all records and photos before committing; a late
+failure rolls back the entire merge. Full walks and photos are loaded one at a
+time during the commit. Leave enough free space for the archive and staging.
+Older JSON/gzip backups still restore with their original limits. Older app
+versions cannot read version-4 archives; keep an older backup if downgrading.
+
+The compressed version-3 workflow above describes the previous release and the
+legacy codec; it is no longer Android's default export format.

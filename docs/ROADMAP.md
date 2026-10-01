@@ -239,3 +239,18 @@ heatmap without an automatic GPX export. Optional stars and a Favourites filter
 keep memorable walks easy to find. Favourite status persists locally and in full
 backups; restoring into existing history keeps local choices. Filtering does not
 limit backup contents or affect counts, matching, or raw GPS data.
+
+## October 2026 architecture hardening
+
+Implemented: conservative display distance without changing raw GPS; version-4
+streamed photo/walk archives with transactional restore and legacy import;
+schema-v7 history summaries and persisted trace fingerprints; reusable native
+matching workers; cached/cullable map geometry; explicit session ownership;
+48-pixel memory targets and shared visual tokens. System fonts are used explicitly
+until offline brand fonts are bundled.
+
+Remaining evaluation: physical-phone recording/battery and document-provider
+behaviour, TalkBack with a new user, large-map pan frame times and sunlight
+contrast. Repository decomposition beyond the new session owner can proceed
+incrementally. MapLibre/PMTiles remain an option to evaluate, not the current
+renderer or an automatic prerequisite for release.

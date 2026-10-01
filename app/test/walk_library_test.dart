@@ -41,10 +41,17 @@ class LibraryStore extends SqliteWalkStore {
   @override
   Future<List<SavedWalk>> listSaved() async => List.of(walks);
   @override
+  Future<List<SavedWalk>> listSummaries({bool recover = false}) => listSaved();
+  @override
+  Future<SavedWalk> loadWalk(int id) async =>
+      walks.firstWhere((w) => w.id == id);
+  @override
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
     List<WalkMemory> memories = const [],
+    Stream<WalkMemory>? memoryStream,
+    Stream<SavedWalk>? walkStream,
     List<String> maps = const [],
     WalkPreferences? preferences,
     String? activeMap,

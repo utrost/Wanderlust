@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import '../transfer/backup_archive.dart';
 import '../memories/memory_backup.dart';
 import '../memories/memory_photos.dart';
 
@@ -63,6 +65,21 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   String? _message;
+  BackupProgress? _archiveProgress;
+  int _archiveRecords = 0;
+  BackupProgress _beginArchive() {
+    _archiveRecords = 0;
+    return _archiveProgress = BackupProgress(
+      onProgress: (records) {
+        if (mounted) setState(() => _archiveRecords = records);
+      },
+    );
+  }
+
+  Future<void> _cancelArchive() async {
+    _archiveProgress?.cancelled = true;
+    if (_files is ArchiveFiles) await (_files as ArchiveFiles).cancelArchive();
+  }
 
   @override
   void initState() {
@@ -71,7 +88,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _load() async {
-    _walks = await widget.store.listSaved();
+    _walks = await widget.store.listSummaries();
     _loaded = true;
   }
 
@@ -82,23 +99,64 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     });
     try {
       await action();
+    } on BackupCancelled {
+      _message = 'Backup operation cancelled. Your data is unchanged.';
     } on FormatException catch (e) {
       _message = 'File could not be read: ${e.message}';
     } catch (_) {
       _message =
           'Could not complete the operation. Check file access and available storage, then retry.';
     } finally {
+      _archiveProgress = null;
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _import(bool backup) async {
+    if (backup && _files is ArchiveFiles) {
+      final progress = _beginArchive();
+      final directory = await Directory.systemTemp.createTemp(
+        'wanderlust-restore-',
+      );
+      File? input;
+      try {
+        input = await (_files as ArchiveFiles).pickArchive();
+        if (input == null) return;
+        progress.check();
+        if (await BackupArchive.recognizes(input)) {
+          final staged = await BackupArchive.read(input, directory, progress);
+          await _restore(staged.metadata, true, staged: staged);
+        } else {
+          if (await input.length() > MemoryBackup.maxBytes) {
+            throw const FormatException('Legacy backup exceeds 128 MiB.');
+          }
+          await _restore(
+            await compute(_readBackup, await input.readAsBytes()),
+            true,
+          );
+        }
+      } finally {
+        if (input != null && await input.exists()) await input.delete();
+        await directory.delete(recursive: true);
+      }
+      return;
+    }
     final bytes = await _files.pick();
     if (bytes == null) return;
     final bundle = backup
         ? await compute(_readBackup, bytes)
         : MemoryBackup([await compute(_readGpx, bytes)], const []);
-    for (final memory in bundle.memories) {
+    await _restore(bundle, backup);
+  }
+
+  Future<void> _restore(
+    MemoryBackup bundle,
+    bool backup, {
+    StagedBackup? staged,
+  }) async {
+    await for (final memory
+        in staged?.memories() ?? Stream.fromIterable(bundle.memories)) {
+      _archiveProgress?.check();
       if (memory.photo != null) await validatePhoto(memory.photo!);
     }
     var restoreMaps = bundle.maps.isNotEmpty;
@@ -146,11 +204,16 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
       );
       if (approved != true) return;
     }
+    _archiveProgress?.check();
+    // The validated import commits atomically; cancellation ends before commit.
+    if (mounted) setState(() => _archiveProgress = null);
     final walks = bundle.walks;
     final added = await widget.store.mergeWalks(
       walks,
       deduplicateTrace: !backup,
-      memories: bundle.memories,
+      memories: staged == null ? bundle.memories : const [],
+      memoryStream: staged?.memories(),
+      walkStream: staged?.walks(),
       maps: restoreMaps ? bundle.maps : const [],
       preferences: restoreSettings ? bundle.preferences : null,
       activeMap: restoreMaps ? bundle.activeMap : null,
@@ -172,6 +235,24 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _backup() async {
+    if (_files is ArchiveFiles) {
+      final progress = _beginArchive();
+      final directory = await Directory.systemTemp.createTemp(
+        'wanderlust-export-',
+      );
+      try {
+        final file = File('${directory.path}/backup.wanderlust');
+        await BackupArchive.write(file, widget.store, progress);
+        progress.check();
+        if (await (_files as ArchiveFiles).saveArchive(file)) {
+          _message =
+              'Backup saved: walks, memories, photos, settings and offline maps.';
+        }
+      } finally {
+        await directory.delete(recursive: true);
+      }
+      return;
+    }
     final maps = <String>[];
     for (final area in await widget.store.listAreas()) {
       final source = await widget.store.readArea(area.version);
@@ -182,7 +263,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     final bytes = await compute(
       _writeBackup,
       MemoryBackup(
-        _walks,
+        await widget.store.listSaved(),
         await widget.store.memories.exportAll(),
         maps: maps,
         preferences: await widget.store.readPreferences(),
@@ -203,7 +284,8 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _export(SavedWalk walk) async {
-    final bytes = await compute(_writeGpx, walk);
+    final full = walk.isSummary ? await widget.store.loadWalk(walk.id) : walk;
+    final bytes = await compute(_writeGpx, full);
     final saved = await _files.save(
       'wanderlust-walk-${walk.uid}.gpx',
       'application/gpx+xml',
@@ -212,11 +294,39 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     if (saved) _message = 'GPX saved.';
   }
 
+  Future<void> _review(SavedWalk summary) async {
+    final walk = summary.isSummary
+        ? await widget.store.loadWalk(summary.id)
+        : summary;
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WalkReviewScreen(
+          walk: walk,
+          networks: _networks,
+          fillSmallGaps:
+              _restoredPreferences?.fillSmallGaps ?? widget.fillSmallGaps,
+          showStreetNames:
+              _restoredPreferences?.showStreetNames ?? widget.showStreetNames,
+          memoryStore: widget.store.memories,
+          showMemories:
+              _restoredPreferences?.showMemories ?? widget.showMemories,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: Scaffold(
-      appBar: AppBar(title: const Text('Walk history')),
+      appBar: AppBar(
+        title: const Text('Walk history'),
+        actions: [
+          if (_busy && _archiveProgress != null)
+            TextButton(onPressed: _cancelArchive, child: const Text('Cancel')),
+        ],
+      ),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -226,6 +336,11 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
+                      if (_busy && _archiveProgress != null) ...[
+                        const LinearProgressIndicator(),
+                        Text('Processing backup · $_archiveRecords items'),
+                        const SizedBox(height: 8),
+                      ],
                       const Text(
                         'Every recorded walk counts towards your heatmap. Favourites simply help you find special walks. GPX files are created only when you export.',
                       ),
@@ -254,7 +369,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                         ],
                       ),
                       const Text(
-                        'Compressed backups include your maps and settings (up to 128 MiB expanded). GPX contains only the walk. Choose where to save exports.',
+                        'Backups include walks, photos, maps and settings. Keep a copy somewhere safe. GPX contains only the walk.',
                         style: TextStyle(fontSize: 12),
                       ),
                       if (_busy)
@@ -323,26 +438,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                   itemBuilder: (context, index) {
                     final walk = _visibleWalks[index];
                     return ListTile(
-                      onTap: _busy
-                          ? null
-                          : () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => WalkReviewScreen(
-                                  walk: walk,
-                                  networks: _networks,
-                                  fillSmallGaps:
-                                      _restoredPreferences?.fillSmallGaps ??
-                                      widget.fillSmallGaps,
-                                  showStreetNames:
-                                      _restoredPreferences?.showStreetNames ??
-                                      widget.showStreetNames,
-                                  memoryStore: widget.store.memories,
-                                  showMemories:
-                                      _restoredPreferences?.showMemories ??
-                                      widget.showMemories,
-                                ),
-                              ),
-                            ),
+                      onTap: _busy ? null : () => _run(() => _review(walk)),
                       leading: IconButton(
                         tooltip: walk.favourite
                             ? 'Remove from favourites'
@@ -355,8 +451,8 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                         ),
                       ),
                       title: Text(
-                        walk.untimed.length == walk.points.length &&
-                                walk.points.isNotEmpty
+                        walk.untimed.length == walk.pointCount &&
+                                walk.pointCount > 0
                             ? 'Undated track'
                             : walk.startedAt
                                   .toLocal()
@@ -365,7 +461,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                   .first,
                       ),
                       subtitle: Text(
-                        '${walk.status} · Tap to review${(_restoredPreferences?.showSamples ?? widget.showSamples) ? ' · ${walk.points.length} GPS samples' : ''}',
+                        '${walk.status} · Tap to review${(_restoredPreferences?.showSamples ?? widget.showSamples) ? ' · ${walk.pointCount} GPS samples' : ''}',
                       ),
                       trailing: IconButton(
                         tooltip: 'Export GPX',

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import '../transfer/walk_codec.dart';
 import '../memories/memory_store.dart';
 import '../memories/memory.dart';
 
@@ -54,7 +56,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
       return await _factory.openDatabase(
         file,
         options: OpenDatabaseOptions(
-          version: 6,
+          version: 7,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
           },
@@ -70,6 +72,9 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
             await _createAreas(db);
             await _createPreferences(db);
             await MemoryStore.create(db);
+            await db.execute(
+              'ALTER TABLE recorded_walk ADD COLUMN fingerprint TEXT',
+            );
           },
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 2) await _createCoverage(db);
@@ -77,6 +82,11 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
             if (oldVersion < 4) await _createAreas(db);
             if (oldVersion < 5) await _createPreferences(db);
             if (oldVersion < 6) await MemoryStore.create(db);
+            if (oldVersion < 7) {
+              await db.execute(
+                'ALTER TABLE recorded_walk ADD COLUMN fingerprint TEXT',
+              );
+            }
           },
         ),
       );
@@ -247,8 +257,13 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
     );
   }
 
-  static Future<List<SavedWalk>> _list(DatabaseExecutor db) async {
-    final rows = await db.query('recorded_walk', orderBy: 'id DESC');
+  static Future<List<SavedWalk>> _list(DatabaseExecutor db, {int? id}) async {
+    final rows = await db.query(
+      'recorded_walk',
+      where: id == null ? null : 'id = ?',
+      whereArgs: id == null ? null : [id],
+      orderBy: 'id DESC',
+    );
     final walks = <SavedWalk>[];
     for (final row in rows) {
       final points = await db.query(
@@ -277,6 +292,7 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
               )
               .toList(),
           uid: row['uid'] as String,
+          fingerprint: row['fingerprint'] as String?,
           segmentStarts: (meta['segmentStarts'] as List? ?? []).cast<int>(),
           untimed: (meta['untimed'] as List? ?? []).cast<int>(),
           favourite: meta['favourite'] == true,
@@ -288,6 +304,60 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
 
   /// Read without recovering: library operations must never stop a live journal.
   Future<List<SavedWalk>> listSaved() async => (await _db).transaction(_list);
+
+  Future<SavedWalk> loadWalk(int id) async =>
+      (await _list(await _db, id: id)).single;
+
+  /// Metadata only after a one-time, per-walk fingerprint backfill on upgrade.
+  Future<List<SavedWalk>> listSummaries({bool recover = false}) async {
+    return (await _db).transaction((tx) async {
+      if (recover) {
+        await tx.rawUpdate(
+          "UPDATE recorded_walk SET status = 'interrupted', ended_at = COALESCE((SELECT timestamp FROM recorded_point WHERE walk_id = recorded_walk.id ORDER BY seq DESC LIMIT 1), started_at) WHERE status = 'recording'",
+        );
+      }
+      final rows = await tx.rawQuery(
+        'SELECT w.*, (SELECT COUNT(*) FROM recorded_point p WHERE p.walk_id = w.id) AS point_count FROM recorded_walk w ORDER BY w.id DESC',
+      );
+      final summaries = <SavedWalk>[];
+      for (final row in rows) {
+        final id = row['id'] as int;
+        var fingerprint = row['fingerprint'] as String?;
+        if (fingerprint == null && row['status'] != 'recording') {
+          final walk = (await _list(tx, id: id)).single;
+          fingerprint = sha256
+              .convert(utf8.encode(WalkCodec.exportGpx(walk)))
+              .toString();
+          await tx.update(
+            'recorded_walk',
+            {'fingerprint': fingerprint},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
+        final meta =
+            jsonDecode(row['trace_metadata'] as String) as Map<String, dynamic>;
+        summaries.add(
+          SavedWalk(
+            id,
+            DateTime.parse(row['started_at'] as String),
+            row['ended_at'] == null
+                ? null
+                : DateTime.parse(row['ended_at'] as String),
+            row['status'] as String,
+            const [],
+            uid: row['uid'] as String,
+            favourite: meta['favourite'] == true,
+            fingerprint: fingerprint,
+            storedPointCount: row['point_count'] as int,
+            segmentStarts: (meta['segmentStarts'] as List? ?? []).cast<int>(),
+            untimed: (meta['untimed'] as List? ?? []).cast<int>(),
+          ),
+        );
+      }
+      return summaries;
+    });
+  }
 
   /// A library preference only: leaves raw fixes and coverage memberships alone.
   Future<void> setFavourite(String uid, bool favourite) async {
@@ -318,22 +388,32 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
     List<WalkMemory> memories = const [],
+    Stream<WalkMemory>? memoryStream,
+    Stream<SavedWalk>? walkStream,
     List<String> maps = const [],
     WalkPreferences? preferences,
     String? activeMap,
   }) async {
     return (await _db).transaction((txn) async {
-      final existing = await _list(txn);
-      if (existing.any((w) => w.status == 'recording')) {
+      final rows = await txn.query(
+        'recorded_walk',
+        columns: ['id', 'uid', 'status'],
+      );
+      if (rows.any((w) => w['status'] == 'recording')) {
         throw StateError('Finish recording before importing or restoring.');
       }
-      final byUid = {for (final w in existing) w.uid: w};
-      final traces = existing.map((w) => w.traceKey).toSet();
+      final byUid = {
+        for (final row in rows) row['uid'] as String: row['id'] as int,
+      };
+      final traces = deduplicateTrace
+          ? (await _list(txn)).map((w) => w.traceKey).toSet()
+          : <String>{};
       var added = 0;
-      for (final walk in incoming) {
+      await for (final walk in walkStream ?? Stream.fromIterable(incoming)) {
         if (deduplicateTrace && traces.contains(walk.traceKey)) continue;
-        final previous = byUid[walk.uid];
-        if (previous != null) {
+        final previousId = byUid[walk.uid];
+        if (previousId != null) {
+          final previous = (await _list(txn, id: previousId)).single;
           if (jsonEncode(previous.toBackup(includeFavourite: false)) !=
               jsonEncode(walk.toBackup(includeFavourite: false))) {
             throw const FormatException(
@@ -364,11 +444,12 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
           });
         }
         await batch.commit(noResult: true);
-        byUid[walk.uid] = walk;
-        traces.add(walk.traceKey);
+        byUid[walk.uid] = id;
+        if (deduplicateTrace) traces.add(walk.traceKey);
         added++;
       }
-      for (final memory in memories) {
+      await for (final memory
+          in memoryStream ?? Stream.fromIterable(memories)) {
         final existingMemory = await txn.query(
           'memory',
           columns: ['id'],
@@ -431,12 +512,20 @@ class SqliteWalkStore implements WalkStore, CoverageStore, AreaStore {
 
   @override
   Future<void> append(int id, int sequence, Position point) async {
-    await (await _db).insert('recorded_point', {
-      'walk_id': id,
-      'seq': sequence,
-      'position': jsonEncode(point.toJson()),
-      'timestamp': point.timestamp.toUtc().toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await (await _db).transaction((tx) async {
+      await tx.insert('recorded_point', {
+        'walk_id': id,
+        'seq': sequence,
+        'position': jsonEncode(point.toJson()),
+        'timestamp': point.timestamp.toUtc().toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await tx.update(
+        'recorded_walk',
+        {'fingerprint': null},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    });
   }
 
   @override

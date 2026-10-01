@@ -14,7 +14,13 @@ class SavedWalk {
     this.segmentStarts = const [],
     this.untimed = const [],
     this.favourite = false,
+    this.storedPointCount,
+    this.fingerprint,
   });
+  final int? storedPointCount;
+  final String? fingerprint;
+  int get pointCount => storedPointCount ?? points.length;
+  bool get isSummary => storedPointCount != null;
   final bool favourite;
   final int id;
   final String uid;
@@ -59,25 +65,30 @@ class SavedWalk {
     segmentStarts: segmentStarts,
     untimed: untimed,
     favourite: value,
+    storedPointCount: storedPointCount,
+    fingerprint: fingerprint,
   );
 
-  Map<String, Object?> toBackup({bool includeFavourite = true}) => {
-    if (includeFavourite) 'favourite': favourite,
-    'uid': uid,
-    'startedAt': startedAt.toUtc().toIso8601String(),
-    'endedAt': endedAt?.toUtc().toIso8601String(),
-    'status': status,
-    'segmentStarts': segmentStarts,
-    'untimed': untimed,
-    'points': points
-        .map(
-          (p) => {
-            ...p.toJson(),
-            'timestampUtc': p.timestamp.toUtc().toIso8601String(),
-          },
-        )
-        .toList(),
-  };
+  Map<String, Object?> toBackup({bool includeFavourite = true}) {
+    if (isSummary) throw StateError('Load the walk trace before backing up.');
+    return {
+      if (includeFavourite) 'favourite': favourite,
+      'uid': uid,
+      'startedAt': startedAt.toUtc().toIso8601String(),
+      'endedAt': endedAt?.toUtc().toIso8601String(),
+      'status': status,
+      'segmentStarts': segmentStarts,
+      'untimed': untimed,
+      'points': points
+          .map(
+            (p) => {
+              ...p.toJson(),
+              'timestampUtc': p.timestamp.toUtc().toIso8601String(),
+            },
+          )
+          .toList(),
+    };
+  }
 }
 
 // Position.toJson stores milliseconds; the journal and backups retain the

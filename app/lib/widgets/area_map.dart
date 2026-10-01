@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../data/area_network.dart';
 import '../theme/heat_ramp.dart';
+import '../theme/wanderlust_theme.dart';
 import 'map_labels.dart';
 import '../memories/memory.dart';
 import 'memory_markers.dart';
@@ -87,6 +88,7 @@ class AreaMap extends StatefulWidget {
 
 class _AreaMapState extends State<AreaMap> {
   final _transform = TransformationController();
+  final _geometry = MapGeometryCache();
   Size? _size;
   bool _pendingCenter = false;
   bool _pendingFit = true;
@@ -210,6 +212,7 @@ class _AreaMapState extends State<AreaMap> {
               animation: _transform,
               builder: (context, _) => CustomPaint(
                 painter: AreaMapPainter(
+                  geometry: _geometry,
                   network: widget.network,
                   networks: widget.networks,
                   counts: widget.counts,
@@ -320,8 +323,28 @@ class LocationMarkerPainter extends CustomPainter {
       oldDelegate.stale != stale;
 }
 
+/// Geometry depends on the map projection and viewport, not GPS or heat counts.
+class MapGeometryCache {
+  AreaNetwork? _network;
+  Size? _size;
+  List<AreaNetwork>? _networks;
+  final _paths = <Object, Path>{};
+  void prepare(AreaNetwork network, Size size, List<AreaNetwork> networks) {
+    if (_network != network || _size != size || _networks != networks) {
+      _network = network;
+      _networks = networks;
+      _size = size;
+      _paths.clear();
+    }
+  }
+
+  Path path(Object key, Path Function() build) =>
+      _paths.putIfAbsent(key, build);
+}
+
 class AreaMapPainter extends CustomPainter {
   AreaMapPainter({
+    this.geometry,
     required this.network,
     required this.counts,
     this.networks = const [],
@@ -333,6 +356,7 @@ class AreaMapPainter extends CustomPainter {
     this.inferred = const {},
     this.textScale = 1,
   });
+  final MapGeometryCache? geometry;
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
   final bool showStreetNames;
@@ -348,6 +372,15 @@ class AreaMapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // Leave space for map controls without shifting geographic coordinates.
     final mapSize = mapDrawingSize(size);
+    final cache = geometry ?? MapGeometryCache();
+    cache.prepare(network, mapSize, networks);
+    final inverse = Matrix4.tryInvert(transform ?? Matrix4.identity());
+    final visible = inverse == null
+        ? null
+        : MatrixUtils.transformRect(
+            inverse,
+            Offset.zero & size,
+          ).shift(const Offset(-12, -80)).inflate(12);
     canvas.save();
     canvas.clipRect(Offset.zero & size);
     if (transform != null) canvas.transform(transform!.storage);
@@ -363,24 +396,31 @@ class AreaMapPainter extends CustomPainter {
         final b = network.project(Offset(map.bbox[2], map.bbox[1]), mapSize);
         canvas.clipRect(Rect.fromPoints(a, b));
         for (final feature in map.scenery.where((s) => s.kind == kind)) {
-          final path = Path()..fillType = PathFillType.evenOdd;
-          for (final ring in feature.paths) {
-            for (var i = 0; i < ring.length; i++) {
-              final p = network.project(ring[i], mapSize);
-              if (i == 0) {
-                path.moveTo(p.dx, p.dy);
-              } else {
-                path.lineTo(p.dx, p.dy);
+          final path = cache.path(feature, () {
+            final path = Path()..fillType = PathFillType.evenOdd;
+            for (final ring in feature.paths) {
+              for (var i = 0; i < ring.length; i++) {
+                final p = network.project(ring[i], mapSize);
+                if (i == 0) {
+                  path.moveTo(p.dx, p.dy);
+                } else {
+                  path.lineTo(p.dx, p.dy);
+                }
               }
+              if (kind != 'waterway') path.close();
             }
-            if (kind != 'waterway') path.close();
+            return path;
+          });
+          if (visible != null &&
+              !visible.overlaps(path.getBounds().inflate(1))) {
+            continue;
           }
           canvas.drawPath(
             path,
             Paint()
               ..color = kind == 'park'
-                  ? const Color(0xFFDCE4D2)
-                  : const Color(0xFFC4DAE2)
+                  ? WanderlustColors.mapPark
+                  : WanderlustColors.mapWater
               ..style = kind == 'waterway'
                   ? PaintingStyle.stroke
                   : PaintingStyle.fill
@@ -409,14 +449,20 @@ class AreaMapPainter extends CustomPainter {
                             4.5,
                       )) /
             zoom;
-      final path = Path();
-      for (var i = 0; i < edge.points.length; i++) {
-        final p = network.project(edge.points[i], mapSize);
-        if (i == 0) {
-          path.moveTo(p.dx, p.dy);
-        } else {
-          path.lineTo(p.dx, p.dy);
+      final path = cache.path(edge, () {
+        final path = Path();
+        for (var i = 0; i < edge.points.length; i++) {
+          final p = network.project(edge.points[i], mapSize);
+          if (i == 0) {
+            path.moveTo(p.dx, p.dy);
+          } else {
+            path.lineTo(p.dx, p.dy);
+          }
         }
+        return path;
+      });
+      if (visible != null && !visible.overlaps(path.getBounds().inflate(1))) {
+        return;
       }
       canvas.drawPath(path, stroke);
     }

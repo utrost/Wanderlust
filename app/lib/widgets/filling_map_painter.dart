@@ -80,8 +80,8 @@ class FillingMapPainter extends CustomPainter {
 
 class _BasemapColors {
   _BasemapColors({required bool dark})
-      : water = dark ? WanderlustColors.darkWater : WanderlustColors.water,
-        park = dark ? WanderlustColors.darkPark : WanderlustColors.park;
+    : water = dark ? WanderlustColors.darkWater : WanderlustColors.water,
+      park = dark ? WanderlustColors.darkPark : WanderlustColors.park;
   final Color water;
   final Color park;
 }
