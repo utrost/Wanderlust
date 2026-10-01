@@ -38,6 +38,19 @@ recording recovery also has one implementation shared by full and summary reads.
 it contains no SQL or business rules. New storage logic belongs in the repositories,
 not in that facade.
 
+Session and transfer code depend on `WalkStore` (journal), `WalkHistory`,
+`AreaStore`, `CoverageStore`, `PreferencesStore`, `MemoryRepository` and
+`WalkImporter` contracts. They do not construct SQLite implementations. The map
+screen currently assembles these dependencies from the compatibility facade;
+`WalkRecorder` now requires an injected journal. In-memory test implementations
+exercise the history UI and transfer service without SQLite subclasses.
+
+`PreferencesController` serializes startup reads and saves; failures do not poison
+the queue and do not publish an unpersisted value. Session shutdown drains accepted
+preference work before closing the journal. `MapMemoriesController` publishes
+immutable lists and ignores superseded read results/errors. Concurrent refreshes
+share pending photo recovery; an explicit later recovery can retry a failure.
+
 ## Source data and derived data
 
 Raw fixes are committed incrementally, with timestamps and measured accuracy.
@@ -88,6 +101,14 @@ and a mandatory final record count. Settings, maps, individual walks, memory
 metadata and raw photo bytes are separate records. This is an application format,
 not ZIP. Checksums detect corruption; backups are not encrypted or authenticated.
 
+`WalkTransfer` owns document selection, preparation, photo validation, export and
+staging cleanup. The history screen supplies a restore-choice callback and shows
+the result. `BackupData` supplies explicit data dependencies to the archive writer;
+`WalkImporter` is the transaction boundary. Cancellation is checked after the
+restore choice and before commit. `ArchiveFiles.pickArchive` transfers ownership
+of a private temporary copy to the caller, never ownership of the user's original
+file. Cleanup runs on cancellation, decoding failure and provider failure.
+
 Photo data is handled one memory at a time. Restore stages photos and walk records
 in private temporary files, validates the complete archive and photo decodability,
 and then merges through one SQLite transaction. Existing local memories win;
@@ -129,3 +150,8 @@ one-shot and review matching. It changes neither the database version nor the
 backup format. The map screen still contains navigation/composition code and the
 store facade remains a compatibility boundary; this is not a claim that every
 remaining class or similar-looking code fragment needs another abstraction.
+
+The second maintainability pass adds deterministic tests for out-of-order memory
+reads, recovery retry, queued preference writes and transfer cleanup/cancellation.
+These exercise workflow outcomes through domain interfaces, without a database
+or widget tree. Existing SQLite tests continue to verify atomic restore rollback.

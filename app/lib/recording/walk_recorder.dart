@@ -4,9 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
-import 'walk_store.dart';
-import 'walk_distance.dart';
 import '../transfer/walk_codec.dart';
+import 'saved_walk.dart';
+import 'walk_distance.dart';
+import 'walk_journal.dart';
 
 enum RecorderError {
   locationServiceDisabled,
@@ -85,12 +86,12 @@ class DeviceLocationSource implements LocationSource {
 class WalkRecorder extends ChangeNotifier {
   WalkRecorder({
     LocationSource? location,
-    WalkStore? store,
+    required WalkStore store,
     DateTime Function()? now,
     this.showElapsed,
     this.loadHistory,
   }) : _location = location ?? DeviceLocationSource(),
-       _store = store ?? SqliteWalkStore(),
+       _store = store,
        _now = now ?? DateTime.now;
   final Future<List<SavedWalk>> Function()? loadHistory;
   Future<List<SavedWalk>> _history() =>

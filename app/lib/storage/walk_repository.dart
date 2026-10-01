@@ -5,13 +5,15 @@ import 'package:geolocator/geolocator.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../recording/saved_walk.dart';
+import '../recording/walk_history.dart';
 import '../transfer/walk_codec.dart';
 import 'app_database.dart';
 
-class WalkRepository {
+class WalkRepository implements WalkHistory {
   WalkRepository(this.connection);
   final AppDatabase connection;
   Future<Database> get _db => connection.database;
+  @override
   Future<String?> walkUid(int id) async {
     final rows = await (await _db).query(
       'recorded_walk',
@@ -80,13 +82,16 @@ class WalkRepository {
   }
 
   /// Read without recovering: library operations must never stop a live journal.
+  @override
   Future<List<SavedWalk>> listSaved() async =>
       (await _db).transaction(readFrom);
 
+  @override
   Future<SavedWalk> loadWalk(int id) async =>
       (await readFrom(await _db, id: id)).single;
 
   /// Metadata only after a one-time, per-walk fingerprint backfill on upgrade.
+  @override
   Future<List<SavedWalk>> listSummaries({bool recover = false}) async {
     return (await _db).transaction((tx) async {
       if (recover) {
@@ -136,6 +141,7 @@ class WalkRepository {
   }
 
   /// A library preference only: leaves raw fixes and coverage memberships alone.
+  @override
   Future<void> setFavourite(String uid, bool favourite) async {
     await (await _db).transaction((txn) async {
       final rows = await txn.query(

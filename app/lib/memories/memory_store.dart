@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:sqflite/sqflite.dart';
-import 'memory.dart';
 
-class MemoryStore {
+import 'package:sqflite/sqflite.dart';
+
+import 'memory.dart';
+import 'memory_repository.dart';
+
+class MemoryStore implements MemoryRepository {
   MemoryStore(this.database);
   final Future<Database> Function() database;
   static const chunkSize = 64 * 1024;
@@ -16,6 +19,7 @@ class MemoryStore {
     );
   }
 
+  @override
   Future<List<WalkMemory>> list({String? walkUid}) async {
     final rows = await (await database()).query('memory');
     final items = rows
@@ -58,6 +62,7 @@ class MemoryStore {
     return WalkMemory.fromJson(data, complete: true);
   }
 
+  @override
   Future<WalkMemory?> read(String id, bool draft) async =>
       (await database()).transaction((tx) => readFrom(tx, id, draft));
   static Future<void> writeTo(DatabaseExecutor db, WalkMemory value) async {
@@ -88,6 +93,7 @@ class MemoryStore {
     }
   }
 
+  @override
   Future<void> put(WalkMemory value) async => (await database()).transaction((
     tx,
   ) async {
@@ -116,6 +122,7 @@ class MemoryStore {
       );
     }
   });
+  @override
   Future<void> delete(String id, {bool draftOnly = false}) async =>
       (await database()).transaction((tx) async {
         await tx.delete(
@@ -124,6 +131,7 @@ class MemoryStore {
           whereArgs: [id],
         );
       });
+  @override
   Future<List<WalkMemory>> exportAll() async => (await database()).transaction((
     tx,
   ) async {

@@ -1,8 +1,8 @@
-import 'dart:typed_data';
 import 'dart:io';
-import 'package:flutter/services.dart';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 
 import '../memories/memory_backup.dart';
 
@@ -12,6 +12,8 @@ abstract class WalkFiles {
 }
 
 abstract class ArchiveFiles {
+  /// Returns a private temporary copy owned by the caller, which must delete it.
+  /// Must never return the original user document's path.
   Future<File?> pickArchive();
   Future<bool> saveArchive(File file);
   Future<void> cancelArchive();

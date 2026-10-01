@@ -8,7 +8,7 @@ import '../data/area_network.dart';
 import '../geo/geo_core_ffi.dart';
 import '../geo/matching_session.dart';
 import '../geo/matching_worker.dart';
-import '../recording/walk_store.dart';
+import '../recording/saved_walk.dart';
 import '../transfer/walk_codec.dart';
 import 'coverage_store.dart';
 

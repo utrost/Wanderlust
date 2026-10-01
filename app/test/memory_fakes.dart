@@ -1,8 +1,7 @@
 import 'package:wanderlust/memories/memory.dart';
-import 'package:wanderlust/memories/memory_store.dart';
+import 'package:wanderlust/memories/memory_repository.dart';
 
-class FakeMemoryStore extends MemoryStore {
-  FakeMemoryStore() : super(() => throw UnimplementedError());
+class FakeMemoryStore implements MemoryRepository {
   final Map<String, WalkMemory> entries = {};
   bool fail = false;
   String key(String id, bool draft) => '$id:$draft';

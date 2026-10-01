@@ -1,42 +1,25 @@
-import 'dart:convert';
-import 'dart:io';
-import '../transfer/backup_archive.dart';
-import '../memories/memory_backup.dart';
-import '../memories/memory_photos.dart';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../recording/walk_store.dart';
 import '../data/area_network.dart';
+import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
+import '../transfer/backup_archive.dart';
+import '../transfer/walk_transfer.dart';
 import 'walk_review_screen.dart';
-import '../transfer/walk_codec.dart';
-import '../transfer/walk_files.dart';
-
-MemoryBackup _readBackup(Uint8List bytes) => MemoryBackup.decode(bytes);
-SavedWalk _readGpx(Uint8List bytes) =>
-    WalkCodec.importGpx(WalkCodec.decodeBytes(bytes));
-Uint8List _writeBackup(MemoryBackup backup) =>
-    MemoryBackup.encode(backup, compressed: true);
-Uint8List _writeGpx(SavedWalk walk) =>
-    Uint8List.fromList(utf8.encode(WalkCodec.exportGpx(walk)));
 
 class WalkLibraryScreen extends StatefulWidget {
   const WalkLibraryScreen({
     super.key,
-    required this.store,
+    required this.transfer,
     required this.onChanged,
-    this.files,
     this.showSamples = false,
     this.networks = const [],
     this.fillSmallGaps = false,
     this.showStreetNames = true,
     this.showMemories = true,
   });
-  final SqliteWalkStore store;
+  final WalkTransfer transfer;
   final Future<void> Function() onChanged;
-  final WalkFiles? files;
   final bool showSamples;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
@@ -48,7 +31,7 @@ class WalkLibraryScreen extends StatefulWidget {
 }
 
 class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
-  late final WalkFiles _files = widget.files ?? DeviceWalkFiles();
+  WalkTransfer get _transfer => widget.transfer;
   List<SavedWalk> _walks = [];
   late List<AreaNetwork> _networks = widget.networks;
   WalkPreferences? _restoredPreferences;
@@ -60,7 +43,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
       : _walks;
 
   Future<void> _toggleFavourite(SavedWalk walk) async {
-    await widget.store.setFavourite(walk.uid, !walk.favourite);
+    await _transfer.data.history.setFavourite(walk.uid, !walk.favourite);
     await _load();
   }
 
@@ -78,7 +61,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
 
   Future<void> _cancelArchive() async {
     _archiveProgress?.cancelled = true;
-    if (_files is ArchiveFiles) await (_files as ArchiveFiles).cancelArchive();
+    await _transfer.cancel();
   }
 
   @override
@@ -88,7 +71,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _load() async {
-    _walks = await widget.store.listSummaries();
+    _walks = await _transfer.data.history.listSummaries();
     _loaded = true;
   }
 
@@ -112,191 +95,99 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     }
   }
 
-  Future<void> _import(bool backup) async {
-    if (backup && _files is ArchiveFiles) {
-      final progress = _beginArchive();
-      final directory = await Directory.systemTemp.createTemp(
-        'wanderlust-restore-',
-      );
-      File? input;
-      try {
-        input = await (_files as ArchiveFiles).pickArchive();
-        if (input == null) return;
-        progress.check();
-        if (await BackupArchive.recognizes(input)) {
-          final staged = await BackupArchive.read(input, directory, progress);
-          await _restore(staged.metadata, true, staged: staged);
-        } else {
-          if (await input.length() > MemoryBackup.maxBytes) {
-            throw const FormatException('Legacy backup exceeds 128 MiB.');
-          }
-          await _restore(
-            await compute(_readBackup, await input.readAsBytes()),
-            true,
-          );
-        }
-      } finally {
-        if (input != null && await input.exists()) await input.delete();
-        await directory.delete(recursive: true);
-      }
-      return;
-    }
-    final bytes = await _files.pick();
-    if (bytes == null) return;
-    final bundle = backup
-        ? await compute(_readBackup, bytes)
-        : MemoryBackup([await compute(_readGpx, bytes)], const []);
-    await _restore(bundle, backup);
-  }
-
-  Future<void> _restore(
-    MemoryBackup bundle,
-    bool backup, {
-    StagedBackup? staged,
-  }) async {
-    await for (final memory
-        in staged?.memories() ?? Stream.fromIterable(bundle.memories)) {
-      _archiveProgress?.check();
-      if (memory.photo != null) await validatePhoto(memory.photo!);
-    }
-    var restoreMaps = bundle.maps.isNotEmpty;
+  Future<RestoreOptions?> _chooseRestore(RestoreSummary summary) async {
+    if (!mounted) return null;
+    var restoreMaps = summary.maps > 0;
     var restoreSettings = false;
-    if (backup && (bundle.maps.isNotEmpty || bundle.preferences != null)) {
-      if (!mounted) return;
-      final approved = await showDialog<bool>(
-        context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, update) => AlertDialog(
-            title: const Text('Restore backup'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${bundle.walks.length} walks · ${bundle.memories.length} memories and drafts',
+    return showDialog<RestoreOptions>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('Restore backup'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${summary.walks} walks · ${summary.memories} memories and drafts',
+              ),
+              const Text('Existing walks and memories are kept.'),
+              if (summary.maps > 0)
+                CheckboxListTile(
+                  title: Text('Include ${summary.maps} offline maps'),
+                  value: restoreMaps,
+                  onChanged: (v) => update(() => restoreMaps = v!),
                 ),
-                const Text('Existing walks and memories are kept.'),
-                if (bundle.maps.isNotEmpty)
-                  CheckboxListTile(
-                    title: Text('Include ${bundle.maps.length} offline maps'),
-                    value: restoreMaps,
-                    onChanged: (v) => update(() => restoreMaps = v!),
-                  ),
-                if (bundle.preferences != null)
-                  CheckboxListTile(
-                    title: const Text('Replace my settings'),
-                    value: restoreSettings,
-                    onChanged: (v) => update(() => restoreSettings = v!),
-                  ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Restore'),
-              ),
+              if (summary.hasSettings)
+                CheckboxListTile(
+                  title: const Text('Replace my settings'),
+                  value: restoreSettings,
+                  onChanged: (v) => update(() => restoreSettings = v!),
+                ),
             ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                context,
+                RestoreOptions(maps: restoreMaps, settings: restoreSettings),
+              ),
+              child: const Text('Restore'),
+            ),
+          ],
         ),
-      );
-      if (approved != true) return;
-    }
-    _archiveProgress?.check();
-    // The validated import commits atomically; cancellation ends before commit.
-    if (mounted) setState(() => _archiveProgress = null);
-    final walks = bundle.walks;
-    final added = await widget.store.mergeWalks(
-      walks,
-      deduplicateTrace: !backup,
-      memories: staged == null ? bundle.memories : const [],
-      memoryStream: staged?.memories(),
-      walkStream: staged?.walks(),
-      maps: restoreMaps ? bundle.maps : const [],
-      preferences: restoreSettings ? bundle.preferences : null,
-      activeMap: restoreMaps ? bundle.activeMap : null,
+      ),
     );
+  }
+
+  Future<void> _import(bool backup) async {
+    final progress = backup && _transfer.supportsArchives
+        ? _beginArchive()
+        : BackupProgress();
+    final result = await _transfer.importFile(
+      backup: backup,
+      choose: _chooseRestore,
+      progress: progress,
+      onCommit: () {
+        if (mounted) setState(() => _archiveProgress = null);
+      },
+    );
+    if (result == null) return;
     await _load();
-    if (restoreSettings) _restoredPreferences = bundle.preferences;
-    if (restoreMaps) {
+    if (result.preferences != null) _restoredPreferences = result.preferences;
+    if (result.restoredMaps) {
       _networks = [
-        for (final area in await widget.store.listAreas())
-          if (await widget.store.readArea(area.version) case final source?)
+        for (final area in await _transfer.data.maps.listAreas())
+          if (await _transfer.data.maps.readArea(area.version)
+              case final source?)
             AreaNetwork.parse(source),
       ];
     }
-    // Raw data is committed before matching. A matching failure cannot lose it.
     await widget.onChanged();
     _message =
-        '$added walk${added == 1 ? '' : 's'} added; ${walks.length - added} already saved. '
-        '${backup ? 'Backup restored with memories${restoreMaps ? ', offline maps' : ''}${restoreSettings ? ' and settings' : ''}.' : 'Streets update for walks inside saved maps.'}';
+        '${result.added} walk${result.added == 1 ? '' : 's'} added; ${result.existing} already saved. '
+        '${backup ? 'Backup restored with memories${result.restoredMaps ? ', offline maps' : ''}${result.preferences != null ? ' and settings' : ''}.' : 'Streets update for walks inside saved maps.'}';
   }
 
   Future<void> _backup() async {
-    if (_files is ArchiveFiles) {
-      final progress = _beginArchive();
-      final directory = await Directory.systemTemp.createTemp(
-        'wanderlust-export-',
-      );
-      try {
-        final file = File('${directory.path}/backup.wanderlust');
-        await BackupArchive.write(file, widget.store, progress);
-        progress.check();
-        if (await (_files as ArchiveFiles).saveArchive(file)) {
-          _message =
-              'Backup saved: walks, memories, photos, settings and offline maps.';
-        }
-      } finally {
-        await directory.delete(recursive: true);
-      }
-      return;
-    }
-    final maps = <String>[];
-    for (final area in await widget.store.listAreas()) {
-      final source = await widget.store.readArea(area.version);
-      if (source == null) throw StateError('Saved map is unavailable');
-      maps.add(source);
-    }
-    final selected = await widget.store.readActiveArea();
-    final bytes = await compute(
-      _writeBackup,
-      MemoryBackup(
-        await widget.store.listSaved(),
-        await widget.store.memories.exportAll(),
-        maps: maps,
-        preferences: await widget.store.readPreferences(),
-        activeMap: selected == null
-            ? null
-            : AreaNetwork.parse(selected).version,
-      ),
-    );
-    final saved = await _files.save(
-      'wanderlust-backup.json.gz',
-      'application/gzip',
-      bytes,
-    );
-    if (saved) {
+    if (await _transfer.backup(
+      _transfer.supportsArchives ? _beginArchive() : BackupProgress(),
+    )) {
       _message =
-          'Backup saved: ${_walks.length} walks, memories, photos, settings and ${maps.length} maps.';
+          'Backup saved: walks, memories, photos, settings and offline maps.';
     }
   }
 
   Future<void> _export(SavedWalk walk) async {
-    final full = walk.isSummary ? await widget.store.loadWalk(walk.id) : walk;
-    final bytes = await compute(_writeGpx, full);
-    final saved = await _files.save(
-      'wanderlust-walk-${walk.uid}.gpx',
-      'application/gpx+xml',
-      bytes,
-    );
-    if (saved) _message = 'GPX saved.';
+    if (await _transfer.exportGpx(walk)) _message = 'GPX saved.';
   }
 
   Future<void> _review(SavedWalk summary) async {
     final walk = summary.isSummary
-        ? await widget.store.loadWalk(summary.id)
+        ? await _transfer.data.history.loadWalk(summary.id)
         : summary;
     if (!mounted) return;
     await Navigator.of(context).push(
@@ -308,7 +199,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
               _restoredPreferences?.fillSmallGaps ?? widget.fillSmallGaps,
           showStreetNames:
               _restoredPreferences?.showStreetNames ?? widget.showStreetNames,
-          memoryStore: widget.store.memories,
+          memoryStore: _transfer.data.memories,
           showMemories:
               _restoredPreferences?.showMemories ?? widget.showMemories,
         ),

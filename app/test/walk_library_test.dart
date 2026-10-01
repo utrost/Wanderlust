@@ -1,25 +1,48 @@
-import 'package:wanderlust/transfer/walk_codec.dart';
-import 'package:wanderlust/memories/memory_backup.dart';
-import 'coverage_test.dart' show networkJson;
-import 'package:wanderlust/settings/walk_preferences.dart';
-import 'package:wanderlust/maps/area_store.dart';
-import 'package:wanderlust/memories/memory.dart';
-import 'memory_fakes.dart';
-import 'package:wanderlust/memories/memory_store.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wanderlust/recording/walk_store.dart';
+import 'package:wanderlust/maps/area_store.dart';
+import 'package:wanderlust/memories/memory.dart';
+import 'package:wanderlust/memories/memory_backup.dart';
+import 'package:wanderlust/memories/memory_repository.dart';
+import 'package:wanderlust/recording/saved_walk.dart';
+import 'package:wanderlust/recording/walk_history.dart';
 import 'package:wanderlust/screens/walk_library_screen.dart';
+import 'package:wanderlust/settings/preferences_store.dart';
+import 'package:wanderlust/settings/walk_preferences.dart';
+import 'package:wanderlust/transfer/backup_data.dart';
+import 'package:wanderlust/transfer/walk_codec.dart';
 import 'package:wanderlust/transfer/walk_files.dart';
+import 'package:wanderlust/transfer/walk_importer.dart';
+import 'package:wanderlust/transfer/walk_transfer.dart';
+
+import 'coverage_test.dart' show networkJson;
+import 'memory_fakes.dart';
 import 'transfer_test.dart' show segmentedGpx;
 
-class LibraryStore extends SqliteWalkStore {
+class LibraryStore
+    implements WalkHistory, WalkImporter, AreaStore, PreferencesStore {
   final _memories = FakeMemoryStore();
+  MemoryRepository get memories => _memories;
+  BackupData get backupData =>
+      BackupData(history: this, maps: this, settings: this, memories: memories);
   @override
-  MemoryStore get memories => _memories;
+  Future<String?> walkUid(int id) async => (await loadWalk(id)).uid;
+  @override
+  Future<String?> readArea(String version) async => null;
+  @override
+  Future<void> saveArea(String geojson) => throw UnimplementedError();
+  @override
+  Future<void> selectArea(String? version) => throw UnimplementedError();
+  @override
+  Future<void> deleteArea(String version) => throw UnimplementedError();
+  @override
+  Future<void> savePreferences(WalkPreferences value) async {
+    restoredPreferences = value;
+  }
+
   final walks = <SavedWalk>[];
   bool failFavourite = false;
   @override
@@ -60,10 +83,13 @@ class LibraryStore extends SqliteWalkStore {
     restoredPreferences = preferences;
     restoredMaps = maps;
     var count = 0;
-    for (final walk in incoming) {
+    await for (final walk in walkStream ?? Stream.fromIterable(incoming)) {
       if (walks.any((w) => w.uid == walk.uid)) continue;
       walks.add(walk);
       count++;
+    }
+    await for (final memory in memoryStream ?? Stream.fromIterable(memories)) {
+      await _memories.put(memory);
     }
     return count;
   }
@@ -105,7 +131,12 @@ Future<void> perform(
           await tester.tap(find.text('Replace my settings'));
           await tester.pump();
         }
-        await tester.tap(find.text(cancelRestore ? 'Cancel' : 'Restore'));
+        await tester.tap(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text(cancelRestore ? 'Cancel' : 'Restore'),
+          ),
+        );
         await tester.pump();
       }
       if (find.byType(LinearProgressIndicator).evaluate().isEmpty) return;
@@ -126,8 +157,11 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: WalkLibraryScreen(
-            store: store,
-            files: files,
+            transfer: WalkTransfer(
+              data: store.backupData,
+              importer: store,
+              files: files,
+            ),
             onChanged: () async {
               updates++;
             },
@@ -167,8 +201,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WalkLibraryScreen(
-          store: store,
-          files: files,
+          transfer: WalkTransfer(
+            data: store.backupData,
+            importer: store,
+            files: files,
+          ),
           onChanged: () async {
             fail('No change callback on cancellation or parse failure');
           },
@@ -206,8 +243,11 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: WalkLibraryScreen(
-            store: store,
-            files: files,
+            transfer: WalkTransfer(
+              data: store.backupData,
+              importer: store,
+              files: files,
+            ),
             onChanged: () async {},
           ),
         ),
@@ -233,8 +273,11 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: WalkLibraryScreen(
-            store: store,
-            files: files,
+            transfer: WalkTransfer(
+              data: store.backupData,
+              importer: store,
+              files: files,
+            ),
             onChanged: () async =>
                 fail('Starring must not trigger coverage recomputation'),
           ),
@@ -284,8 +327,11 @@ void main() {
             child: child!,
           ),
           home: WalkLibraryScreen(
-            store: store,
-            files: TestFiles(),
+            transfer: WalkTransfer(
+              data: store.backupData,
+              importer: store,
+              files: TestFiles(),
+            ),
             onChanged: () async {},
           ),
         ),

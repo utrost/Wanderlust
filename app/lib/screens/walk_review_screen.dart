@@ -1,12 +1,14 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import '../data/area_network.dart';
+import '../memories/memory.dart';
+import '../memories/memory_repository.dart';
 import '../recording/saved_walk.dart';
 import '../review/walk_review.dart';
 import '../widgets/area_map.dart';
 import '../widgets/walk_overlay.dart';
-import '../memories/memory.dart';
-import '../memories/memory_store.dart';
 import 'memories_screen.dart';
 
 typedef ReviewMatcher =
@@ -27,7 +29,7 @@ class WalkReviewScreen extends StatefulWidget {
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
   final bool showStreetNames;
-  final MemoryStore? memoryStore;
+  final MemoryRepository? memoryStore;
   final bool showMemories;
   final ReviewMatcher match;
   @override

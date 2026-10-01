@@ -1,13 +1,15 @@
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:wanderlust/transfer/backup_archive.dart';
-import 'package:wanderlust/recording/walk_store.dart';
 import 'package:wanderlust/memories/memory.dart';
+import 'package:wanderlust/recording/walk_store.dart';
+import 'package:wanderlust/transfer/backup_archive.dart';
 import 'package:wanderlust/transfer/walk_codec.dart';
-import 'transfer_test.dart' show segmentedGpx;
+
 import 'coverage_test.dart' show networkJson;
+import 'transfer_test.dart' show segmentedGpx;
 
 void main() {
   sqfliteFfiInit();
@@ -37,7 +39,7 @@ void main() {
     );
     await store.memories.put(m);
     final file = File('${dir.path}/backup');
-    await BackupArchive.write(file, store, BackupProgress());
+    await BackupArchive.write(file, store.backupData, BackupProgress());
     expect(await BackupArchive.recognizes(file), isTrue);
     final staged = await BackupArchive.read(file, dir, BackupProgress());
     expect(staged.metadata.walks.single.uid, walk.uid);
@@ -61,7 +63,7 @@ void main() {
   });
   test('corruption, truncation and trailing bytes are rejected', () async {
     final file = File('${dir.path}/backup');
-    await BackupArchive.write(file, store, BackupProgress());
+    await BackupArchive.write(file, store.backupData, BackupProgress());
     final bytes = await file.readAsBytes();
     final corrupt = Uint8List.fromList(bytes);
     corrupt[bytes.length ~/ 2] ^= 1;
@@ -84,7 +86,11 @@ void main() {
       ).copyWith(note: 'Orphan', draft: false),
     );
     await expectLater(
-      BackupArchive.write(File('${dir.path}/backup'), store, BackupProgress()),
+      BackupArchive.write(
+        File('${dir.path}/backup'),
+        store.backupData,
+        BackupProgress(),
+      ),
       throwsFormatException,
     );
   });
@@ -92,7 +98,7 @@ void main() {
     await expectLater(
       BackupArchive.write(
         File('${dir.path}/backup'),
-        store,
+        store.backupData,
         BackupProgress()..cancelled = true,
       ),
       throwsA(isA<BackupCancelled>()),
@@ -132,7 +138,7 @@ void main() {
       );
     }
     final file = File('${dir.path}/large');
-    await BackupArchive.write(file, store, BackupProgress());
+    await BackupArchive.write(file, store.backupData, BackupProgress());
     expect(await file.length(), greaterThan(80 * 1024 * 1024));
     final staged = await BackupArchive.read(file, dir, BackupProgress());
     var bytes = 0;

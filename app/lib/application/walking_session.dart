@@ -3,68 +3,67 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../coverage/coverage_controller.dart';
+import '../coverage/coverage_store.dart';
+import '../maps/area_store.dart';
+import '../recording/walk_history.dart';
+import '../recording/walk_journal.dart';
 import '../recording/walk_recorder.dart';
-import '../recording/walk_store.dart';
+import '../settings/preferences_store.dart';
 import '../settings/walk_preferences.dart';
-import '../transfer/backup_archive.dart';
+import 'preferences_controller.dart';
 
 /// Owns the shared database, recording journal and derived coverage lifetime.
 /// Coordinates recording previews and preferences; navigation stays in the UI.
 class WalkingSession extends ChangeNotifier {
-  WalkingSession({required this.store, LocationSource? location}) {
-    unawaited(BackupArchive.cleanAbandonedFiles().catchError((Object _) {}));
+  WalkingSession({
+    required WalkStore journal,
+    required WalkHistory history,
+    required AreaStore maps,
+    required CoverageStore coverageStore,
+    required PreferencesStore preferencesStore,
+    LocationSource? location,
+  }) {
     recorder = WalkRecorder(
-      store: store,
+      store: journal,
       location:
           location ??
           DeviceLocationSource(detailedGps: () => preferences.detailedGps),
       showElapsed: () => preferences.showTime,
-      loadHistory: () => store.listSummaries(recover: true),
+      loadHistory: () => history.listSummaries(recover: true),
     );
     coverage = CoverageController(
-      store: store,
-      loadWalk: store.loadWalk,
+      store: coverageStore,
+      loadWalk: history.loadWalk,
       loadSavedNetworks: () async => [
-        for (final area in await store.listAreas())
-          if (await store.readArea(area.version) case final source?) source,
+        for (final area in await maps.listAreas())
+          if (await maps.readArea(area.version) case final source?) source,
       ],
       loadNetwork: () async {
-        final selected = await store.readActiveArea();
+        final selected = await maps.readActiveArea();
         if (selected != null) return selected;
-        final maps = await store.listAreas();
-        return maps.isEmpty ? null : store.readArea(maps.first.version);
+        final saved = await maps.listAreas();
+        return saved.isEmpty ? null : maps.readArea(saved.first.version);
       },
     );
+    _preferences = PreferencesController(
+      store: preferencesStore,
+      onApplied: (value) async {
+        recorder.refreshDisplayClock();
+        await coverage.setFillSmallGaps(
+          value.fillSmallGaps,
+          recorder.savedWalks,
+        );
+      },
+    );
+    _preferences.addListener(notifyListeners);
     recorder.addListener(_recordingChanged);
   }
-  WalkPreferences _preferences = const WalkPreferences();
-  WalkPreferences get preferences => _preferences;
+  late final PreferencesController _preferences;
+  WalkPreferences get preferences => _preferences.value;
   bool _foreground = true;
-
-  Future<void> loadPreferences() async {
-    try {
-      final value = await store.readPreferences();
-      if (_closed) return;
-      await _applyPreferences(value);
-    } catch (_) {
-      // Calm defaults remain available if storage is unavailable.
-    }
-  }
-
-  Future<void> savePreferences(WalkPreferences value) async {
-    await store.savePreferences(value);
-    if (!_closed) await _applyPreferences(value);
-  }
-
-  Future<void> _applyPreferences(WalkPreferences value) async {
-    final changed = preferences.fillSmallGaps != value.fillSmallGaps;
-    _preferences = value;
-    recorder.refreshDisplayClock();
-    notifyListeners();
-    if (changed) {
-      await coverage.setFillSmallGaps(value.fillSmallGaps, recorder.savedWalks);
-    }
-  }
+  Future<void> loadPreferences() => _preferences.load();
+  Future<void> savePreferences(WalkPreferences value) =>
+      _preferences.save(value);
 
   void setForeground(bool visible) {
     _foreground = visible;
@@ -82,7 +81,6 @@ class WalkingSession extends ChangeNotifier {
     }
   }
 
-  final SqliteWalkStore store;
   late final WalkRecorder recorder;
   late final CoverageController coverage;
   bool _closed = false;
@@ -91,8 +89,14 @@ class WalkingSession extends ChangeNotifier {
     if (_closed) return;
     _closed = true;
     recorder.removeListener(_recordingChanged);
+    _preferences.dispose();
     coverage.dispose();
-    unawaited(coverage.settled.whenComplete(recorder.dispose));
+    unawaited(
+      Future.wait([
+        coverage.settled,
+        _preferences.settled,
+      ]).whenComplete(recorder.dispose),
+    );
     super.dispose();
   }
 }

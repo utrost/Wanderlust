@@ -2,13 +2,15 @@ import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
 
+import '../settings/preferences_store.dart';
 import '../settings/walk_preferences.dart';
 import 'app_database.dart';
 
-class PreferencesRepository {
+class PreferencesRepository implements PreferencesStore {
   PreferencesRepository(this.connection);
   final AppDatabase connection;
   Future<Database> get _db => connection.database;
+  @override
   Future<WalkPreferences> readPreferences() async {
     final rows = await (await _db).query('walk_preferences', where: 'id = 1');
     return rows.isEmpty
@@ -18,6 +20,7 @@ class PreferencesRepository {
           );
   }
 
+  @override
   Future<void> savePreferences(WalkPreferences value) async {
     await writeTo(await _db, value);
   }

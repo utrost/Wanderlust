@@ -1,9 +1,11 @@
-import 'dart:typed_data';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
+
 import 'package:image_picker/image_picker.dart';
+
 import 'memory.dart';
-import 'memory_store.dart';
+import 'memory_repository.dart';
 
 abstract class MemoryPhotos {
   Future<Uint8List?> pick(bool camera);
@@ -33,7 +35,7 @@ class DeviceMemoryPhotos implements MemoryPhotos {
     return bytes;
   }
 
-  Future<void> recover(MemoryStore store) async {
+  Future<void> recover(MemoryRepository store) async {
     final response = await _picker.retrieveLostData();
     final drafts = (await store.list())
         .where((m) => m.draft && m.pendingPhoto)

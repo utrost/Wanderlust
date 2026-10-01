@@ -264,3 +264,14 @@ renderer or an automatic prerequisite for release.
       presentation widgets; keep navigation in the screen.
 - [x] Share native matcher lifecycle/cache logic across live, review and one-shot
       paths, with regression checks for consistent results.
+
+### Workflow and dependency follow-up
+
+- [x] Move backup staging, validation and commit ordering out of the history UI.
+- [x] Inject domain contracts into recording, session and transfer code; require
+      an explicit recording journal and keep SQLite construction at composition.
+- [x] Serialize preference changes and drain accepted writes on shutdown.
+- [x] Prevent stale memory loads from replacing newer pins; expose read-only lists
+      and allow failed photo recovery to retry.
+- [x] Test transfer cancellation/cleanup and asynchronous state races independently
+      of SQLite and widget rendering.

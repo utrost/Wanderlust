@@ -6,18 +6,20 @@ import '../memories/memory.dart';
 import '../memories/memory_store.dart';
 import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
+import '../transfer/walk_importer.dart';
 import 'app_database.dart';
 import 'offline_map_repository.dart';
 import 'preferences_repository.dart';
 import 'walk_repository.dart';
 
-class BackupImporter {
+class BackupImporter implements WalkImporter {
   BackupImporter(this.connection);
   final AppDatabase connection;
   Future<Database> get _db => connection.database;
 
   /// One transaction for the whole validated file. Local IDs are remapped;
   /// backup identities survive restore and recordings with identical traces.
+  @override
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,

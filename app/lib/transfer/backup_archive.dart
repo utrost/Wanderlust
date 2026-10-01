@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:crypto/crypto.dart';
+
 import '../data/area_network.dart';
 import '../memories/memory.dart';
 import '../memories/memory_backup.dart';
-import '../recording/walk_store.dart';
+import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
+import 'backup_data.dart';
 import 'walk_codec.dart';
 
 class BackupCancelled implements Exception {}
@@ -64,7 +67,7 @@ class BackupArchive {
 
   static Future<void> write(
     File file,
-    SqliteWalkStore store,
+    BackupData data,
     BackupProgress progress,
   ) async {
     final output = await file.open(mode: FileMode.write);
@@ -98,26 +101,26 @@ class BackupArchive {
         record(kind, Uint8List.fromList(utf8.encode(jsonEncode(value))));
     try {
       await output.writeFrom(utf8.encode(magic));
-      final selected = await store.readActiveArea();
+      final selected = await data.maps.readActiveArea();
       await json('settings', {
-        'preferences': (await store.readPreferences()).toJson(),
+        'preferences': (await data.settings.readPreferences()).toJson(),
         'activeMap': selected == null
             ? null
             : AreaNetwork.parse(selected).version,
       });
-      for (final area in await store.listAreas()) {
+      for (final area in await data.maps.listAreas()) {
         progress.check();
-        final source = await store.readArea(area.version);
+        final source = await data.maps.readArea(area.version);
         if (source == null) throw StateError('Saved map is unavailable');
         await record('map', Uint8List.fromList(utf8.encode(source)));
       }
-      final summaries = await store.listSummaries();
+      final summaries = await data.history.listSummaries();
       if (summaries.length > 100000) {
         throw const FormatException('Backup exceeds 100,000 walks.');
       }
       final walkUids = summaries.map((w) => w.uid).toSet();
       for (final summary in summaries) {
-        final walk = await store.loadWalk(summary.id);
+        final walk = await data.history.loadWalk(summary.id);
         progress.check();
         if (walk.status == 'recording') {
           throw StateError('Finish recording before backing up.');
@@ -127,7 +130,7 @@ class BackupArchive {
           Uint8List.fromList(utf8.encode(WalkCodec.exportBackup([walk]))),
         );
       }
-      final memories = await store.memories.list();
+      final memories = await data.memories.list();
       if (memories.length > 10000) {
         throw const FormatException('Backup exceeds 10,000 memories.');
       }
@@ -138,7 +141,7 @@ class BackupArchive {
       }
       for (final metadata in memories) {
         progress.check();
-        final memory = await store.memories.read(metadata.id, metadata.draft);
+        final memory = await data.memories.read(metadata.id, metadata.draft);
         if (memory == null) throw StateError('Memory changed during backup');
         await json('memory', memory.toJson(includePhoto: false));
         if (memory.photo != null) await record('photo', memory.photo!);

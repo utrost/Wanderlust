@@ -15,6 +15,8 @@ import '../recording/walk_recorder.dart';
 import '../recording/walk_store.dart';
 import '../settings/walk_preferences.dart';
 import '../theme/wanderlust_theme.dart';
+import '../transfer/walk_files.dart';
+import '../transfer/walk_transfer.dart';
 import '../widgets/area_map.dart';
 import '../widgets/coverage_status.dart';
 import '../widgets/gps_hud.dart';
@@ -54,10 +56,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   late final Future<GeoDiagnostic> _liveMatch = runSampleMatch();
 
   late final WalkingSession _session = WalkingSession(
-    store: widget.store ?? SqliteWalkStore(),
+    journal: _store,
+    history: _store,
+    maps: _store,
+    coverageStore: _store,
+    preferencesStore: _store,
     location: widget.location,
   );
-  SqliteWalkStore get _store => _session.store;
+  late final SqliteWalkStore _store = widget.store ?? SqliteWalkStore();
   WalkRecorder get _recorder => _session.recorder;
   CoverageController get _coverage => _session.coverage;
 
@@ -577,7 +583,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => WalkLibraryScreen(
-          store: _store,
+          transfer: WalkTransfer(
+            data: _store.backupData,
+            importer: _store,
+            files: DeviceWalkFiles(),
+          ),
           showSamples: _preferences.showSamples,
           networks: _coverage.networks,
           fillSmallGaps: _preferences.fillSmallGaps,

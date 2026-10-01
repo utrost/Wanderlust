@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../data/area_network.dart';
-import 'memory_pin_screen.dart';
 import 'package:geolocator/geolocator.dart';
+
+import '../data/area_network.dart';
 import '../memories/memory.dart';
-import '../memories/memory_store.dart';
-import '../memories/memory_photos.dart';
 import '../memories/memory_location.dart';
+import '../memories/memory_photos.dart';
+import '../memories/memory_repository.dart';
+import 'memory_pin_screen.dart';
 
 class MemoryEditor extends StatefulWidget {
   const MemoryEditor({
@@ -17,7 +18,7 @@ class MemoryEditor extends StatefulWidget {
     this.locate = locateMemory,
     this.networks = const [],
   });
-  final MemoryStore store;
+  final MemoryRepository store;
   final WalkMemory memory;
   final bool isNew;
   final MemoryPhotos? photos;
@@ -362,7 +363,7 @@ class MemoriesScreen extends StatefulWidget {
     this.add,
     this.networks = const [],
   });
-  final MemoryStore store;
+  final MemoryRepository store;
   final String? walkUid;
   final List<AreaNetwork> networks;
   final Future<void> Function()? add;
