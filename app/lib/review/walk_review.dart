@@ -1,6 +1,8 @@
 import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
-import '../geo/geo_core_ffi.dart';
+
+import '../geo/matching_session.dart';
 import '../recording/saved_walk.dart';
 import '../transfer/walk_codec.dart';
 
@@ -11,20 +13,21 @@ class WalkReviewResult {
 }
 
 WalkReviewResult _matchReview((List<String>, String, bool) input) {
-  final geo = WanderlustGeo.open();
+  final session = MatchingSession();
   final direct = <int>{}, inferred = <int>{};
-  for (final network in input.$1) {
-    final matcher = geo.loadNetwork(network);
-    try {
-      final result = matcher.matchGpx(input.$2, fillSmallGaps: input.$3);
+  try {
+    for (final network in input.$1) {
+      final result = session.match(network, [
+        input.$2,
+      ], fillSmallGaps: input.$3).single;
       final estimates = result.inferred.toSet();
       direct.addAll(result.walked.where((id) => !estimates.contains(id)));
       inferred.addAll(estimates);
-    } finally {
-      matcher.dispose();
     }
+    return WalkReviewResult(direct, inferred.difference(direct));
+  } finally {
+    session.dispose();
   }
-  return WalkReviewResult(direct, inferred.difference(direct));
 }
 
 Future<WalkReviewResult> matchWalkReview(

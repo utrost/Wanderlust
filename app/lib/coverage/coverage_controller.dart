@@ -1,52 +1,31 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/area_network.dart';
 import '../geo/geo_core_ffi.dart';
+import '../geo/matching_session.dart';
 import '../geo/matching_worker.dart';
-import '../transfer/walk_codec.dart';
 import '../recording/walk_store.dart';
+import '../transfer/walk_codec.dart';
 import 'coverage_store.dart';
 
 // Bump when matching rules change: old saved traces are then reprocessed once.
 const matchingRevision = 'motion-evidence-osm-v4';
 typedef MatchBatch = Future<List<MatchResult>> Function(String, List<String>);
 
-class CoverageFailure implements Exception {
-  const CoverageFailure(this.stage, this.detail);
-  final String stage;
-  final String detail;
-  @override
-  String toString() => '$stage: $detail';
-}
+typedef CoverageFailure = MatchingFailure;
 
 Future<List<MatchResult>> _matchOnWorker(
   (String, List<String>, bool) input,
 ) async {
-  late final WanderlustGeo geo;
+  final session = MatchingSession();
   try {
-    geo = WanderlustGeo.open();
-  } catch (e) {
-    throw CoverageFailure('Native library / ABI unavailable', e.toString());
-  }
-  late final Matcher matcher;
-  try {
-    matcher = geo.loadNetwork(input.$1);
-  } catch (e) {
-    throw CoverageFailure('Street network rejected', e.toString());
-  }
-  try {
-    return [
-      for (final gpx in input.$2)
-        matcher.matchGpx(gpx, fillSmallGaps: input.$3),
-    ];
-  } catch (e) {
-    throw CoverageFailure('Walk matching failed', e.toString());
+    return session.match(input.$1, input.$2, fillSmallGaps: input.$3);
   } finally {
-    matcher.dispose();
+    session.dispose();
   }
 }
 

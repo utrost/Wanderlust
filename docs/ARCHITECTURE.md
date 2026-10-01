@@ -20,13 +20,23 @@ flowchart TD
     Backup --> DB
 ```
 
-`WalkingSession` owns the shared store, recorder and coverage controller. It
-settles coverage work before closing the recording store. Navigation, permission
-messages and camera intent remain in the UI. `MemoryStore` owns memory and photo
-persistence; `SqliteWalkStore` currently also supplies maps, preferences, walk
-history and coverage through narrow interfaces. Splitting those implementations
-into repositories is a possible further refactor, not a prerequisite for a new
-state-management framework.
+`WalkingSession` owns the shared store, recorder and coverage controller, applies
+preferences and coordinates live coverage. It settles coverage work before closing
+the recording store. `MapLocationController` owns GPS requests and camera intent;
+late replies cannot undo a map gesture or move the camera after hiding the app.
+`MapMemoriesController` loads pins and recovers drafts. `MapScreen` composes the
+screen and routes navigation; its toolbar, location control, dock, coverage status,
+welcome layout and recording panel are separate widgets.
+
+`AppDatabase` owns the SQLite connection and version-7 schema. `WalkRepository`,
+`OfflineMapRepository`, `CoverageRepository`, `PreferencesRepository` and
+`MemoryStore` own their data access. `BackupImporter` coordinates one transaction
+across them. Map writes and preference writes expose transaction-aware helpers so
+restore uses the same policies without opening nested transactions. Interrupted
+recording recovery also has one implementation shared by full and summary reads.
+`SqliteWalkStore` remains a source-compatible delegating facade for existing callers;
+it contains no SQL or business rules. New storage logic belongs in the repositories,
+not in that facade.
 
 ## Source data and derived data
 
@@ -49,7 +59,9 @@ trace on demand. A summary cannot be exported as an empty walk.
 
 ## Matching and rendering
 
-A dedicated Dart isolate owns a bounded LRU cache of two native matchers. Repeated
+`MatchingSession` owns a bounded LRU cache of two native matchers. Live coverage
+uses it inside a dedicated Dart isolate; review and one-shot matching use the same
+implementation in their background isolates. Repeated
 live updates reuse graphs; eviction and shutdown free native handles. Coverage
 operations are serialized, and previews never commit unfinished walks. Hidden-app
 previews pause while GPS journaling continues.
@@ -110,3 +122,10 @@ these timings isolate loading overhead rather than claiming a phone speedup.
 Android API 35 emulator validation retained three existing walks across the
 schema upgrade, exported a v4 archive through the system picker, and restored it
 without duplicates, including six memories/drafts and the offline map.
+
+The architecture refactor adds regression checks for both recovery entry points,
+late GPS replies during browsing/hide/disposal, and agreement among cached,
+one-shot and review matching. It changes neither the database version nor the
+backup format. The map screen still contains navigation/composition code and the
+store facade remains a compatibility boundary; this is not a claim that every
+remaining class or similar-looking code fragment needs another abstraction.

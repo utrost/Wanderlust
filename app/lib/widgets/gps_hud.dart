@@ -2,16 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../data/area_network.dart';
+import '../geo/location_freshness.dart';
 import '../maps/map_extent.dart';
 import '../theme/wanderlust_theme.dart';
 
-Duration fixAge(Position point, DateTime now) {
-  final age = now.toUtc().difference(point.timestamp.toUtc());
-  return age.isNegative ? Duration.zero : age;
-}
-
-bool isOldFix(Position point, DateTime now) =>
-    fixAge(point, now).inSeconds > 30;
+export '../geo/location_freshness.dart';
 
 class GpsHud extends StatelessWidget {
   const GpsHud({

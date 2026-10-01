@@ -1,5 +1,7 @@
 import 'dart:isolate';
+
 import 'geo_core_ffi.dart';
+import 'matching_session.dart';
 
 /// A bounded, long-lived native matcher cache, owned by one coverage controller.
 class MatchingWorker {
@@ -54,33 +56,20 @@ class MatchingWorker {
 
 void _serve(SendPort ready) {
   final commands = ReceivePort();
-  final matchers = <String, Matcher>{};
+  final session = MatchingSession();
   ready.send(commands.sendPort);
   commands.listen((dynamic message) {
     if (message is SendPort) {
-      for (final matcher in matchers.values) {
-        matcher.dispose();
-      }
-      matchers.clear();
+      session.dispose();
       commands.close();
       message.send(true);
       return;
     }
     final request = message as (SendPort, String, List<String>, bool);
     try {
-      var matcher = matchers.remove(request.$2);
-      if (matcher == null) {
-        // Limit native graph memory; least recently used maps leave first.
-        if (matchers.length == 2) {
-          matchers.remove(matchers.keys.first)!.dispose();
-        }
-        matcher = WanderlustGeo.open().loadNetwork(request.$2);
-      }
-      matchers[request.$2] = matcher;
-      request.$1.send([
-        for (final walk in request.$3)
-          matcher.matchGpx(walk, fillSmallGaps: request.$4),
-      ]);
+      request.$1.send(
+        session.match(request.$2, request.$3, fillSmallGaps: request.$4),
+      );
     } catch (error) {
       request.$1.send('Walk matching failed: $error');
     }

@@ -254,3 +254,13 @@ behaviour, TalkBack with a new user, large-map pan frame times and sunlight
 contrast. Repository decomposition beyond the new session owner can proceed
 incrementally. MapLibre/PMTiles remain an option to evaluate, not the current
 renderer or an automatic prerequisite for release.
+
+### Responsibility separation follow-up
+
+- [x] Move schema/connection ownership and walk/map/coverage/preference access into
+      focused repositories; retain one atomic backup import transaction.
+- [x] Share interrupted-recording recovery and map/preference writes.
+- [x] Extract map location/camera intent and memory loading controllers, and map
+      presentation widgets; keep navigation in the screen.
+- [x] Share native matcher lifecycle/cache logic across live, review and one-shot
+      paths, with regression checks for consistent results.
