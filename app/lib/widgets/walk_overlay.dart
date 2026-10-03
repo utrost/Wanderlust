@@ -63,3 +63,33 @@ void paintWalkOverlay(
     );
   }
 }
+
+/// Muted, dashed raw movement; deliberately distinct from counted street heat.
+void paintUnmatchedTrails(
+  Canvas canvas,
+  List<List<Offset>> trails,
+  Offset Function(Offset) project,
+) {
+  final pen = Paint()
+    ..color = const Color(0xFF748C89)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.8
+    ..strokeCap = StrokeCap.round;
+  for (final trail in trails) {
+    if (trail.length < 2) continue;
+    final path = Path();
+    for (var i = 0; i < trail.length; i++) {
+      final point = project(trail[i]);
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    for (final metric in path.computeMetrics()) {
+      for (double start = 0; start < metric.length; start += 8) {
+        canvas.drawPath(metric.extractPath(start, start + 4), pen);
+      }
+    }
+  }
+}

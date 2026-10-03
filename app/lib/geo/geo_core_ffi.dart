@@ -32,6 +32,7 @@ class MatchResult {
   const MatchResult({
     required this.walked,
     this.inferred = const [],
+    this.unmatched = const [],
     required this.gapsFilled,
     required this.gapsRejected,
   });
@@ -39,6 +40,9 @@ class MatchResult {
   /// Segment ids the walker plausibly traversed.
   final List<int> walked;
   final List<int> inferred;
+
+  /// End indices of safe, unmatched GPS pairs in the flattened input track.
+  final List<int> unmatched;
 
   /// Gaps the guardrail bridged with a shortest path.
   final int gapsFilled;
@@ -49,6 +53,7 @@ class MatchResult {
   factory MatchResult.fromJson(Map<String, dynamic> j) => MatchResult(
     walked: (j['walked'] as List).cast<int>(),
     inferred: (j['inferred'] as List? ?? []).cast<int>(),
+    unmatched: (j['unmatched'] as List? ?? []).cast<int>(),
     gapsFilled: j['gaps_filled'] as int,
     gapsRejected: j['gaps_rejected'] as int,
   );

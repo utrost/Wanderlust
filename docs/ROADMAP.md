@@ -288,3 +288,24 @@ renderer or an automatic prerequisite for release.
 The new identity installs separately from the experimental app. No automatic data
 migration is provided. Future releases should preserve this identity and use
 explicit schema migrations rather than repeating this reset.
+
+### Crossing evidence and unmatched GPS trails (implemented)
+
+- Short crossings can be inferred after reliable, confirmed readings on both
+  sides, even if no reading landed on the connector. Only a unique route that
+  follows the recorded geometry is accepted. Longer gaps retain the opt-in rule.
+- Reliable unmatched movement appears as thin, dashed grey-green GPS trails,
+  separately from street heat and section counts. Accuracy failures, time gaps,
+  jumps and GPX segment boundaries break these trails.
+- Trails preview during recording and are rebuilt from retained recordings on
+  startup. Overlapping maps suppress fallback wherever another map supplies
+  coverage. Removing a recording removes its derived trail.
+- Finer 10–20 metre coverage portions remain a separate next slice; this change
+  preserves existing street identifiers and coverage counts.
+
+Validation uses synthetic junction/outage/parallel-route fixtures and a private
+field recording against its three downloaded maps. On the active map, the field
+replay preserves all 68 previously matched sections and identifies 103 safe
+unmatched GPS intervals. Combining all three maps yields 71 sections and 101
+fallback intervals in 21 trails. These are replay results, not ground-truth
+accuracy scores. The private recording, backup and rendering are not committed.

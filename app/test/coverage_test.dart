@@ -60,6 +60,54 @@ void main() {
   }
 
   test(
+    'GPS trails survive restart, avoid double street credit and disappear on removal',
+    () async {
+      final id = await store.begin(fix(0).timestamp);
+      await store.append(id, 0, fix(1));
+      await store.append(id, 1, fix(2));
+      await store.finish(id, fix(3).timestamp, 'completed');
+      var calls = 0;
+      CoverageController create() => CoverageController(
+        store: store,
+        loadNetwork: () async => networkJson(),
+        match: (_, traces) async {
+          calls++;
+          return [
+            for (final _ in traces)
+              const MatchResult(
+                walked: [1],
+                unmatched: [1],
+                gapsFilled: 0,
+                gapsRejected: 0,
+              ),
+          ];
+        },
+      );
+      var controller = create();
+      try {
+        final walks = await store.listSaved();
+        await controller.synchronize(walks);
+        expect(controller.unmatchedTrails.single, hasLength(2));
+        expect(controller.counts, {1: 1});
+        await controller.synchronize(walks);
+        expect(calls, 1);
+        controller.dispose();
+        await controller.settled;
+        controller = create();
+        await controller.synchronize(walks);
+        expect(calls, 2);
+        expect(controller.unmatchedTrails.single, hasLength(2));
+        expect(controller.counts, {1: 1});
+        await controller.synchronize([]);
+        expect(controller.unmatchedTrails, isEmpty);
+      } finally {
+        controller.dispose();
+        await controller.settled;
+      }
+    },
+  );
+
+  test(
     'counts are once per walk, replace atomically, and survive reopen',
     () async {
       final network = AreaNetwork.parse(networkJson());

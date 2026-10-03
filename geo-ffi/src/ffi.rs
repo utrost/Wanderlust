@@ -98,6 +98,7 @@ pub unsafe extern "C" fn wanderlust_match_gpx_options(
         serde_json::json!({
             "walked": ids,
             "inferred": inferred,
+            "unmatched": result.unmatched,
             "gaps_filled": result.gaps_filled,
             "gaps_rejected": result.gaps_rejected,
         })

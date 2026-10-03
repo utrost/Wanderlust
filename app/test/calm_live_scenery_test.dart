@@ -203,7 +203,12 @@ void main() {
           }
           return [
             for (final _ in traces)
-              const MatchResult(walked: [1, 2], gapsFilled: 0, gapsRejected: 0),
+              const MatchResult(
+                walked: [1, 2],
+                unmatched: [1],
+                gapsFilled: 0,
+                gapsRejected: 0,
+              ),
           ];
         },
       );
@@ -239,10 +244,12 @@ void main() {
         expect(controller.counts, isEmpty);
         expect(await store.readCounts('test-v1'), isEmpty);
         expect(calls, 2);
+        expect(controller.unmatchedTrails.single, hasLength(2));
         await store.finish(id, fix(5).timestamp, 'completed');
         await controller.synchronize(await store.listSaved());
         expect(controller.displayCounts, {1: 1, 2: 1});
         expect(controller.counts, {1: 1, 2: 1});
+        expect(controller.unmatchedTrails.single, hasLength(2));
         await controller.synchronize(await store.listSaved());
         expect(controller.displayCounts, {1: 1, 2: 1});
       } finally {

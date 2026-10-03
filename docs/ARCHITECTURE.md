@@ -159,3 +159,22 @@ The second maintainability pass adds deterministic tests for out-of-order memory
 reads, recovery retry, queued preference writes and transfer cleanup/cancellation.
 These exercise workflow outcomes through domain interfaces, without a database
 or widget tree. Existing SQLite tests continue to verify atomic restore rollback.
+
+### Unmatched movement display
+
+The native matcher returns `unmatched` pair-end indices into flattened GPX
+points alongside street membership. It excludes unreliable fixes, untimed
+pairs, gaps over 30 seconds, motion above 3 m/s and sub-two-metre jitter, and
+never joins GPX segments. A pair is covered when both endpoints and its midpoint
+lie within 12 metres of matched geometry; otherwise it remains raw GPS evidence.
+
+`UnmatchedTrails` keeps only derived unmatched coordinates, separate from street
+counts. Pair sets are intersected across loaded maps, so one map's coverage
+suppresses another map's fallback. Saved trails are rebuilt once per controller
+lifetime; live tails replace overlapping preview data as crossing evidence
+arrives. The matching revision invalidates old stored coverage. No new database
+schema or private-data backup format is required. This currently costs a saved
+trace replay on startup; persisting derived trail caches is a future optimisation.
+
+The painter uses a fixed screen-width, dashed grey-green line. Its meaning is
+explained in the existing heatmap legend, without adding text to the main map.

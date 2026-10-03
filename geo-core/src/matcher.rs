@@ -46,6 +46,9 @@ pub struct MatchResult {
     pub walked: HashSet<usize>,
     /// Walked edges supported only by route inference, not direct observations.
     pub inferred: HashSet<usize>,
+    /// End indices of reliable GPS pairs not covered by matched geometry.
+    /// Indices refer to the flattened GPX points; segment boundaries never join.
+    pub unmatched: Vec<usize>,
     pub gaps_filled: usize,
     pub gaps_rejected: usize,
 }
@@ -193,34 +196,34 @@ pub fn match_gpx_tracks(
                 }
             }
         }
-        if cfg.fill_small_gaps {
-            interpolate_gaps(graph, track, &snapped, &confirmed, &mut total);
-        }
+        interpolate_gaps(graph, track, &snapped, &confirmed, cfg, &mut total);
+    }
+    let mut offset = 0;
+    for track in tracks {
         for i in 1..track.len() {
-            if !confirmed[i - 1] || !confirmed[i] {
+            let a = &track[i - 1];
+            let b = &track[i];
+            if !reliable(a)
+                || !reliable(b)
+                || continuous_seconds(a, b).is_none()
+                || haversine_m(a.pos, b.pos) < 2.0
+            {
                 continue;
             }
-            let (Some((a, _)), Some((b, _))) = (snapped[i - 1], snapped[i]) else {
-                continue;
-            };
-            if a == b || graph.adjacent(a, b) {
-                continue;
-            }
-            let Some(seconds) = continuous_seconds(&track[i - 1], &track[i]) else {
-                continue;
-            };
-            let gap = haversine_m(track[i - 1].pos, track[i].pos).max(1.0);
-            match graph.shortest_path(a, b) {
-                Some((intermediate, len))
-                    if len <= cfg.max_fill_len_m.min(seconds * 3.0)
-                        && len <= cfg.max_fill_detour_ratio * gap =>
-                {
-                    total.walked.extend(intermediate);
-                    total.gaps_filled += 1;
-                }
-                _ => total.gaps_rejected += 1,
+            // Require geometry near the entire pair, not just its endpoints.
+            let middle = LngLat::new((a.pos.lng + b.pos.lng) / 2.0, (a.pos.lat + b.pos.lat) / 2.0);
+            let covered = [a.pos, middle, b.pos].iter().all(|&point| {
+                total.walked.iter().any(|&edge| {
+                    graph.segment(edge).polyline.windows(2).any(|line| {
+                        point_to_segment_m(point, line[0], line[1], point.lat.to_radians()) <= 12.0
+                    })
+                })
+            });
+            if !covered {
+                total.unmatched.push(offset + i);
             }
         }
+        offset += track.len();
     }
     total.inferred = total.walked.difference(&direct).copied().collect();
     total
@@ -233,6 +236,7 @@ fn interpolate_gaps(
     track: &[crate::gpx::TrackPoint],
     snapped: &[Option<(usize, f64)>],
     confirmed: &[bool],
+    cfg: MatchConfig,
     result: &mut MatchResult,
 ) {
     let mut anchor: Option<usize> = None;
@@ -250,15 +254,26 @@ fn interpolate_gaps(
         if let Some(j) = anchor {
             let a = snapped[j].unwrap().0;
             let b = snapped[i].unwrap().0;
-            // Adjacent fixes already have the default, stricter fill path.
-            if i > j + 1 && a != b && !graph.adjacent(a, b) {
+            // A short crossing may have no fix on its tiny connector. Wait for
+            // confirmed evidence on both sides and require a unique route.
+            if a != b && !graph.adjacent(a, b) {
                 let seconds = track[i]
                     .time
                     .zip(track[j].time)
                     .map(|(end, start)| (end - start).num_milliseconds() as f64 / 1000.0);
                 if let Some(seconds) = seconds.filter(|&s| s > 0.0 && s <= 30.0) {
                     let distance = haversine_m(track[j].pos, track[i].pos);
-                    let budget = 75.0_f64.min(seconds * 3.0).min(distance * 1.8);
+                    let limit = if i == j + 1 {
+                        300.0_f64
+                    } else if cfg.fill_small_gaps {
+                        75.0_f64
+                    } else {
+                        20.0_f64
+                    };
+                    let budget = limit
+                        .min(cfg.max_fill_len_m)
+                        .min(seconds * 3.0)
+                        .min(distance * cfg.max_fill_detour_ratio.min(1.8));
                     if let Some(path) =
                         graph.unique_connection(a, b, track[j].pos, track[i].pos, budget)
                     {

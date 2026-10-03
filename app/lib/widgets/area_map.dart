@@ -59,6 +59,7 @@ class AreaMap extends StatefulWidget {
     this.centerRequest = 0,
     this.areaRequest = 0,
     this.trace = const [],
+    this.unmatchedTrails = const [],
     this.inferred = const {},
     this.fitCoordinates = const [],
     this.onInteractionStart,
@@ -77,6 +78,7 @@ class AreaMap extends StatefulWidget {
   final int centerRequest;
   final int areaRequest;
   final List<List<Offset>> trace;
+  final List<List<Offset>> unmatchedTrails;
   final Set<int> inferred;
   final List<Offset> fitCoordinates;
   final VoidCallback? onInteractionStart;
@@ -221,6 +223,7 @@ class _AreaMapState extends State<AreaMap> {
                   coverageScreenWidth: widget.coverageScreenWidth,
                   transform: _transform.value.clone(),
                   trace: widget.trace,
+                  unmatchedTrails: widget.unmatchedTrails,
                   inferred: widget.inferred,
                   textScale: MediaQuery.textScalerOf(context).scale(12) / 12,
                 ),
@@ -353,6 +356,7 @@ class AreaMapPainter extends CustomPainter {
     this.coverageScreenWidth,
     this.transform,
     this.trace = const [],
+    this.unmatchedTrails = const [],
     this.inferred = const {},
     this.textScale = 1,
   });
@@ -365,6 +369,7 @@ class AreaMapPainter extends CustomPainter {
   final AreaNetwork network;
   final Map<int, int> counts;
   final List<List<Offset>> trace;
+  final List<List<Offset>> unmatchedTrails;
   final Set<int> inferred;
   final double textScale;
 
@@ -506,6 +511,7 @@ class AreaMapPainter extends CustomPainter {
       draw(edge, counts[edge.id]!);
     }
     canvas.restore();
+    paintUnmatchedTrails(canvas, unmatchedTrails, project);
     paintWalkOverlay(canvas, maps.toList(), inferred, trace, project);
     canvas.restore();
   }
@@ -519,6 +525,7 @@ class AreaMapPainter extends CustomPainter {
       oldDelegate.showStreetNames != showStreetNames ||
       oldDelegate.coverageScreenWidth != coverageScreenWidth ||
       oldDelegate.trace != trace ||
+      oldDelegate.unmatchedTrails != unmatchedTrails ||
       oldDelegate.inferred != inferred ||
       oldDelegate.textScale != textScale ||
       oldDelegate.transform != transform;
