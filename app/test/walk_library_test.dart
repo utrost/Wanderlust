@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -5,7 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wanderlust/maps/area_store.dart';
 import 'package:wanderlust/memories/memory.dart';
-import 'package:wanderlust/memories/memory_backup.dart';
+import 'package:wanderlust/transfer/backup_contents.dart';
+import 'backup_fixture.dart';
 import 'package:wanderlust/memories/memory_repository.dart';
 import 'package:wanderlust/recording/saved_walk.dart';
 import 'package:wanderlust/recording/walk_history.dart';
@@ -102,6 +104,23 @@ class TestFiles implements WalkFiles {
   String? name;
   Uint8List? saved;
   @override
+  Future<File?> pickArchive() async {
+    if (picked == null) return null;
+    final file = File(
+      '${Directory.systemTemp.path}/wanderlust-test-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    return file.writeAsBytes(picked!);
+  }
+
+  @override
+  Future<bool> saveArchive(File file) async => save(
+    'wanderlust-backup.wanderlust',
+    'application/octet-stream',
+    await file.readAsBytes(),
+  );
+  @override
+  Future<void> cancelArchive() async {}
+  @override
   Future<Uint8List?> pick() async => picked;
   @override
   Future<bool> save(String name, String mimeType, Uint8List bytes) async {
@@ -178,7 +197,7 @@ void main() {
       expect(files.name, endsWith('.gpx'));
       expect(utf8.decode(files.saved!), contains('</trkseg><trkseg>'));
       await tap(find.text('Create backup'));
-      expect(files.name, 'wanderlust-backup.json.gz');
+      expect(files.name, 'wanderlust-backup.wanderlust');
       files.picked = files.saved;
       await tap(find.text('Restore backup'));
       expect(
@@ -229,17 +248,18 @@ void main() {
     'restore preview cancels safely and replaces settings only when opted in',
     (tester) async {
       final store = LibraryStore();
-      final files = TestFiles()
-        ..picked = MemoryBackup.encode(
-          MemoryBackup(
+      final files = TestFiles();
+      files.picked = await tester.runAsync(
+        () => encodeBackup(
+          BackupContents(
             [],
             [],
             maps: [networkJson()],
             activeMap: 'test-v1',
             preferences: const WalkPreferences(mapSizeKm: 12),
           ),
-          compressed: true,
-        );
+        ),
+      );
       await tester.pumpWidget(
         MaterialApp(
           home: WalkLibraryScreen(
@@ -308,7 +328,10 @@ void main() {
       expect(files.saved, isNull);
       // A backup still includes all walks while viewing an empty favourites list.
       await perform(tester, find.text('Create backup'));
-      expect(MemoryBackup.decode(files.saved!).walks, hasLength(1));
+      expect(
+        (await tester.runAsync(() => decodeBackup(files.saved!)))!.walks,
+        hasLength(1),
+      );
     },
   );
   testWidgets(

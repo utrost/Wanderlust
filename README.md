@@ -53,7 +53,6 @@ Still open:
 - Real-phone battery and long-walk validation for screen-off recording.
 - Field validation of matching on varied, noisy GPS traces.
 - Richer offline basemap/labels (PMTiles + MapLibre remains a possible approach).
-- Streaming backups beyond the current 128 MiB expanded limit; maps/settings and gzip compression are implemented.
 - Continuous recording after OS process termination (committed fixes recover).
 
 Test APKs now have a persistent-signing build path and increasing version codes.
@@ -193,16 +192,16 @@ used for its pin.
 
 Everything stays in app-private storage. Settings → Show memory markers hides
 pins without removing entries. Create backup includes memories, drafts and actual
-photo bytes; old walk-only backups still restore. GPX does not include memories.
-The complete bundle limit is 128 MiB, with at most 80 MiB of photo bytes; oversized
-exports fail explicitly. See the [UX concept and workflows](docs/MEMORIES.md).
+photo bytes. GPX does not include memories. See the [UX concept and workflows](docs/MEMORIES.md).
 
-Complete backups are saved as `wanderlust-backup.json.gz` and include saved walks,
-memories/photos, settings and offline maps. Restore also accepts older JSON
-backups. It merges missing items, preserves your current map selection, and only
-replaces settings if you select that option. Maps can be excluded during restore.
-The expanded backup is limited to 128 MiB, including at most 80 MiB of photos;
-exceeding the limit fails explicitly without creating an incomplete backup.
+Complete backups use `wanderlust-backup.wanderlust` (version 4), with streamed,
+checksummed walk and photo records, settings and offline maps. Restore merges
+missing items and replaces settings only when selected. Limits are 2 GiB per
+archive and 8 MiB per photo. Earlier JSON/gzip backups are no longer supported.
+
+The Android package for registration is **`com.simiono.wanderlust`**. This is a
+fresh-install baseline: it does not update or automatically migrate the former
+experimental app. Current `.wanderlust` archives can still be restored manually.
 
 In a memory editor, **Choose on map** lets you position or move a pin without GPS.
 Tap a location inside a downloaded map and confirm **Use this spot**. Cancelling

@@ -1,4 +1,4 @@
-package com.wanderlust.wanderlust
+package com.simiono.wanderlust
 
 import android.content.Intent
 import android.Manifest

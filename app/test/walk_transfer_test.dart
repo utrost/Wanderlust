@@ -6,13 +6,12 @@ import 'package:wanderlust/memories/memory.dart';
 import 'package:wanderlust/settings/walk_preferences.dart';
 import 'package:wanderlust/transfer/backup_archive.dart';
 import 'package:wanderlust/transfer/walk_codec.dart';
-import 'package:wanderlust/transfer/walk_files.dart';
 import 'package:wanderlust/transfer/walk_transfer.dart';
 
 import 'transfer_test.dart' show segmentedGpx;
 import 'walk_library_test.dart' show LibraryStore, TestFiles;
 
-class ArchiveDocuments extends TestFiles implements ArchiveFiles {
+class ArchiveDocuments extends TestFiles {
   ArchiveDocuments(this.root, this.bytes);
   final Directory root;
   final Uint8List bytes;
@@ -157,6 +156,38 @@ void main() {
       expect(await dir.list().toList(), isEmpty);
     },
   );
+
+  test('retired JSON and gzip backups are rejected without a commit', () async {
+    for (final old in [
+      Uint8List.fromList([123, 125]),
+      Uint8List.fromList([31, 139, 8, 0]),
+    ]) {
+      final legacyFiles = ArchiveDocuments(dir, old);
+      final service = WalkTransfer(
+        data: store.backupData,
+        importer: store,
+        files: legacyFiles,
+        temporaryRoot: dir,
+      );
+      await expectLater(
+        service.importFile(
+          backup: true,
+          progress: BackupProgress(),
+          choose: (_) async =>
+              throw StateError('No preview for retired format'),
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('no longer supported'),
+          ),
+        ),
+      );
+      expect(store.mergeCalls, 0);
+      expect(await dir.list().toList(), isEmpty);
+    }
+  });
 
   test(
     'picker cancellation and failed export leave no temporary files',

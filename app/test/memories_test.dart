@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -7,7 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:wanderlust/memories/memory.dart';
-import 'package:wanderlust/memories/memory_backup.dart';
+import 'package:wanderlust/transfer/backup_contents.dart';
+import 'backup_fixture.dart';
 import 'package:wanderlust/memories/memory_photos.dart';
 import 'package:wanderlust/recording/walk_store.dart';
 import 'package:wanderlust/screens/memories_screen.dart';
@@ -116,13 +116,10 @@ void main() {
           draft: false,
         );
         await source.memories.put(m);
-        final bytes = MemoryBackup.encode(
-          MemoryBackup(
-            await source.listSaved(),
-            await source.memories.exportAll(),
-          ),
+        final bytes = await encodeBackup(
+          BackupContents(await source.listSaved(), [m]),
         );
-        final restored = MemoryBackup.decode(bytes);
+        final restored = await decodeBackup(bytes);
         // Force a different local row id in the destination.
         final dummy = await target.begin(DateTime.utc(2026));
         await target.finish(dummy, DateTime.utc(2026), 'completed');
@@ -137,19 +134,8 @@ void main() {
           0,
         );
         expect(await target.memories.list(), hasLength(1));
-        final old = MemoryBackup.decode(
-          Uint8List.fromList(utf8.encode(WalkCodec.exportBackup([walk]))),
-        );
-        expect(old.walks.single.uid, walk.uid);
-        expect(old.memories, isEmpty);
-        final corrupt = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-        corrupt['payload'] = '${corrupt['payload']} ';
-        expect(
-          () => MemoryBackup.decode(
-            Uint8List.fromList(utf8.encode(jsonEncode(corrupt))),
-          ),
-          throwsFormatException,
-        );
+        final corrupt = Uint8List.fromList(bytes)..[bytes.length ~/ 2] ^= 1;
+        await expectLater(decodeBackup(corrupt), throwsFormatException);
         final invalid = m.copyWith(
           photo: Uint8List(WalkMemory.maxPhotoBytes + 1),
         );
@@ -158,36 +144,6 @@ void main() {
       } finally {
         await source.close();
         await target.close();
-        await dir.delete(recursive: true);
-      }
-    },
-  );
-  test(
-    'v5 migration retains walks and preferences and creates empty memory tables',
-    () async {
-      final dir = await Directory.systemTemp.createTemp(
-        'wanderlust-memory-upgrade-',
-      );
-      final file = '${dir.path}/walks.db';
-      var store = SqliteWalkStore(
-        factory: databaseFactoryFfi,
-        databasePath: file,
-      );
-      final walk = WalkCodec.importGpx(segmentedGpx);
-      await store.mergeWalks([walk]);
-      await store.close();
-      final db = await databaseFactoryFfi.openDatabase(file);
-      await db.execute('DROP TABLE memory_photo');
-      await db.execute('DROP TABLE memory');
-      await db.execute('ALTER TABLE recorded_walk DROP COLUMN fingerprint');
-      await db.execute('PRAGMA user_version = 5');
-      await db.close();
-      store = SqliteWalkStore(factory: databaseFactoryFfi, databasePath: file);
-      try {
-        expect((await store.listSaved()).single.uid, walk.uid);
-        expect(await store.memories.list(), isEmpty);
-      } finally {
-        await store.close();
         await dir.delete(recursive: true);
       }
     },

@@ -3,8 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../data/area_network.dart';
-import '../memories/memory_backup.dart';
+import 'backup_contents.dart';
 import '../memories/memory_photos.dart';
 import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
@@ -14,11 +13,8 @@ import 'walk_codec.dart';
 import 'walk_files.dart';
 import 'walk_importer.dart';
 
-MemoryBackup _readBackup(Uint8List bytes) => MemoryBackup.decode(bytes);
 SavedWalk _readGpx(Uint8List bytes) =>
     WalkCodec.importGpx(WalkCodec.decodeBytes(bytes));
-Uint8List _writeBackup(MemoryBackup backup) =>
-    MemoryBackup.encode(backup, compressed: true);
 Uint8List _writeGpx(SavedWalk walk) =>
     Uint8List.fromList(utf8.encode(WalkCodec.exportGpx(walk)));
 
@@ -69,10 +65,7 @@ class WalkTransfer {
   final Future<void> Function(Uint8List) _checkPhoto;
   final Directory _temporaryRoot;
 
-  bool get supportsArchives => files is ArchiveFiles;
-  Future<void> cancel() async {
-    if (files case final ArchiveFiles archive) await archive.cancelArchive();
-  }
+  Future<void> cancel() => files.cancelArchive();
 
   Future<RestoreResult?> importFile({
     required bool backup,
@@ -80,33 +73,26 @@ class WalkTransfer {
     required BackupProgress progress,
     void Function()? onCommit,
   }) async {
-    if (backup && files is ArchiveFiles) {
+    if (backup) {
       final directory = await _temporaryRoot.createTemp('wanderlust-restore-');
       File? input;
       try {
-        input = await (files as ArchiveFiles).pickArchive();
+        input = await files.pickArchive();
         if (input == null) return null;
         progress.check();
-        if (await BackupArchive.recognizes(input)) {
-          final staged = await BackupArchive.read(input, directory, progress);
-          return await _restore(
-            staged.metadata,
-            backup: true,
-            choose: choose,
-            progress: progress,
-            onCommit: onCommit,
-            staged: staged,
+        if (!await BackupArchive.recognizes(input)) {
+          throw const FormatException(
+            'Choose a .wanderlust backup. Old JSON/gzip backups are no longer supported.',
           );
         }
-        if (await input.length() > MemoryBackup.maxBytes) {
-          throw const FormatException('Legacy backup exceeds 128 MiB.');
-        }
+        final staged = await BackupArchive.read(input, directory, progress);
         return await _restore(
-          await compute(_readBackup, await input.readAsBytes()),
+          staged.metadata,
           backup: true,
           choose: choose,
           progress: progress,
           onCommit: onCommit,
+          staged: staged,
         );
       } finally {
         // Both paths are private temporary copies; a selected user document is
@@ -121,9 +107,7 @@ class WalkTransfer {
     final bytes = await files.pick();
     if (bytes == null) return null;
     progress.check();
-    final bundle = backup
-        ? await compute(_readBackup, bytes)
-        : MemoryBackup([await compute(_readGpx, bytes)], const []);
+    final bundle = BackupContents([await compute(_readGpx, bytes)], const []);
     return _restore(
       bundle,
       backup: backup,
@@ -134,7 +118,7 @@ class WalkTransfer {
   }
 
   Future<RestoreResult?> _restore(
-    MemoryBackup bundle, {
+    BackupContents bundle, {
     required bool backup,
     required ChooseRestore choose,
     required BackupProgress progress,
@@ -181,39 +165,15 @@ class WalkTransfer {
   }
 
   Future<bool> backup(BackupProgress progress) async {
-    if (files case final ArchiveFiles archive) {
-      final directory = await _temporaryRoot.createTemp('wanderlust-export-');
-      try {
-        final file = File('${directory.path}/backup.wanderlust');
-        await BackupArchive.write(file, data, progress);
-        progress.check();
-        return await archive.saveArchive(file);
-      } finally {
-        await directory.delete(recursive: true);
-      }
-    }
-    final maps = <String>[];
-    for (final area in await data.maps.listAreas()) {
+    final directory = await _temporaryRoot.createTemp('wanderlust-export-');
+    try {
+      final file = File('${directory.path}/backup.wanderlust');
+      await BackupArchive.write(file, data, progress);
       progress.check();
-      final source = await data.maps.readArea(area.version);
-      if (source == null) throw StateError('Saved map is unavailable');
-      maps.add(source);
+      return await files.saveArchive(file);
+    } finally {
+      await directory.delete(recursive: true);
     }
-    final selected = await data.maps.readActiveArea();
-    final bytes = await compute(
-      _writeBackup,
-      MemoryBackup(
-        await data.history.listSaved(),
-        await data.memories.exportAll(),
-        maps: maps,
-        preferences: await data.settings.readPreferences(),
-        activeMap: selected == null
-            ? null
-            : AreaNetwork.parse(selected).version,
-      ),
-    );
-    progress.check();
-    return files.save('wanderlust-backup.json.gz', 'application/gzip', bytes);
   }
 
   Future<bool> exportGpx(SavedWalk walk) async {

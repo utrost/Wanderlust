@@ -16,7 +16,7 @@ fun signingSecret(name: String): String = requireNotNull(System.getenv(name)) {
 }
 
 android {
-    namespace = "com.wanderlust.wanderlust"
+    namespace = "com.simiono.wanderlust"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
     compileOptions {
@@ -24,7 +24,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     defaultConfig {
-        applicationId = "com.wanderlust.wanderlust"
+        applicationId = "com.simiono.wanderlust"
         minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode

@@ -28,7 +28,7 @@ late replies cannot undo a map gesture or move the camera after hiding the app.
 screen and routes navigation; its toolbar, location control, dock, coverage status,
 welcome layout and recording panel are separate widgets.
 
-`AppDatabase` owns the SQLite connection and version-7 schema. `WalkRepository`,
+`AppDatabase` owns the SQLite connection and current schema. `WalkRepository`,
 `OfflineMapRepository`, `CoverageRepository`, `PreferencesRepository` and
 `MemoryStore` own their data access. `BackupImporter` coordinates one transaction
 across them. Map writes and preference writes expose transaction-aware helpers so
@@ -65,9 +65,11 @@ movement evidence and supports optional bounded gap interpolation. Coverage is
 derived and replaceable; walk membership updates are transactional and idempotent.
 Matching revision, gap policy and a trace fingerprint invalidate old results.
 
-SQLite schema version 7 adds a trace fingerprint. Older traces receive one during
-the first summary load after upgrade. Later history reads load metadata and point
-counts, not full traces. Review, export and pending matching load the relevant
+The new `com.simiono.wanderlust` identity starts schema version 1, created directly
+with all current tables and columns. Experimental migrations are removed. An
+application marker rejects unrelated databases without resetting them. Completed
+and imported traces receive a cached fingerprint on their first summary read;
+later reads load metadata and point counts, not full traces. Review, export and pending matching load the relevant
 trace on demand. A summary cannot be exported as an empty walk.
 
 ## Matching and rendering
@@ -105,7 +107,7 @@ not ZIP. Checksums detect corruption; backups are not encrypted or authenticated
 staging cleanup. The history screen supplies a restore-choice callback and shows
 the result. `BackupData` supplies explicit data dependencies to the archive writer;
 `WalkImporter` is the transaction boundary. Cancellation is checked after the
-restore choice and before commit. `ArchiveFiles.pickArchive` transfers ownership
+restore choice and before commit. `WalkFiles.pickArchive` transfers ownership
 of a private temporary copy to the caller, never ownership of the user's original
 file. Cleanup runs on cancellation, decoding failure and provider failure.
 
@@ -118,12 +120,13 @@ the transaction starts. Temporary staging is deleted on completion or failure.
 Limits: 2 GiB per archive, 32 MiB per record, 8 MiB per photo, eight maps of at most
 16 MiB each, 10,000 memories and 100,000 walk records. Each walk retains the GPX
 codec's per-walk validation limits. These bounds are resource protections, not a
-promise that every phone has sufficient free staging space. Legacy v1/v2/v3 JSON
-and gzip imports retain their original bounds and remain supported.
+promise that every phone has sufficient free staging space. Version-4 archives
+are the sole full-backup format. JSON/gzip versions 1–3 are rejected; their codecs
+and whole-photo export path have been removed. GPX remains supported.
 
 ## Verification and remaining work
 
-Unit/widget tests cover recovery, migrations, matching, import rollback, damaged
+Unit/widget tests cover recovery, fresh-schema reopening, matching, import rollback, damaged
 archives, cancellation and archives containing more than 80 MiB of photos.
 Native FFI tests exercise the Rust library; Python checks validate Android setup,
 packaging and release tooling.
@@ -140,14 +143,15 @@ matching batches took 485 ms with fresh workers versus 3 ms with a warmed cache.
 The native test fixture and real matching checks still verify results separately;
 these timings isolate loading overhead rather than claiming a phone speedup.
 
-Android API 35 emulator validation retained three existing walks across the
-schema upgrade, exported a v4 archive through the system picker, and restored it
+Before the package rename, Android API 35 emulator validation retained three
+existing walks across the earlier schema upgrade, exported a v4 archive through the system picker, and restored it
 without duplicates, including six memories/drafts and the offline map.
 
 The architecture refactor adds regression checks for both recovery entry points,
 late GPS replies during browsing/hide/disposal, and agreement among cached,
-one-shot and review matching. It changes neither the database version nor the
-backup format. The map screen still contains navigation/composition code and the
+one-shot and review matching. That earlier refactor preserved the database and backup format; the October 3
+package reset subsequently retired the experimental database lineage and old
+backup formats. The map screen still contains navigation/composition code and the
 store facade remains a compatibility boundary; this is not a claim that every
 remaining class or similar-looking code fragment needs another abstraction.
 

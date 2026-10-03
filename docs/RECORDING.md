@@ -7,7 +7,7 @@ completion. Distance is accumulated incrementally; it is still a raw GPS-distanc
 estimate and can include drift.
 
 The **Saved walks** button opens the library for completed and interrupted walks.
-It supports GPX import, per-walk GPX file export, and full raw-walk JSON backup
+It supports GPX import, per-walk GPX file export, and full streamed `.wanderlust` backup
 and merge restore. See [import/export](IMPORT_EXPORT.md) for formats, limits,
 duplicate handling, and phone acceptance checks.
 

@@ -144,9 +144,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _import(bool backup) async {
-    final progress = backup && _transfer.supportsArchives
-        ? _beginArchive()
-        : BackupProgress();
+    final progress = backup ? _beginArchive() : BackupProgress();
     final result = await _transfer.importFile(
       backup: backup,
       choose: _chooseRestore,
@@ -173,9 +171,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _backup() async {
-    if (await _transfer.backup(
-      _transfer.supportsArchives ? _beginArchive() : BackupProgress(),
-    )) {
+    if (await _transfer.backup(_beginArchive())) {
       _message =
           'Backup saved: walks, memories, photos, settings and offline maps.';
     }

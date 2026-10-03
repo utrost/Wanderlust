@@ -102,48 +102,38 @@ void main() {
       }
     },
   );
-  test(
-    'preferences default calm, migrate v4 and persist after reopening',
-    () async {
-      final dir = await Directory.systemTemp.createTemp('wanderlust-settings-');
-      final path = '${dir.path}/walks.db';
-      SqliteWalkStore open() =>
-          SqliteWalkStore(factory: databaseFactoryFfi, databasePath: path);
-      var store = open();
-      try {
-        expect((await store.readPreferences()).showTime, isFalse);
-        await store.close();
-        final db = await databaseFactoryFfi.openDatabase(path);
-        await db.execute('DROP TABLE memory_photo');
-        await db.execute('DROP TABLE memory');
-        await db.execute('DROP TABLE walk_preferences');
-        await db.execute('ALTER TABLE recorded_walk DROP COLUMN fingerprint');
-        await db.execute('PRAGMA user_version = 4');
-        await db.close();
-        store = open();
-        expect((await store.readPreferences()).showTime, isFalse);
-        await store.savePreferences(
-          const WalkPreferences(showTime: true, showSamples: true),
-        );
-        await store.close();
-        store = open();
-        expect((await store.readPreferences()).toJson(), {
-          'showTime': true,
-          'showSamples': true,
-          'showGps': false,
-          'showStreetNames': true,
-          'showMemories': true,
-          'detailedGps': false,
-          'fillSmallGaps': false,
-          'walkedLineWidth': 3.0,
-          'mapSizeKm': 4,
-        });
-      } finally {
-        await store.close();
-        await dir.delete(recursive: true);
-      }
-    },
-  );
+  test('preferences default calm and persist after reopening', () async {
+    final dir = await Directory.systemTemp.createTemp('wanderlust-settings-');
+    final path = '${dir.path}/walks.db';
+    SqliteWalkStore open() =>
+        SqliteWalkStore(factory: databaseFactoryFfi, databasePath: path);
+    var store = open();
+    try {
+      expect((await store.readPreferences()).showTime, isFalse);
+      await store.close();
+      store = open();
+      expect((await store.readPreferences()).showTime, isFalse);
+      await store.savePreferences(
+        const WalkPreferences(showTime: true, showSamples: true),
+      );
+      await store.close();
+      store = open();
+      expect((await store.readPreferences()).toJson(), {
+        'showTime': true,
+        'showSamples': true,
+        'showGps': false,
+        'showStreetNames': true,
+        'showMemories': true,
+        'detailedGps': false,
+        'fillSmallGaps': false,
+        'walkedLineWidth': 3.0,
+        'mapSizeKm': 4,
+      });
+    } finally {
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
   testWidgets(
     'details are optional and failed preference save leaves switch off',
     (tester) async {

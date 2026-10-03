@@ -2,7 +2,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:wanderlust/data/area_network.dart';
-import 'package:wanderlust/memories/memory_backup.dart';
+import 'package:wanderlust/transfer/backup_contents.dart';
+import 'backup_fixture.dart';
 import 'package:wanderlust/recording/walk_store.dart';
 import 'package:wanderlust/transfer/walk_codec.dart';
 import 'coverage_test.dart' show networkJson;
@@ -61,11 +62,8 @@ void main() {
         expect(saved.favourite, isTrue);
         expect(saved.toBackup(includeFavourite: false), raw);
         expect(WalkCodec.exportGpx(saved), WalkCodec.exportGpx(first));
-        final backup = MemoryBackup.decode(
-          MemoryBackup.encode(
-            MemoryBackup(await store.listSaved(), []),
-            compressed: true,
-          ),
+        final backup = await decodeBackup(
+          await encodeBackup(BackupContents(await store.listSaved(), [])),
         );
         await target.mergeWalks(backup.walks);
         expect(

@@ -57,39 +57,4 @@ void main() {
       }
     },
   );
-  test(
-    'v6 upgrade preserves old traces and backfills summaries without modifying points',
-    () async {
-      final dir = await Directory.systemTemp.createTemp('summary-migration-');
-      final path = '${dir.path}/db';
-      var store = SqliteWalkStore(
-        factory: databaseFactoryFfi,
-        databasePath: path,
-      );
-      final original = WalkCodec.importGpx(segmentedGpx);
-      try {
-        await store.mergeWalks([original]);
-        await store.close();
-        final old = await databaseFactoryFfi.openDatabase(path);
-        await old.execute('ALTER TABLE recorded_walk DROP COLUMN fingerprint');
-        await old.setVersion(6);
-        await old.close();
-        store = SqliteWalkStore(
-          factory: databaseFactoryFfi,
-          databasePath: path,
-        );
-        final summary = (await store.listSummaries()).single;
-        expect(summary.pointCount, original.points.length);
-        expect(
-          WalkCodec.exportGpx(await store.loadWalk(summary.id)),
-          WalkCodec.exportGpx(original),
-        );
-        final reopened = (await store.listSummaries()).single;
-        expect(reopened.fingerprint, summary.fingerprint);
-      } finally {
-        await store.close();
-        await dir.delete(recursive: true);
-      }
-    },
-  );
 }

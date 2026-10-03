@@ -12,6 +12,8 @@ class AppDatabase {
   DatabaseFactory get _factory => _providedFactory ?? databaseFactory;
   final String? _path;
   Future<Database>? _opening;
+  // Distinguishes this fresh schema lineage from earlier experimental databases.
+  static const applicationId = 0x57414e44; // WAND
 
   Future<Database> get database => _opening ??= _open();
   Future<Database> _open() async {
@@ -22,13 +24,14 @@ class AppDatabase {
       return await _factory.openDatabase(
         file,
         options: OpenDatabaseOptions(
-          version: 7,
+          version: 1,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
           },
           onCreate: (db, version) async {
+            await db.execute('PRAGMA application_id = $applicationId');
             await db.execute(
-              "CREATE TABLE recorded_walk (id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, ended_at TEXT, status TEXT NOT NULL CHECK(status IN ('recording','completed','interrupted')))",
+              "CREATE TABLE recorded_walk (id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, ended_at TEXT, status TEXT NOT NULL CHECK(status IN ('recording','completed','interrupted')), uid TEXT, trace_metadata TEXT NOT NULL DEFAULT '{}', fingerprint TEXT)",
             );
             await db.execute(
               'CREATE TABLE recorded_point (walk_id INTEGER NOT NULL REFERENCES recorded_walk(id), seq INTEGER NOT NULL, position TEXT NOT NULL, timestamp TEXT NOT NULL, PRIMARY KEY(walk_id, seq))',
@@ -38,21 +41,19 @@ class AppDatabase {
             await _createAreas(db);
             await _createPreferences(db);
             await MemoryStore.create(db);
-            await db.execute(
-              'ALTER TABLE recorded_walk ADD COLUMN fingerprint TEXT',
-            );
           },
-          onUpgrade: (db, oldVersion, newVersion) async {
-            if (oldVersion < 2) await _createCoverage(db);
-            if (oldVersion < 3) await _createTransfer(db);
-            if (oldVersion < 4) await _createAreas(db);
-            if (oldVersion < 5) await _createPreferences(db);
-            if (oldVersion < 6) await MemoryStore.create(db);
-            if (oldVersion < 7) {
-              await db.execute(
-                'ALTER TABLE recorded_walk ADD COLUMN fingerprint TEXT',
+          onOpen: (db) async {
+            final identity = await db.rawQuery('PRAGMA application_id');
+            if (identity.single.values.single != applicationId) {
+              throw StateError(
+                'This database belongs to an unsupported app lineage.',
               );
             }
+          },
+          // The com.simiono identity starts a new schema lineage. No upgrade or
+          // downgrade may silently open a database from another lineage.
+          onUpgrade: (db, oldVersion, newVersion) async {
+            throw StateError('Unsupported database version: $oldVersion');
           },
         ),
       );
@@ -77,13 +78,6 @@ class AppDatabase {
   }
 
   static Future<void> _createTransfer(DatabaseExecutor db) async {
-    await db.execute("ALTER TABLE recorded_walk ADD COLUMN uid TEXT");
-    await db.execute(
-      "ALTER TABLE recorded_walk ADD COLUMN trace_metadata TEXT NOT NULL DEFAULT '{}'",
-    );
-    await db.execute(
-      "UPDATE recorded_walk SET uid = lower(hex(randomblob(16)))",
-    );
     await db.execute('CREATE UNIQUE INDEX walk_uid ON recorded_walk(uid)');
     await db.execute(
       "CREATE TRIGGER assign_walk_uid AFTER INSERT ON recorded_walk WHEN NEW.uid IS NULL BEGIN UPDATE recorded_walk SET uid = lower(hex(randomblob(16))) WHERE id = NEW.id; END",

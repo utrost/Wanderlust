@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:wanderlust/memories/memory.dart';
-import 'package:wanderlust/memories/memory_backup.dart';
+import 'package:wanderlust/transfer/backup_contents.dart';
+import 'backup_fixture.dart';
 import 'package:wanderlust/recording/walk_store.dart';
 import 'package:wanderlust/settings/walk_preferences.dart';
 import 'package:wanderlust/transfer/walk_codec.dart';
@@ -28,7 +28,7 @@ void main() {
   });
 
   test(
-    'compressed backup restores maps, settings, walks and pinned photos after restart',
+    'streamed backup restores maps, settings, walks and pinned photos after restart',
     () async {
       final walk = WalkCodec.importGpx(segmentedGpx);
       final memory = WalkMemory.create(walkUid: walk.uid).copyWith(
@@ -42,17 +42,14 @@ void main() {
         showStreetNames: false,
         fillSmallGaps: true,
       );
-      final backup = MemoryBackup(
+      final backup = BackupContents(
         [walk],
         [memory],
         maps: [networkJson()],
         activeMap: 'test-v1',
         preferences: preferences,
       );
-      final raw = MemoryBackup.encode(backup);
-      final zipped = MemoryBackup.encode(backup, compressed: true);
-      expect(zipped.length, lessThan(raw.length));
-      final restored = MemoryBackup.decode(zipped);
+      final restored = await decodeBackup(await encodeBackup(backup));
       await store.mergeWalks(
         restored.walks,
         memories: restored.memories,
@@ -126,75 +123,4 @@ void main() {
       expect((await store.readPreferences()).mapSizeKm, 7);
     },
   );
-
-  test(
-    'legacy v2 and walk-only backups remain readable; damaged gzip is rejected',
-    () {
-      final encoded = MemoryBackup.encode(const MemoryBackup([], []));
-      final old = jsonDecode(utf8.decode(encoded)) as Map<String, dynamic>;
-      old['version'] = 2;
-      expect(
-        MemoryBackup.decode(
-          Uint8List.fromList(utf8.encode(jsonEncode(old))),
-        ).maps,
-        isEmpty,
-      );
-      expect(
-        MemoryBackup.decode(
-          Uint8List.fromList(utf8.encode(WalkCodec.exportBackup([]))),
-        ).walks,
-        isEmpty,
-      );
-      final zipped = MemoryBackup.encode(
-        const MemoryBackup([], []),
-        compressed: true,
-      );
-      zipped[zipped.length - 8] ^= 255;
-      expect(() => MemoryBackup.decode(zipped), throwsFormatException);
-    },
-  );
-
-  test(
-    'invalid map and missing selection cannot be exported as restorable backups',
-    () {
-      expect(
-        () => MemoryBackup.encode(const MemoryBackup([], [], maps: ['{}'])),
-        throwsFormatException,
-      );
-      expect(
-        () => MemoryBackup.encode(
-          MemoryBackup([], [], maps: [networkJson()], activeMap: 'absent'),
-        ),
-        throwsFormatException,
-      );
-      expect(
-        () => MemoryBackup.encode(
-          MemoryBackup([], [], maps: [networkJson(), networkJson()]),
-        ),
-        throwsFormatException,
-      );
-    },
-  );
-  test('gzip expansion is bounded before parsing oversized input', () {
-    late List<int> compressed;
-    final encoder = gzip.encoder.startChunkedConversion(
-      ByteConversionSink.withCallback((bytes) => compressed = bytes),
-    );
-    final block = Uint8List(1024 * 1024);
-    for (var i = 0; i < 129; i++) {
-      encoder.add(block);
-    }
-    encoder.close();
-    expect(compressed.length, lessThan(1024 * 1024));
-    expect(
-      () => MemoryBackup.decode(Uint8List.fromList(compressed)),
-      throwsA(
-        isA<FormatException>().having(
-          (e) => e.message,
-          'message',
-          contains('Expanded backup'),
-        ),
-      ),
-    );
-  });
 }

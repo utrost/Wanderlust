@@ -71,7 +71,7 @@ def verify_apk_manifest(path, build_tools):
         raise ValueError('Store APK is debuggable')
     if "targetSdkVersion:'36'" not in badging:
         raise ValueError('Unexpected target SDK')
-    if "package: name='com.wanderlust.wanderlust'" not in badging:
+    if "package: name='com.simiono.wanderlust'" not in badging:
         raise ValueError('Unexpected package ID')
     if 'android.permission.ACCESS_BACKGROUND_LOCATION' in badging:
         raise ValueError('Unexpected background location permission')

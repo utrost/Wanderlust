@@ -84,8 +84,8 @@ The smallest thing that delivers the core joy: walk → map fills.
   rectangles, and per-area PMTiles remain open. See [nearby maps](NEARBY_MAPS.md).
 - 🟢 **GPX import** — document picker, strict validation, segment/time preservation,
   duplicate detection, and coverage updates. Native phone picker validation pending.
-- 🟡 **Export and backup** — per-walk GPX and versioned JSON backup/merge restore
-  implemented, including maps, settings, photos, atomic restore, corruption checks and gzip compression. GeoJSON with
+- 🟡 **Export and backup** — per-walk GPX and streamed archive backup/merge restore
+  implemented, including maps, settings, photos, atomic restore and per-record corruption checks. GeoJSON with
   counts and streaming archives beyond the current size limit remain open.
   See [behavior and acceptance checks](IMPORT_EXPORT.md).
 
@@ -210,11 +210,11 @@ See [NEARBY_MAPS.md](NEARBY_MAPS.md#first-launch-and-no-map-state).
 
 ### Complete backups and manual memory pins (implemented)
 
-Backups now use a checksummed version-3 JSON bundle compressed with gzip and
-include settings and offline maps. Legacy JSON walk-only and memory backups still
-restore. A preview lets users omit maps and opt into replacing settings; capacity
-or write failures roll back the entire restore. Existing map selection is kept.
-The expanded archive remains limited to 128 MiB (80 MiB of photos).
+Backups use checksummed version-4 `.wanderlust` archives with settings and offline
+maps. A preview lets users omit maps and opt into replacing settings; capacity or
+write failures roll back the restore. Existing map selection is kept. Archives
+are limited to 2 GiB and individual photos to 8 MiB. Experimental JSON/gzip backup
+support was removed for the October 3 package baseline.
 
 Memory editors offer **Choose on map** across the main map, library and walk
 review. Selection uses downloaded maps with pan/zoom, confirmation and cancel;
@@ -243,7 +243,7 @@ limit backup contents or affect counts, matching, or raw GPS data.
 ## October 2026 architecture hardening
 
 Implemented: conservative display distance without changing raw GPS; version-4
-streamed photo/walk archives with transactional restore and legacy import;
+streamed photo/walk archives with transactional restore;
 schema-v7 history summaries and persisted trace fingerprints; reusable native
 matching workers; cached/cullable map geometry; explicit session ownership;
 48-pixel memory targets and shared visual tokens. System fonts are used explicitly
@@ -275,3 +275,16 @@ renderer or an automatic prerequisite for release.
       and allow failed photo recovery to retry.
 - [x] Test transfer cancellation/cleanup and asynchronous state races independently
       of SQLite and widget rendering.
+
+### October 3: pre-publication identity and compatibility reset
+
+- [x] Adopt `com.simiono.wanderlust` in Android, release checks and F-Droid metadata.
+- [x] Create the current SQLite schema directly as a new version-1 lineage; remove
+      experimental migrations and reject unrelated databases without resetting them.
+- [x] Retain streamed version-4 backups and GPX; remove JSON/gzip backup codecs,
+      fallback transport and the old whole-photo export path.
+- [x] Replace migration/legacy-format tests with fresh-baseline and archive tests.
+
+The new identity installs separately from the experimental app. No automatic data
+migration is provided. Future releases should preserve this identity and use
+explicit schema migrations rather than repeating this reset.

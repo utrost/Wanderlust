@@ -30,7 +30,7 @@ class AndroidSetupTest(unittest.TestCase):
             self.assertIn('android.permission.WAKE_LOCK', permissions)
             self.assertNotIn('android.permission.ACCESS_BACKGROUND_LOCATION', permissions)
             self.assertIsNotNone(root.find('application/activity'))
-            self.assertTrue((manifest.parent / 'kotlin/com/wanderlust/wanderlust/MainActivity.kt').exists())
+            self.assertTrue((manifest.parent / 'kotlin/com/simiono/wanderlust/MainActivity.kt').exists())
             application = root.find('application')
             self.assertEqual(application.get(f'{{{module.ANDROID}}}allowBackup'), 'false')
             for filename, sections in [('backup_rules.xml', [None]),
@@ -43,6 +43,11 @@ class AndroidSetupTest(unittest.TestCase):
                                      'device_root', 'device_file', 'device_database', 'device_sharedpref'} <= domains)
             gradle = (Path(directory) / 'app/build.gradle.kts').read_text()
             self.assertNotIn('signingConfigs.getByName("debug")', gradle)
+            self.assertIn('namespace = "com.simiono.wanderlust"', gradle)
+            self.assertIn('applicationId = "com.simiono.wanderlust"', gradle)
+            for name in ('MainActivity.kt', 'BackupFiles.kt'):
+                self.assertTrue((manifest.parent / 'kotlin/com/simiono/wanderlust' / name).read_text().startswith('package com.simiono.wanderlust'))
+
 
     def test_missing_or_wrong_signing_key_never_replaces_existing_key(self):
         module = load('install_test_signing')
@@ -67,13 +72,23 @@ class AndroidSetupTest(unittest.TestCase):
                 module.verify(Path('test.apk'), Path('/tools'), 1010, 'deadbeef')
             run.side_effect = [
                 type('Result', (), {'stdout': 'Signer #1 certificate SHA-256 digest: deadbeef\n'})(),
-                type('Result', (), {'stdout': "package: name='com.wanderlust.wanderlust' versionCode='1010' versionName='0.0.1'"})(),
+                type('Result', (), {'stdout': "package: name='com.simiono.wanderlust' versionCode='1010' versionName='0.0.1'"})(),
             ]
             module.verify(Path('test.apk'), Path('/tools'), 1010, 'deadbeef')
 
+    def test_publication_rejects_a_different_application_id(self):
+        module = load('verify_android_release')
+        with patch.object(module.subprocess, 'run') as run:
+            run.side_effect = [
+                type('Result', (), {'stdout': 'Signer #1 certificate SHA-256 digest: deadbeef\n'})(),
+                type('Result', (), {'stdout': "package: name='com.example.other' versionCode='1010' versionName='0.0.1'"})(),
+            ]
+            with self.assertRaises(ValueError):
+                module.verify(Path('test.apk'), Path('/tools'), 1010, 'deadbeef')
+
     def test_build_tools_37_certificate_labels_and_multiple_signers(self):
         module = load('verify_android_release')
-        package = "package: name='com.wanderlust.wanderlust' versionCode='1015' versionName='0.0.1'"
+        package = "package: name='com.simiono.wanderlust' versionCode='1015' versionName='0.0.1'"
         for certificate in (
             'Signer #1 certificate SHA-256 digest: deadbeef\n',
             'V3.0 Signer: certificate SHA-256 digest: deadbeef\n',

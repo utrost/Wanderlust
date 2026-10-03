@@ -62,15 +62,15 @@ individual sharing are later slices. **Choose on map** now supports manual pin p
 
 ## Backup / restore
 
-Create backup includes saved walks, memories, drafts, photo bytes, settings and offline maps, with an
-integrity checksum. Restore supports earlier walk-only backups. Validate the
-entire file before writes and merge walks and memories in one transaction;
-existing memory identities win on conflict (never overwrite newer local edits).
-New backups use gzip-compressed version-3 JSON. Older uncompressed version-1/2 files remain supported. Restore previews optional maps and settings; existing map selection is retained and replacing settings requires an explicit checkbox. The expanded bundle has a 128 MiB limit (at most 80 MiB of photo bytes before base64 encoding) and retains the existing walk limits. Oversize
-exports fail explicitly rather than omitting photos. GPX remains a walk-only
-export; the UI says that memories require the full backup. Backups may contain
-photo metadata as well as notes and locations. Finish recording before backing up
-or restoring so walk associations remain consistent.
+Create backup includes saved walks, memories, drafts, photo bytes, settings and
+offline maps in a checksummed `.wanderlust` version-4 archive. JSON/gzip versions
+1–3 are retired. Validation completes before writes; failure leaves local data
+unchanged. Restore previews optional maps and settings; replacing settings is
+opt-in and existing map selection is retained.
+
+Archives are limited to 2 GiB and individual photos to 8 MiB. Photos are streamed
+individually, without the earlier combined-photo limit. GPX contains only walks.
+Finish recording before backup/restore so walk associations remain consistent.
 
 ## Acceptance checks
 

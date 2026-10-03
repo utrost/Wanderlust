@@ -90,7 +90,7 @@ class WalkRepository implements WalkHistory {
   Future<SavedWalk> loadWalk(int id) async =>
       (await readFrom(await _db, id: id)).single;
 
-  /// Metadata only after a one-time, per-walk fingerprint backfill on upgrade.
+  /// Metadata reads lazily cache fingerprints for completed/imported traces.
   @override
   Future<List<SavedWalk>> listSummaries({bool recover = false}) async {
     return (await _db).transaction((tx) async {

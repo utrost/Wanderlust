@@ -24,7 +24,4 @@ class FakeMemoryStore implements MemoryRepository {
     entries.remove(key(id, true));
     if (!draftOnly) entries.remove(key(id, false));
   }
-
-  @override
-  Future<List<WalkMemory>> exportAll() async => entries.values.toList();
 }

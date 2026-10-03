@@ -31,7 +31,7 @@ def verify(apk, build_tools, expected_version, expected_certificate):
         [str(build_tools / 'aapt'), 'dump', 'badging', str(apk)],
         check=True, capture_output=True, text=True,
     ).stdout
-    if not re.search(r"package: name='com.wanderlust.wanderlust' versionCode='" + str(expected_version) + "'", package):
+    if not re.search(r"package: name='com.simiono.wanderlust' versionCode='" + str(expected_version) + "'", package):
         raise ValueError('Unexpected application ID or version code')
     print(f'Verified persistent test certificate and Android build number {expected_version}.')
 

@@ -1,5 +1,24 @@
 # Android test APK updates
 
+## Package baseline (October 3, 2026)
+
+Use **`com.simiono.wanderlust`** for Google Play registration and Android builds.
+The package and Kotlin namespace match; F-Droid metadata uses the same ID. This
+replaces the experimental identity and therefore installs as a separate app,
+not an update. A fresh install is intentional; no automatic data migration or
+old database upgrades are supported. Current `.wanderlust` version-4 backups
+remain importable; old JSON/gzip backups do not. Keep this application ID for
+future releases. Signing-key handling and version counters below remain unchanged.
+
+Validation for this baseline: 175 Flutter tests passed (3 skipped), Flutter
+analysis reported no issues, and 24 Python build-tool tests passed. The local
+arm64/x86_64 APK passed native-library checks; its manifest declares
+`com.simiono.wanderlust`. An Android emulator fresh install cold-started the new
+activity, created its database and displayed the location-based map setup screen.
+This is a startup smoke test, not a replacement for physical-phone walk testing.
+
+## Builds and signing
+
 Test APK releases now use one persistent, private test signing key and build
 number `1000 + github.run_number` from the **Test APK** workflow. New workflow
 runs increase the version; retrying the same run keeps its version. Keep that
@@ -118,7 +137,7 @@ its history as well as the current code; review that separately before publishin
 - Android automatic cloud backups and device transfers explicitly exclude all
   app-private data. Manual full backups remain available. Older backups made by
   previous versions are outside the app's control.
-- `fdroid/com.wanderlust.wanderlust.yml`: disabled submission metadata draft.
+- `fdroid/com.simiono.wanderlust.yml`: disabled submission metadata draft.
   Still needs a tagged build recipe validated in fdroidserver, a complete
   dependency/licence scan and signing/reproducibility decisions. Removal of GMS
   alone is not a claim of F-Droid acceptance or bit-for-bit reproducibility.

@@ -307,45 +307,6 @@ void main() {
   );
 
   test(
-    'v3 walk database upgrades to offline-map storage without changing walks',
-    () async {
-      final dir = await Directory.systemTemp.createTemp('wanderlust-v3-');
-      final path = '${dir.path}/walks.db';
-      var store = SqliteWalkStore(
-        factory: databaseFactoryFfi,
-        databasePath: path,
-      );
-      try {
-        final id = await store.begin(fix(0).timestamp);
-        await store.append(id, 0, fix(1));
-        await store.finish(id, fix(2).timestamp, 'completed');
-        final before = (await store.listSaved()).single.toBackup();
-        await store.close();
-        final db = await databaseFactoryFfi.openDatabase(path);
-        await db.execute('DROP TABLE memory_photo');
-        await db.execute('DROP TABLE memory');
-        await db.execute('DROP TABLE walk_preferences');
-        await db.execute('DROP TABLE offline_selection');
-        await db.execute('DROP TABLE offline_area');
-        await db.execute('ALTER TABLE recorded_walk DROP COLUMN fingerprint');
-        await db.execute('PRAGMA user_version = 3');
-        await db.close();
-        store = SqliteWalkStore(
-          factory: databaseFactoryFfi,
-          databasePath: path,
-        );
-        expect((await store.listSaved()).single.toBackup(), before);
-        expect(await store.listAreas(), isEmpty);
-        await store.saveArea(smallNetwork());
-        expect(await store.listAreas(), hasLength(1));
-      } finally {
-        await store.close();
-        await dir.delete(recursive: true);
-      }
-    },
-  );
-
-  test(
     'network switching waits for old matching and reprocesses saved walks',
     () async {
       final dir = await Directory.systemTemp.createTemp('wanderlust-switch-');

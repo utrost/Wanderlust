@@ -35,8 +35,8 @@ def configure(directory):
     tree.write(manifest, encoding='unicode')
     sources = Path(__file__).parent / 'android'
     for source, relative in (
-        ('MainActivity.kt', 'kotlin/com/wanderlust/wanderlust/MainActivity.kt'),
-        ('BackupFiles.kt', 'kotlin/com/wanderlust/wanderlust/BackupFiles.kt'),
+        ('MainActivity.kt', 'kotlin/com/simiono/wanderlust/MainActivity.kt'),
+        ('BackupFiles.kt', 'kotlin/com/simiono/wanderlust/BackupFiles.kt'),
         ('ic_walk_notification.xml', 'res/drawable/ic_walk_notification.xml'),
         ('backup_rules.xml', 'res/xml/backup_rules.xml'),
         ('data_extraction_rules.xml', 'res/xml/data_extraction_rules.xml'),

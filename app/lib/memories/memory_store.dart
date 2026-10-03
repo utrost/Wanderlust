@@ -131,23 +131,4 @@ class MemoryStore implements MemoryRepository {
           whereArgs: [id],
         );
       });
-  @override
-  Future<List<WalkMemory>> exportAll() async => (await database()).transaction((
-    tx,
-  ) async {
-    final rows = await tx.query('memory', columns: ['id', 'draft']);
-    final result = <WalkMemory>[];
-    var photoBytes = 0;
-    for (final row in rows) {
-      final m = (await readFrom(tx, row['id'] as String, row['draft'] == 1))!;
-      photoBytes += m.photoLength;
-      if (photoBytes > 80 * 1024 * 1024) {
-        throw const FormatException(
-          'Photos exceed the backup size limit. No backup was written.',
-        );
-      }
-      result.add(m);
-    }
-    return result;
-  });
 }

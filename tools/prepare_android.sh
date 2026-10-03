@@ -32,7 +32,7 @@ cd "$ROOT/app"
 lock_copy=$(mktemp)
 cp pubspec.lock "$lock_copy"
 trap 'cp "$lock_copy" "$ROOT/app/pubspec.lock"; rm -f "$lock_copy"' EXIT
-flutter create --no-pub --org com.wanderlust --project-name wanderlust --platforms=android .
+flutter create --no-pub --org com.simiono --project-name wanderlust --platforms=android .
 cp "$lock_copy" pubspec.lock
 rm -f "$lock_copy"
 trap - EXIT

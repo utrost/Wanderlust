@@ -6,7 +6,7 @@ import 'package:crypto/crypto.dart';
 
 import '../data/area_network.dart';
 import '../memories/memory.dart';
-import '../memories/memory_backup.dart';
+import 'backup_contents.dart';
 import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
 import 'backup_data.dart';
@@ -219,7 +219,7 @@ class BackupArchive {
             );
           }
           return StagedBackup(
-            MemoryBackup(
+            BackupContents(
               walks,
               memories,
               maps: maps,
@@ -319,7 +319,7 @@ class StagedBackup {
     }
   }
 
-  final MemoryBackup metadata;
+  final BackupContents metadata;
   final Map<String, File> photos;
   Stream<WalkMemory> memories() async* {
     for (final m in metadata.memories) {

@@ -4,14 +4,12 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 
-import '../memories/memory_backup.dart';
+import 'walk_codec.dart';
 
 abstract class WalkFiles {
   Future<Uint8List?> pick();
   Future<bool> save(String name, String mimeType, Uint8List bytes);
-}
 
-abstract class ArchiveFiles {
   /// Returns a private temporary copy owned by the caller, which must delete it.
   /// Must never return the original user document's path.
   Future<File?> pickArchive();
@@ -19,7 +17,7 @@ abstract class ArchiveFiles {
   Future<void> cancelArchive();
 }
 
-class DeviceWalkFiles implements WalkFiles, ArchiveFiles {
+class DeviceWalkFiles implements WalkFiles {
   static const _backups = MethodChannel('wanderlust/backups');
   @override
   Future<File?> pickArchive() async {
@@ -40,13 +38,13 @@ class DeviceWalkFiles implements WalkFiles, ArchiveFiles {
     final file = await FilePicker.pickFile();
     if (file == null) return null;
     final size = await file.length();
-    if (size != null && size > MemoryBackup.maxBytes) {
-      throw const FormatException('File exceeds the 128 MiB limit.');
+    if (size != null && size > WalkCodec.maxBytes) {
+      throw const FormatException('File exceeds the 32 MiB limit.');
     }
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in file.readAsByteStream()) {
-      if (bytes.length + chunk.length > MemoryBackup.maxBytes) {
-        throw const FormatException('File exceeds the 128 MiB limit.');
+      if (bytes.length + chunk.length > WalkCodec.maxBytes) {
+        throw const FormatException('File exceeds the 32 MiB limit.');
       }
       bytes.add(chunk);
     }

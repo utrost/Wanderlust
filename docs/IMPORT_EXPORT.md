@@ -49,40 +49,37 @@ restore deduplication is by identity, while GPX import deduplication is by trace
 restoring a recording after separately importing its GPX export can therefore
 retain both identities. Use backups to move a library between installations.
 
-The version-1 JSON envelope carries a SHA-256 checksum of its payload string to
-detect corruption, not authenticate or encrypt the file. Unknown versions,
-malformed measurements, duplicate identities, invalid segment indices, and
-checksum mismatches are rejected before storage writes.
+Full backups use the `.wanderlust` version-4 archive: length-delimited records,
+individual SHA-256 checksums and a final record count. Checksums detect corruption;
+they do not authenticate or encrypt a file. JSON/gzip backup formats 1–3 are
+retired and rejected. The single-walk JSON record inside version 4 remains an
+internal codec, not a separately supported backup import format.
 
-Files are limited to **32 MiB**, GPX imports to **100,000 points**, and backups to
-**10,000 walks / 100,000 total points**. Backup creation validates the same limits
-so it never emits an unsupported backup. These are initial resource bounds, not
-a lifetime-library storage target. File reading is bounded and parsing/encoding
-runs in worker isolates. SQLite library reads still load all points; paging and
-streaming archives remain future work.
+GPX input is limited to **32 MiB / 100,000 points**. Full archives are limited to
+**2 GiB**, with **32 MiB per record**, **8 MiB per photo**, **100,000 walks**,
+**10,000 memories**, and **eight maps of 16 MiB each**. Walk and photo data are
+staged and committed one item at a time; no combined 80 MiB photo ceiling remains.
+
+Restore offers optional offline maps and an unchecked **Replace my settings**
+choice. Existing walks, memories, maps and map selection take precedence. On a
+fresh installation the backed-up selected map becomes active. Selected content
+commits in one transaction, including settings; an error rolls everything back.
+Export and restore show progress and allow cancellation before commit. Private
+staging files are removed after success, cancellation or failure.
 
 ## Storage and verification
 
-Schema version 3 adds stable identities and per-walk trace metadata. Versions 1
-and 2 migrate in place. The point journal's separate timestamp column is used on
-read to preserve sub-millisecond precision omitted by `Position.toJson()`.
+`com.simiono.wanderlust` starts a fresh schema lineage at version 1, created
+straight from the current schema. Old experimental database migrations are not
+shipped. Database identity checks reject an unrelated file without deleting it.
+The point journal's separate timestamp column preserves sub-millisecond precision.
+History reads use summaries and cached fingerprints; full traces load on demand.
 
-Automated checks cover GPX round trips, missing times and segment breaks,
-malformed/oversize input, renamed and repeated imports, migration, full backup
-round trips, local ID remapping, repeated restore, identity-conflict rollback,
-active recording safety, and file-dialog cancellation/save failures. The real
-Rust/SQLite test imports a Bremen fixture, backs it up, restores it into a fresh
-database, and checks identical persisted coverage. Separate singleton GPX segments
-produce no coverage, confirming that transfer does not invent connections.
-
-Local validation: **42 Flutter tests passed**, including native integration;
-`flutter analyze` is clean. The debug APK also built successfully and passed
-architecture/asset and APK-signature checks. It contains no broad storage
-permissions. Native picker interaction still requires the phone.
-
-Local APK: `app/build/app/outputs/flutter-apk/app-debug.apk`
-
-SHA-256: `12b59931cc0da8844ff7621bce41f96b3869285365f41d16503347aa12c752e8`.
+Automated checks cover GPX round trips, missing timestamps and segment breaks,
+bounded input, repeated imports, complete archive round trips, stable identities,
+transaction rollback, fresh schema/reopening, cancellation, cleanup and rejection
+of retired formats. Native FFI tests verify that restored walks produce the same
+street coverage.
 
 ## Phone acceptance checks
 
@@ -102,43 +99,3 @@ SHA-256: `12b59931cc0da8844ff7621bce41f96b3869285365f41d16503347aa12c752e8`.
 
 Implementation references: [file picker API](https://pub.dev/packages/file_picker)
 and [Dart XML parser](https://pub.dev/packages/xml).
-
-## Complete compressed backups (version 3)
-
-Create backup now writes `wanderlust-backup.json.gz`: walks, memories/drafts and
-photos, settings, and all downloaded street maps. A SHA-256 checksum covers the
-JSON payload. Gzip reduces file size; decompression enforces the same 128 MiB
-expanded-data limit before JSON parsing. Photos retain their 80 MiB combined
-limit. Streaming larger collections is future work, not silently omitted data.
-
-Restore accepts gzip version 3 and older uncompressed version 1/2 files. Its
-preview offers optional offline maps and an unchecked **Replace my settings**
-option. Existing walks/memories/maps and selected map take precedence. On a new
-installation the backed-up selected map becomes active. Walks, memories, maps and
-selected settings commit in one transaction. If merged maps exceed eight, the
-restore fails without partial changes; retry without maps or remove an unused
-map first. Coverage is recomputed from restored raw walks.
-
-Android API 35 emulator validation: saved a compressed backup through the system
-document picker, cleared only the isolated test app's data, restored through the
-picker with settings selected, and verified the offline map, selection, settings
-and all three test memories in SQLite. A manually placed pin retained its
-coordinates and null GPS accuracy. Actual-phone provider testing remains open.
-
-## Streaming Android backups (version 4)
-
-Android now creates `wanderlust-backup.wanderlust`. Walks and photos are separate
-checksummed records rather than one large JSON/base64 payload. The previous
-80 MiB combined-photo limit no longer applies to new archives. Individual photos
-remain limited to 8 MiB and the entire archive to 2 GiB. Backups are not encrypted.
-
-Export and restore show progress and allow cancellation before the restore
-transaction begins. The Android document picker streams bytes from/to private
-cache files. Restore validates all records and photos before committing; a late
-failure rolls back the entire merge. Full walks and photos are loaded one at a
-time during the commit. Leave enough free space for the archive and staging.
-Older JSON/gzip backups still restore with their original limits. Older app
-versions cannot read version-4 archives; keep an older backup if downgrading.
-
-The compressed version-3 workflow above describes the previous release and the
-legacy codec; it is no longer Android's default export format.

@@ -21,8 +21,6 @@ class ControlledMemories implements MemoryRepository {
   @override
   Future<void> delete(String id, {bool draftOnly = false}) =>
       throw UnimplementedError();
-  @override
-  Future<List<WalkMemory>> exportAll() => throw UnimplementedError();
 }
 
 void main() {
