@@ -66,6 +66,10 @@ pub fn segments_from_geojson(src: &str) -> Result<Vec<Segment>, String> {
             return Err(format!("degenerate edge {id}"));
         }
         let props = &f["properties"];
+        if props.get("coverage_parent").is_some() {
+            segment.coverage_parent =
+                Some(integer(props.get("coverage_parent"), "coverage_parent")?);
+        }
         let has_nodes = props.get("from_node").is_some() || props.get("to_node").is_some();
         if contract.is_some() && !has_nodes {
             return Err("OSM contract requires endpoint node ids".into());

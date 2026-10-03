@@ -184,7 +184,7 @@ void main() {
       );
       try {
         final source = await download.fetch(NearbyArea.around(53.1, 8.8));
-        expect(AreaNetwork.parse(source).edges, hasLength(3));
+        expect(AreaNetwork.parse(source).edges, hasLength(4));
         expect(
           Uri.splitQueryString(await received.future)['data'],
           contains('[timeout:45]'),
@@ -297,7 +297,7 @@ void main() {
         await controller.initialize();
         expect(controller.error, isNull);
         expect(controller.network!.version, area.version);
-        expect(controller.networks.single.geojson, source);
+        expect(controller.networks.single.geojson == area.geojson, isTrue);
       } finally {
         controller?.dispose();
         await store.close();

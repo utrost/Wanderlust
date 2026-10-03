@@ -103,6 +103,16 @@ void main() {
       final settings =
           DeviceLocationSource.settingsFor(TargetPlatform.android)
               as AndroidSettings;
+      for (final interval in [2, 5, 10, 20]) {
+        final request =
+            DeviceLocationSource.settingsFor(
+                  TargetPlatform.android,
+                  intervalSeconds: interval,
+                )
+                as AndroidSettings;
+        expect(request.intervalDuration, Duration(seconds: interval));
+        expect(request.distanceFilter, interval == 2 ? 2 : 5);
+      }
       expect(settings.intervalDuration, const Duration(seconds: 5));
       expect(settings.distanceFilter, 5);
       expect(settings.foregroundNotificationConfig!.enableWakeLock, isTrue);
@@ -111,7 +121,7 @@ void main() {
       final detailed =
           DeviceLocationSource.settingsFor(
                 TargetPlatform.android,
-                detailed: true,
+                intervalSeconds: 2,
               )
               as AndroidSettings;
       expect(detailed.intervalDuration, const Duration(seconds: 2));

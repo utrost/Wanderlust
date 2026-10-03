@@ -14,11 +14,15 @@ The app does not upload your recorded routes to the developer.
 Android and your device's location provider have their own privacy settings.
 
 Map downloads
-When you choose to download a map, the app sends the requested geographic
+When you download a map, the app sends the requested geographic
 bounding box to https://overpass-api.de/api/interpreter over HTTPS. This area
 can reveal your approximate location. The service also receives your IP address
-and an app-identifying user agent as part of the request. Maps are not downloaded
-automatically. The Overpass operator controls its own server logs and retention;
+and an app-identifying user agent as part of the request. Automatic map downloads
+are enabled by default during user-started walks: within
+500 metres of uncovered terrain, a 2 × 2 km map is requested using your available
+connection, including mobile data. Disable “Download maps as I walk” in Settings
+to keep downloads manual. No maps are automatically deleted. The Overpass
+operator controls its own server logs and retention;
 see https://overpass-api.de/ for operator information. Downloaded OpenStreetMap
 streets and scenery are saved locally. No account is required.
 

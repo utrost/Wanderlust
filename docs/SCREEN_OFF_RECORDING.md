@@ -17,10 +17,12 @@ or start a recording service.
 ## Work and battery budget
 
 - High-accuracy location requests use a five-second desired interval and a
-  five-metre distance filter by default. Settings → Detailed GPS requests two
-  seconds / two metres for the next walk, with higher battery use. Actual
+  five-metre distance filter by default. Settings → GPS interval offers 2, 5, 10
+  and 20 seconds for the next walk (2 s uses a two-metre movement filter). Actual
   delivery depends on the location provider.
-- No Wi-Fi lock, network upload, screen wake lock or constant notification update.
+- No Wi-Fi lock, route upload, screen wake lock or constant notification update.
+  Automatic nearby map downloads may use the network during a started walk,
+  including while hidden, unless disabled in Settings.
 - Display clocks and live map matching pause while hidden. On return, matching
   catches up with every unseen fix, retaining overlap for consecutive evidence.
 - Stop cancels the stream and releases the foreground notification and partial

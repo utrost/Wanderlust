@@ -161,7 +161,8 @@ pub fn match_gpx_tracks(
             };
             let mut end = start + 1;
             while end < track.len()
-                && snapped[end].is_some_and(|(e, _)| e == edge)
+                && snapped[end]
+                    .is_some_and(|(e, _)| e == edge || graph.same_coverage_parent(e, edge))
                 && continuous(&track[end - 1], &track[end])
             {
                 end += 1;
@@ -172,12 +173,24 @@ pub fn match_gpx_tracks(
             let mut high = f64::NEG_INFINITY;
             let mut supported = false;
             for i in start..end {
+                let current = graph.segment(snapped[i].unwrap().0);
                 if let Some((along, tangent)) = segment.project(track[i].pos) {
                     low = low.min(along);
                     high = high.max(along);
                     if i > start
-                        && high - low >= required_progress
-                        && direction_supports(track, i, segment, tangent)
+                        && (high - low >= required_progress
+                            || (edge != snapped[i].unwrap().0
+                                && graph.same_coverage_parent(edge, snapped[i].unwrap().0)
+                                && haversine_m(track[start].pos, track[i].pos) >= 4.0))
+                        && direction_supports(
+                            track,
+                            i,
+                            current,
+                            current
+                                .project(track[i].pos)
+                                .map(|(_, t)| t)
+                                .unwrap_or(tangent),
+                        )
                     {
                         supported = true;
                     }
@@ -213,11 +226,11 @@ pub fn match_gpx_tracks(
             // Require geometry near the entire pair, not just its endpoints.
             let middle = LngLat::new((a.pos.lng + b.pos.lng) / 2.0, (a.pos.lat + b.pos.lat) / 2.0);
             let covered = [a.pos, middle, b.pos].iter().all(|&point| {
-                total.walked.iter().any(|&edge| {
-                    graph.segment(edge).polyline.windows(2).any(|line| {
-                        point_to_segment_m(point, line[0], line[1], point.lat.to_radians()) <= 12.0
-                    })
-                })
+                // Proximity to the end of a painted section must not hide a
+                // neighbouring, unconfirmed short section's GPS evidence.
+                graph
+                    .nearest_segment(point, 12.0)
+                    .is_some_and(|(edge, _)| total.walked.contains(&edge))
             });
             if !covered {
                 total.unmatched.push(offset + i);

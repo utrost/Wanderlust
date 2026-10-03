@@ -81,7 +81,32 @@ void main() {
       expect(old.showTime, isTrue);
       expect(old.walkedLineWidth, 3);
       expect(old.mapSizeKm, 4);
-      expect(old.detailedGps, isFalse);
+      expect(old.gpsIntervalSeconds, 5);
+      expect(old.autoDownloadMaps, isTrue);
+      expect(
+        WalkPreferences.fromJson({
+          'gpsIntervalSeconds': 10.0,
+        }).gpsIntervalSeconds,
+        10,
+      );
+      for (final interval in WalkPreferences.gpsIntervals) {
+        final decoded = WalkPreferences.fromJson(
+          WalkPreferences(
+            gpsIntervalSeconds: interval,
+            autoDownloadMaps: false,
+          ).toJson(),
+        );
+        expect(decoded.gpsIntervalSeconds, interval);
+        expect(decoded.autoDownloadMaps, isFalse);
+      }
+      expect(
+        WalkPreferences.fromJson({'gpsIntervalSeconds': 7}).gpsIntervalSeconds,
+        5,
+      );
+      expect(
+        WalkPreferences.fromJson({'detailedGps': true}).gpsIntervalSeconds,
+        2,
+      );
       expect(old.fillSmallGaps, isFalse);
       final corrupt = WalkPreferences.fromJson({
         'walkedLineWidth': double.nan,
@@ -102,7 +127,7 @@ void main() {
           old.copyWith(
             walkedLineWidth: 1.5,
             mapSizeKm: 25,
-            detailedGps: true,
+            gpsIntervalSeconds: 2,
             fillSmallGaps: true,
           ),
         );
@@ -112,10 +137,10 @@ void main() {
         expect(saved.showTime, isTrue);
         expect(saved.walkedLineWidth, 1.5);
         expect(saved.mapSizeKm, 25);
-        expect(saved.detailedGps, isTrue);
+        expect(saved.gpsIntervalSeconds, 2);
         expect(saved.fillSmallGaps, isTrue);
         expect(saved.copyWith(showGps: true).fillSmallGaps, isTrue);
-        expect(saved.copyWith(showGps: true).detailedGps, isTrue);
+        expect(saved.copyWith(showGps: true).gpsIntervalSeconds, 2);
         expect(saved.copyWith(showGps: true).mapSizeKm, 25);
         expect(saved.copyWith(showSamples: true).walkedLineWidth, 1.5);
       } finally {
@@ -125,7 +150,7 @@ void main() {
     },
   );
   testWidgets(
-    'Detailed GPS preserves other settings and rolls back failed writes',
+    'GPS interval preserves other settings and rolls back failed writes',
     (tester) async {
       WalkPreferences? saved;
       var fail = false;
@@ -145,23 +170,28 @@ void main() {
           ),
         ),
       );
-      await tester.scrollUntilVisible(find.text('Detailed GPS'), 250);
-      await tester.tap(find.text('Detailed GPS'));
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('gps-interval')),
+        250,
+      );
+      await tester.drag(
+        find.byKey(const Key('gps-interval')),
+        const Offset(-500, 0),
+      );
       await tester.pumpAndSettle();
-      expect(saved!.detailedGps, isTrue);
+      expect(saved!.gpsIntervalSeconds, 2);
       expect(saved!.showTime, isTrue);
       expect(saved!.walkedLineWidth, 2);
       expect(saved!.mapSizeKm, 6);
       fail = true;
-      await tester.tap(find.text('Detailed GPS'));
+      await tester.drag(
+        find.byKey(const Key('gps-interval')),
+        const Offset(500, 0),
+      );
       await tester.pumpAndSettle();
       expect(
-        tester
-            .widget<SwitchListTile>(
-              find.widgetWithText(SwitchListTile, 'Detailed GPS'),
-            )
-            .value,
-        isTrue,
+        tester.widget<Slider>(find.byKey(const Key('gps-interval'))).value,
+        0,
       );
     },
   );

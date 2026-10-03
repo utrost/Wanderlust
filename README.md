@@ -142,8 +142,7 @@ offline maps; the location-status icon opens GPS details. The bottom icons show
 explored sections, add a memory, open memories, and open saved walks. Long-press
 icons for labels. Start/Stop remains labelled, and map-edge warnings stay visible.
 
-**Settings → Detailed GPS** requests updates every 2 seconds / 2 metres instead
-of 5 seconds / 5 metres, starting with the next walk. It uses more battery.
+**Settings → GPS interval** offers 2, 5, 10 and 20 seconds, starting with the next walk. Five seconds is the default; longer intervals may miss short turns. The movement filter is two metres at 2 s and five metres otherwise.
 Street colouring now requires movement along the street in a compatible direction;
 see [matching changes, regression tests and limits](docs/MATCHING_EVIDENCE.md).
 

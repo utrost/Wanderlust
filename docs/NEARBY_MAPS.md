@@ -23,8 +23,10 @@ without introducing a separate map whose streets cannot receive walk coverage.
 
 ## Data and offline behavior
 
-- Downloads are explicitly initiated by the user. There is no automatic map
-  request on startup, GPS updates, or area selection.
+- The first map is downloaded explicitly. During started walks, automatic
+  2 × 2 km extensions are enabled by default within 500 m of the exposed boundary
+  of all saved maps (or outside them). Settings can disable this. Requests use
+  the available connection, including mobile data; they do not run on app startup.
 - A rounded bounding box goes to `https://overpass-api.de/api/interpreter`.
   Recorded walks and the precise GPS fix are not sent. The screen explains this
   before the download button. OSM attribution and ODbL information remain visible.

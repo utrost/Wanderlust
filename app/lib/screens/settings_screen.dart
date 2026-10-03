@@ -21,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late WalkPreferences value = widget.initial;
   bool busy = false;
   double? _previewWidth;
+  double? _previewInterval;
   String? error;
   Future<void> change(WalkPreferences next) async {
     setState(() {
@@ -129,15 +130,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? null
               : (v) => change(value.copyWith(fillSmallGaps: v)),
         ),
-        SwitchListTile(
-          title: const Text('Detailed GPS'),
-          subtitle: const Text(
-            'Request readings every 2 seconds / 2 metres instead of 5 seconds / 5 metres. Uses more battery. Applies to the next walk; actual updates depend on your phone.',
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'GPS interval: ${WalkPreferences.gpsIntervals[(_previewInterval ?? WalkPreferences.gpsIntervals.indexOf(value.gpsIntervalSeconds).toDouble()).round()]} seconds',
+              ),
+              Slider(
+                key: const Key('gps-interval'),
+                min: 0,
+                max: 3,
+                divisions: 3,
+                value:
+                    _previewInterval ??
+                    WalkPreferences.gpsIntervals
+                        .indexOf(value.gpsIntervalSeconds)
+                        .toDouble(),
+                label:
+                    '${WalkPreferences.gpsIntervals[(_previewInterval ?? WalkPreferences.gpsIntervals.indexOf(value.gpsIntervalSeconds).toDouble()).round()]} s',
+                onChanged: busy
+                    ? null
+                    : (v) => setState(() => _previewInterval = v),
+                onChangeEnd: busy
+                    ? null
+                    : (v) async {
+                        await change(
+                          value.copyWith(
+                            gpsIntervalSeconds:
+                                WalkPreferences.gpsIntervals[v.round()],
+                          ),
+                        );
+                        if (mounted) setState(() => _previewInterval = null);
+                      },
+              ),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('2 s'),
+                  Text('5 s'),
+                  Text('10 s'),
+                  Text('20 s'),
+                ],
+              ),
+              const Text(
+                'Longer intervals may save battery but miss short turns. Applies to the next walk. Actual readings also depend on movement and your phone.',
+              ),
+            ],
           ),
-          value: value.detailedGps,
+        ),
+        SwitchListTile(
+          title: const Text('Download maps as I walk'),
+          subtitle: const Text(
+            'Within 500 m of uncovered terrain, save a 2 × 2 km map automatically. Uses mobile data or Wi-Fi and sends the surrounding area to OpenStreetMap’s Overpass service. Stops when eight maps are saved.',
+          ),
+          value: value.autoDownloadMaps,
           onChanged: busy
               ? null
-              : (v) => change(value.copyWith(detailedGps: v)),
+              : (v) => change(value.copyWith(autoDownloadMaps: v)),
         ),
         const Divider(),
         SwitchListTile(

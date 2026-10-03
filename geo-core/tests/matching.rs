@@ -343,3 +343,46 @@ fn a_single_gps_excursion_does_not_paint_a_side_street() {
     let result = match_gpx_tracks(&graph, &[track], MatchConfig::default());
     assert_eq!(walked_ids(&graph, &result), vec![1]);
 }
+
+#[test]
+fn spatial_grid_matches_exhaustive_distance_search_at_cell_boundaries() {
+    use geo_core::geometry::point_to_segment_m;
+    let grid = build_grid(8, 15., LngLat::new(8.8, 53.1));
+    let reference = grid
+        .graph
+        .segments()
+        .iter()
+        .flat_map(|s| &s.polyline)
+        .map(|p| p.lat)
+        .sum::<f64>()
+        / grid
+            .graph
+            .segments()
+            .iter()
+            .map(|s| s.polyline.len())
+            .sum::<usize>() as f64;
+    for i in 0..300 {
+        let p = LngLat::new(
+            8.8 + dlng((i % 25) as f64 * 6. - 20., 53.1),
+            53.1 + dlat((i / 25) as f64 * 12. - 20.),
+        );
+        let expected = grid
+            .graph
+            .segments()
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                (
+                    i,
+                    s.polyline
+                        .windows(2)
+                        .map(|w| point_to_segment_m(p, w[0], w[1], reference.to_radians()))
+                        .fold(f64::INFINITY, f64::min),
+                )
+            })
+            .filter(|(_, d)| *d <= 25.)
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        let actual = grid.graph.nearest_segment(p, 25.);
+        assert_eq!(actual.map(|v| v.0), expected.map(|v| v.0));
+    }
+}

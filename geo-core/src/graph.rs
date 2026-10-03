@@ -16,6 +16,8 @@ pub struct Segment {
     pub polyline: Vec<LngLat>,
     /// OSM topology when available; never merge distinct nodes by proximity.
     pub node_ids: Option<[u64; 2]>,
+    /// Original street edge for artificial coverage subdivisions.
+    pub coverage_parent: Option<u64>,
 }
 
 impl Segment {
@@ -24,6 +26,7 @@ impl Segment {
             id,
             polyline,
             node_ids: None,
+            coverage_parent: None,
         }
     }
 
@@ -93,6 +96,8 @@ fn node_key(p: LngLat) -> NodeKey {
 pub struct Graph {
     segments: Vec<Segment>,
     ref_lat_rad: f64,
+    spatial: HashMap<(i64, i64), Vec<usize>>,
+    unindexed: Vec<usize>,
     /// For each segment index, its (start_node, end_node) ids.
     seg_nodes: Vec<(usize, usize)>,
     /// node id -> outgoing edges (neighbour_node, segment_index, length_m).
@@ -145,9 +150,38 @@ impl Graph {
             }
         }
 
+        // A small metric grid keeps dense coverage sections cheap to query.
+        let mut spatial: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+        let mut unindexed = Vec::new();
+        for (i, segment) in segments.iter().enumerate() {
+            let coords: Vec<_> = segment
+                .polyline
+                .iter()
+                .map(|p| p.to_xy(ref_lat_rad))
+                .collect();
+            let x0 =
+                (coords.iter().map(|p| p.0).fold(f64::INFINITY, f64::min) / 50.0).floor() as i64;
+            let x1 = (coords.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max) / 50.0).floor()
+                as i64;
+            let y0 =
+                (coords.iter().map(|p| p.1).fold(f64::INFINITY, f64::min) / 50.0).floor() as i64;
+            let y1 = (coords.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max) / 50.0).floor()
+                as i64;
+            if (x1 - x0 + 1).saturating_mul(y1 - y0 + 1) > 4096 {
+                unindexed.push(i);
+                continue;
+            }
+            for x in x0..=x1 {
+                for y in y0..=y1 {
+                    spatial.entry((x, y)).or_default().push(i);
+                }
+            }
+        }
         Self {
             segments,
             ref_lat_rad,
+            spatial,
+            unindexed,
             seg_nodes,
             adjacency,
         }
@@ -161,6 +195,11 @@ impl Graph {
         &self.segments[idx]
     }
 
+    pub fn same_coverage_parent(&self, a: usize, b: usize) -> bool {
+        self.segments[a].coverage_parent.is_some()
+            && self.segments[a].coverage_parent == self.segments[b].coverage_parent
+    }
+
     /// True if two segments share a junction node.
     pub fn adjacent(&self, a: usize, b: usize) -> bool {
         let (a0, a1) = self.seg_nodes[a];
@@ -168,12 +207,37 @@ impl Graph {
         a0 == b0 || a0 == b1 || a1 == b0 || a1 == b1
     }
 
+    fn candidates(&self, p: LngLat, radius: f64) -> Vec<usize> {
+        if !radius.is_finite() || radius < 0.0 {
+            return Vec::new();
+        }
+        let (x, y) = p.to_xy(self.ref_lat_rad);
+        let x0 = ((x - radius) / 50.0).floor() as i64;
+        let x1 = ((x + radius) / 50.0).floor() as i64;
+        let y0 = ((y - radius) / 50.0).floor() as i64;
+        let y1 = ((y + radius) / 50.0).floor() as i64;
+        if (x1 - x0 + 1).saturating_mul(y1 - y0 + 1) > 4096 {
+            return (0..self.segments.len()).collect();
+        }
+        let mut result = self.unindexed.clone();
+        for x in x0..=x1 {
+            for y in y0..=y1 {
+                if let Some(edges) = self.spatial.get(&(x, y)) {
+                    result.extend(edges);
+                }
+            }
+        }
+        result.sort_unstable();
+        result.dedup();
+        result
+    }
+
     /// Nearest segment to `p` within `max_dist_m`. Returns (segment_index,
-    /// distance_m). O(n) scan — fine for the spike; a real deployment swaps in a
-    /// spatial index (R-tree / grid).
+    /// distance_m). Grid candidates retain source order for deterministic ties.
     pub fn nearest_segment(&self, p: LngLat, max_dist_m: f64) -> Option<(usize, f64)> {
         let mut best: Option<(usize, f64)> = None;
-        for (i, seg) in self.segments.iter().enumerate() {
+        for i in self.candidates(p, max_dist_m) {
+            let seg = &self.segments[i];
             let mut d = f64::INFINITY;
             for w in seg.polyline.windows(2) {
                 d = d.min(point_to_segment_m(p, w[0], w[1], self.ref_lat_rad));
@@ -192,8 +256,9 @@ impl Graph {
             return None;
         }
         let best = self.nearest_segment(p, max_dist_m)?;
-        for (i, seg) in self.segments.iter().enumerate() {
-            if i == best.0 {
+        for i in self.candidates(p, best.1 + 3.0) {
+            let seg = &self.segments[i];
+            if i == best.0 || self.same_coverage_parent(i, best.0) {
                 continue;
             }
             let distance = seg

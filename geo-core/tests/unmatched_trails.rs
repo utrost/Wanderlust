@@ -97,3 +97,49 @@ fn short_crossing_waits_for_exit_evidence_without_colouring_side_branch() {
     assert!(full.inferred.contains(&1));
     assert!(!full.walked.contains(&3));
 }
+
+#[test]
+fn artificial_section_boundaries_preserve_motion_evidence_without_crediting_the_whole_parent() {
+    let mut sections = Vec::new();
+    for i in 0..6 {
+        let mut section = Segment::new(
+            i + 1,
+            vec![pos(i as f64 * 15., 0.), pos((i + 1) as f64 * 15., 0.)],
+        );
+        section.coverage_parent = Some(100);
+        sections.push(section);
+    }
+    let graph = Graph::build(sections);
+    let track = points(&[
+        (5., 0.),
+        (12., 0.),
+        (19., 0.),
+        (26., 0.),
+        (33., 0.),
+        (40., 0.),
+    ]);
+    let result = match_gpx_tracks(&graph, &[track], MatchConfig::default());
+    assert_eq!(result.walked, [0, 1, 2].into_iter().collect());
+    assert!(result.inferred.is_empty());
+}
+
+#[test]
+fn painted_neighbours_do_not_hide_a_missing_short_sections_gps_trail() {
+    let graph = Graph::build(vec![
+        Segment::new(1, vec![pos(0., 0.), pos(15., 0.)]),
+        Segment::new(2, vec![pos(15., 0.), pos(30., 0.)]),
+        Segment::new(3, vec![pos(30., 0.), pos(50., 0.)]),
+    ]);
+    let track = points(&[
+        (2., 0.),
+        (7., 0.),
+        (11., 0.),
+        (22., 0.),
+        (34., 0.),
+        (39., 0.),
+        (44., 0.),
+    ]);
+    let result = match_gpx_tracks(&graph, &[track], MatchConfig::default());
+    assert!(!result.walked.contains(&1));
+    assert!(result.unmatched.contains(&3));
+}

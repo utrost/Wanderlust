@@ -88,7 +88,8 @@ paths are culled. Heat counts and location updates do not need to rebuild static
 paths. Labels still lay out in screen coordinates while panning.
 
 A normal recording requests high-accuracy fixes every five seconds with a
-five-metre distance filter; Detailed GPS requests two seconds/two metres. These
+five-metre distance filter; the GPS slider offers 2, 5, 10 and 20 seconds, with a
+two-metre movement filter at 2 s and five metres otherwise. These
 are OS requests, not guaranteed sampling intervals or adaptive sampling. The
 vendored Android geolocator uses platform LocationManager without a Google Play
 Services SDK dependency. User-started recording uses a location foreground
@@ -166,7 +167,9 @@ The native matcher returns `unmatched` pair-end indices into flattened GPX
 points alongside street membership. It excludes unreliable fixes, untimed
 pairs, gaps over 30 seconds, motion above 3 m/s and sub-two-metre jitter, and
 never joins GPX segments. A pair is covered when both endpoints and its midpoint
-lie within 12 metres of matched geometry; otherwise it remains raw GPS evidence.
+have a nearest street within 12 metres that was matched; otherwise it remains
+raw GPS evidence. Merely being near a painted neighbour must not hide a short
+unmatched section.
 
 `UnmatchedTrails` keeps only derived unmatched coordinates, separate from street
 counts. Pair sets are intersected across loaded maps, so one map's coverage
@@ -178,3 +181,27 @@ trace replay on startup; persisting derived trail caches is a future optimisatio
 
 The painter uses a fixed screen-width, dashed grey-green line. Its meaning is
 explained in the existing heatmap legend, without adding text to the main map.
+
+
+### Coverage resolution and automatic extension
+
+`CoverageSections` derives stable 10–20 m pieces (target 15 m) from canonical OSM
+parent edges when maps are loaded. Short original junction pieces remain short.
+Intermediate shape vertices and original endpoint topology are preserved;
+synthetic node IDs reserve the upper half of JSON-safe integers. Saved map
+identity and raw download data remain unchanged. A separate `coverageVersion`
+selects rebuilt memberships instead of mixing coarse and fine counts. Restoring
+an older current-format backup therefore needs no re-download to gain finer heat.
+Artificial boundaries share their parent edge's motion evidence; they are not
+misclassified as ambiguous junctions. The Rust graph's metric grid bounds local
+candidate searches while retaining deterministic ties and exact distances.
+
+`AutomaticMaps` listens only to user-started recording fixes, including hidden
+recording. Fresh, <=25 m accuracy fixes within 500 m of the union boundary trigger
+one 2 km download centred on the fix. Existing overlap seams do not trigger it.
+It keeps selection unchanged, never evicts maps, respects the existing eight-map
+limit, throttles successful attempts for one minute and failures for five minutes.
+Disabling or stopping cancels pending requests; failures leave recording intact.
+Saved maps are refreshed into coverage after a successful save. The first map
+remains explicit. Settings, first-run text and the privacy policy disclose default
+network use; recorded routes are never uploaded.

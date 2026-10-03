@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:wanderlust/data/area_network.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:crypto/crypto.dart';
@@ -46,7 +47,7 @@ void main() {
         expect(await source.mergeWalks([imported], deduplicateTrace: true), 1);
         await a.synchronize(await source.listSaved());
         expect(a.error, isNull);
-        final expected =
+        final expectedParents =
             (jsonDecode(
                       await File(
                         '../data/bremen/evaluation/schlachte.expected.json',
@@ -55,6 +56,7 @@ void main() {
                     as List)
                 .cast<int>()
                 .toSet();
+        final expected = sectionIds(network, expectedParents);
         expect(
           a.counts.length,
           greaterThanOrEqualTo((expected.length * 0.6).floor()),
@@ -133,7 +135,7 @@ void main() {
       final gpx = await File(
         '../data/bremen/evaluation/schlachte.synthetic.gpx',
       ).readAsString();
-      final expected =
+      final expectedParents =
           (jsonDecode(
                     await File(
                       '../data/bremen/evaluation/schlachte.expected.json',
@@ -142,6 +144,7 @@ void main() {
                   as List)
               .cast<int>()
               .toSet();
+      final expected = sectionIds(network, expectedParents);
       // This regex reads our fixed generated fixture, not user-supplied GPX.
       final points =
           RegExp(r'<trkpt lon="([^"]+)" lat="([^"]+)"><time>([^<]+)</time>')
@@ -196,13 +199,13 @@ void main() {
       );
       await store.replaceWalkMatch(
         savedWalk.id,
-        coverage.network!.version,
+        coverage.network!.coverageVersion,
         oldFingerprint,
         {...counts.keys, phantom},
       );
       expect(
         (await store.readCounts(
-          coverage.network!.version,
+          coverage.network!.coverageVersion,
         )).containsKey(phantom),
         isTrue,
       );
@@ -240,4 +243,14 @@ void main() {
         ? 'Requires cargo build --release -p geo-ffi and LD_LIBRARY_PATH=../target/release; enabled in CI.'
         : false,
   );
+}
+
+Set<int> sectionIds(String source, Set<int> parents) {
+  final features =
+      jsonDecode(AreaNetwork.parse(source).geojson)['features'] as List;
+  return {
+    for (final f in features)
+      if (parents.contains(f['properties']['coverage_parent'] ?? f['id']))
+        f['id'] as int,
+  };
 }

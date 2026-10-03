@@ -15,7 +15,7 @@ import 'coverage_store.dart';
 import 'unmatched_trails.dart';
 
 // Bump when matching rules change: old saved traces are then reprocessed once.
-const matchingRevision = 'crossings-trails-v5';
+const matchingRevision = 'sections-15m-v6';
 typedef MatchBatch = Future<List<MatchResult>> Function(String, List<String>);
 
 typedef CoverageFailure = MatchingFailure;
@@ -279,7 +279,9 @@ class CoverageController extends ChangeNotifier {
     return (
       List<AreaNetwork>.unmodifiable(maps.values),
       Map<int, int>.unmodifiable(
-        await _store.readCombinedCounts(maps.keys.toList()),
+        await _store.readCombinedCounts(
+          maps.values.map((m) => m.coverageVersion).toList(),
+        ),
       ),
     );
   }
@@ -376,7 +378,7 @@ class CoverageController extends ChangeNotifier {
           final traceHash = walk.fingerprint ?? _prepare(walk).$2;
           final fingerprint =
               '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}/$traceHash';
-          if (await _store.matchFingerprint(walk.id, area.version) !=
+          if (await _store.matchFingerprint(walk.id, area.coverageVersion) !=
                   fingerprint ||
               !_trails.contains(walk.id, area.version)) {
             final full = walk.isSummary ? await loadWalk!(walk.id) : walk;
@@ -404,7 +406,7 @@ class CoverageController extends ChangeNotifier {
           if (p.$1.points.isEmpty) _trails.put(p.$1, area.version, const []);
           await _store.replaceWalkMatch(
             p.$1.id,
-            area.version,
+            area.coverageVersion,
             p.$3,
             matched[p.$1.id] ?? {},
           );
@@ -414,7 +416,7 @@ class CoverageController extends ChangeNotifier {
       _savedTrailLines = _trails.lines(networks.map((n) => n.version).toList());
       counts = Map<int, int>.unmodifiable(
         await _store.readCombinedCounts(
-          networks.map((map) => map.version).toList(),
+          networks.map((map) => map.coverageVersion).toList(),
         ),
       );
       if (_liveWalk != null &&

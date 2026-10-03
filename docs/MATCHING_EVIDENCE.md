@@ -37,9 +37,10 @@ raw walks, maps and settings are preserved. A real native/SQLite integration
 test seeds an old-revision phantom membership and verifies that it is removed
 without changing the raw fixes.
 
-## Detailed GPS
+## GPS intervals
 
-**Settings → Detailed GPS** requests a two-second interval and two-metre movement
+**Settings → GPS interval** offers 2, 5, 10 and 20 seconds (default 5).
+Two seconds requests a two-metre movement
 filter. Off uses the existing five-second/five-metre policy. The preference is
 stored locally, defaults off for existing installations, and is read when the
 next walk starts. Changing it during a walk does not interrupt the active stream.

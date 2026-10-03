@@ -24,21 +24,21 @@ abstract class LocationSource {
 }
 
 class DeviceLocationSource implements LocationSource {
-  DeviceLocationSource({this.forRecording = true, this.detailedGps});
+  DeviceLocationSource({this.forRecording = true, this.gpsIntervalSeconds});
   final bool forRecording;
-  final bool Function()? detailedGps;
+  final int Function()? gpsIntervalSeconds;
   static const _notificationChannel = MethodChannel('wanderlust/walking');
 
   /// A user-started location service keeps this stream alive with the screen
   /// off. Cancellation releases both GPS and the service's partial wake lock.
   static LocationSettings settingsFor(
     TargetPlatform platform, {
-    bool detailed = false,
+    int intervalSeconds = 5,
   }) => platform == TargetPlatform.android
       ? AndroidSettings(
           accuracy: LocationAccuracy.high,
-          distanceFilter: detailed ? 2 : 5,
-          intervalDuration: Duration(seconds: detailed ? 2 : 5),
+          distanceFilter: intervalSeconds == 2 ? 2 : 5,
+          intervalDuration: Duration(seconds: intervalSeconds),
           foregroundNotificationConfig: const ForegroundNotificationConfig(
             notificationTitle: 'Walk in progress',
             notificationText: 'Recording your route. Tap to return and stop.',
@@ -78,7 +78,7 @@ class DeviceLocationSource implements LocationSource {
   Stream<Position> positions() => Geolocator.getPositionStream(
     locationSettings: settingsFor(
       defaultTargetPlatform,
-      detailed: detailedGps?.call() ?? false,
+      intervalSeconds: gpsIntervalSeconds?.call() ?? 5,
     ),
   );
 }

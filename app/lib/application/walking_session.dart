@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../coverage/coverage_controller.dart';
 import '../coverage/coverage_store.dart';
 import '../maps/area_store.dart';
+import '../maps/automatic_maps.dart';
 import '../recording/walk_history.dart';
 import '../recording/walk_journal.dart';
 import '../recording/walk_recorder.dart';
@@ -27,7 +28,9 @@ class WalkingSession extends ChangeNotifier {
       store: journal,
       location:
           location ??
-          DeviceLocationSource(detailedGps: () => preferences.detailedGps),
+          DeviceLocationSource(
+            gpsIntervalSeconds: () => preferences.gpsIntervalSeconds,
+          ),
       showElapsed: () => preferences.showTime,
       loadHistory: () => history.listSummaries(recover: true),
     );
@@ -45,10 +48,19 @@ class WalkingSession extends ChangeNotifier {
         return saved.isEmpty ? null : maps.readArea(saved.first.version);
       },
     );
+    automaticMaps = AutomaticMaps(
+      store: maps,
+      networks: () => coverage.networks,
+      onSaved: () async {
+        await coverage.refreshMaps();
+        await coverage.synchronize(recorder.savedWalks);
+      },
+    );
     _preferences = PreferencesController(
       store: preferencesStore,
       onApplied: (value) async {
         recorder.refreshDisplayClock();
+        automaticMaps.setEnabled(value.autoDownloadMaps);
         await coverage.setFillSmallGaps(
           value.fillSmallGaps,
           recorder.savedWalks,
@@ -72,7 +84,13 @@ class WalkingSession extends ChangeNotifier {
   }
 
   void _recordingChanged() {
-    if (_closed || !_foreground) return;
+    if (_closed) return;
+    if (recorder.isRecording) {
+      unawaited(automaticMaps.consider(recorder.latestPosition));
+    } else if (automaticMaps.busy) {
+      automaticMaps.cancel();
+    }
+    if (!_foreground) return;
     if (recorder.isRecording) {
       final walk = recorder.recordingSnapshot;
       if (walk != null) coverage.updateLive(walk);
@@ -81,6 +99,7 @@ class WalkingSession extends ChangeNotifier {
     }
   }
 
+  late final AutomaticMaps automaticMaps;
   late final WalkRecorder recorder;
   late final CoverageController coverage;
   bool _closed = false;
@@ -90,10 +109,12 @@ class WalkingSession extends ChangeNotifier {
     _closed = true;
     recorder.removeListener(_recordingChanged);
     _preferences.dispose();
+    automaticMaps.dispose();
     coverage.dispose();
     unawaited(
       Future.wait([
         coverage.settled,
+        automaticMaps.settled,
         _preferences.settled,
       ]).whenComplete(recorder.dispose),
     );

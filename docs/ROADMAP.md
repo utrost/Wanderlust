@@ -300,8 +300,8 @@ explicit schema migrations rather than repeating this reset.
 - Trails preview during recording and are rebuilt from retained recordings on
   startup. Overlapping maps suppress fallback wherever another map supplies
   coverage. Removing a recording removes its derived trail.
-- Finer 10–20 metre coverage portions remain a separate next slice; this change
-  preserves existing street identifiers and coverage counts.
+- Finer 10–20 metre coverage portions were implemented in the following slice
+  below, with derived identifiers and automatic coverage rebuilding.
 
 Validation uses synthetic junction/outage/parallel-route fixtures and a private
 field recording against its three downloaded maps. On the active map, the field
@@ -309,3 +309,17 @@ replay preserves all 68 previously matched sections and identifies 103 safe
 unmatched GPS intervals. Combining all three maps yields 71 sections and 101
 fallback intervals in 21 trails. These are replay results, not ground-truth
 accuracy scores. The private recording, backup and rendering are not committed.
+
+
+### Smaller coverage sections, sampling and automatic maps (implemented)
+
+- Existing and newly downloaded OSM maps gain 10–20 m coverage portions, targeting
+  15 m; shorter junction pieces remain intact. Saved walks rebuild heat locally.
+- GPS interval slider: 2 / 5 / 10 / 20 seconds, default 5, applied next walk.
+- Automatic 2 × 2 km downloads during a walk, default on, within 500 m of uncovered
+  terrain. One request at a time, backoff on failure, eight-map cap, no eviction.
+- First-run and privacy disclosures updated for optional automatic mobile-data use.
+
+Physical-phone checks: confirm all interval requests with the screen off, cross
+an exposed map boundary, verify download-disable cancellation and offline retry,
+and compare the finer heat plus GPS fallback against the actual walked route.

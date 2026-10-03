@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'map_scenery.dart';
 import 'map_place.dart';
+import 'coverage_sections.dart';
 
 class AreaEdge {
   const AreaEdge(this.id, this.points, this.name);
@@ -22,8 +23,9 @@ class AreaNetwork {
     this.edges,
     this.attribution,
     this.scenery,
-    this.places,
-  );
+    this.places, [
+    this._coverageRevision,
+  ]);
   final String geojson;
   final String areaId;
   final String name;
@@ -33,6 +35,9 @@ class AreaNetwork {
   final String attribution;
   final List<MapScenery> scenery;
   final List<MapPlace> places;
+  final String? _coverageRevision;
+  String get coverageVersion =>
+      _coverageRevision == null ? version : '$version/$_coverageRevision';
   late final Set<int> edgeIds = edges.map((e) => e.id).toSet();
 
   factory AreaNetwork.parse(String source) {
@@ -50,6 +55,7 @@ class AreaNetwork {
         bbox[1] >= bbox[3]) {
       throw const FormatException('Invalid area bounds');
     }
+    if (CoverageSections.refine(json)) source = jsonEncode(json);
     final ids = <int>{};
     final edges = (json['features'] as List)
         .map((value) {
@@ -111,6 +117,7 @@ class AreaNetwork {
                 : [])
           if (MapPlace.tryParse(p) case final place?) place,
       ],
+      meta['coverage_sections'] as String?,
     );
   }
 
@@ -137,6 +144,7 @@ class AreaNetwork {
     attribution,
     scenery,
     places,
+    _coverageRevision,
   );
 
   bool contains(Offset coordinate) =>

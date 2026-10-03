@@ -15,17 +15,17 @@ class CoverageRepository implements CoverageStore {
       final existing = await txn.query(
         'coverage_network',
         where: 'version = ?',
-        whereArgs: [network.version],
+        whereArgs: [network.coverageVersion],
       );
       if (existing.isNotEmpty) return;
       await txn.insert('coverage_network', {
-        'version': network.version,
+        'version': network.coverageVersion,
         'area_id': network.areaId,
       });
       final batch = txn.batch();
       for (final id in network.edgeIds) {
         batch.insert('coverage_edge', {
-          'network_version': network.version,
+          'network_version': network.coverageVersion,
           'edge_id': id,
         });
       }

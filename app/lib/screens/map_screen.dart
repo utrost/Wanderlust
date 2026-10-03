@@ -329,6 +329,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                             _mapToolbar(),
                             const SizedBox(height: 8),
                             _locationControl(),
+                            ListenableBuilder(
+                              listenable: _session.automaticMaps,
+                              builder: (context, _) =>
+                                  _session.automaticMaps.message == null
+                                  ? const SizedBox.shrink()
+                                  : IconButton(
+                                      tooltip: _session.automaticMaps.message,
+                                      onPressed: _showMaps,
+                                      icon: Icon(
+                                        _session.automaticMaps.busy
+                                            ? Icons.downloading_outlined
+                                            : Icons.cloud_off_outlined,
+                                      ),
+                                    ),
+                            ),
                             const Spacer(),
                             ListenableBuilder(
                               listenable: _recorder,

@@ -27,7 +27,7 @@ class MapWelcome extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Maps and walks stay on your phone. You only need internet to download a map.',
+                'Walks stay on your phone. Nearby maps download as you walk using Wi-Fi or mobile data. You can turn this off in Settings.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),

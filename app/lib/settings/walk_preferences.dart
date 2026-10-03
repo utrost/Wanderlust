@@ -5,7 +5,8 @@ class WalkPreferences {
     this.showGps = false,
     this.showStreetNames = true,
     this.showMemories = true,
-    this.detailedGps = false,
+    this.gpsIntervalSeconds = 5,
+    this.autoDownloadMaps = true,
     this.fillSmallGaps = false,
     this.walkedLineWidth = 3,
     this.mapSizeKm = 4,
@@ -15,7 +16,9 @@ class WalkPreferences {
   final bool showGps;
   final bool showStreetNames;
   final bool showMemories;
-  final bool detailedGps;
+  static const gpsIntervals = [2, 5, 10, 20];
+  final int gpsIntervalSeconds;
+  final bool autoDownloadMaps;
   final bool fillSmallGaps;
 
   /// Maximum screen-space stroke width; keeps zoomed-in coverage legible.
@@ -28,7 +31,8 @@ class WalkPreferences {
     bool? showGps,
     bool? showStreetNames,
     bool? showMemories,
-    bool? detailedGps,
+    int? gpsIntervalSeconds,
+    bool? autoDownloadMaps,
     bool? fillSmallGaps,
     double? walkedLineWidth,
     int? mapSizeKm,
@@ -38,7 +42,8 @@ class WalkPreferences {
     showGps: showGps ?? this.showGps,
     showStreetNames: showStreetNames ?? this.showStreetNames,
     showMemories: showMemories ?? this.showMemories,
-    detailedGps: detailedGps ?? this.detailedGps,
+    gpsIntervalSeconds: gpsIntervalSeconds ?? this.gpsIntervalSeconds,
+    autoDownloadMaps: autoDownloadMaps ?? this.autoDownloadMaps,
     fillSmallGaps: fillSmallGaps ?? this.fillSmallGaps,
     walkedLineWidth: walkedLineWidth ?? this.walkedLineWidth,
     mapSizeKm: mapSizeKm ?? this.mapSizeKm,
@@ -50,7 +55,8 @@ class WalkPreferences {
     'showGps': showGps,
     'showStreetNames': showStreetNames,
     'showMemories': showMemories,
-    'detailedGps': detailedGps,
+    'gpsIntervalSeconds': gpsIntervalSeconds,
+    'autoDownloadMaps': autoDownloadMaps,
     'fillSmallGaps': fillSmallGaps,
     'walkedLineWidth': walkedLineWidth,
     'mapSizeKm': mapSizeKm,
@@ -64,7 +70,10 @@ class WalkPreferences {
       showGps: json['showGps'] == true,
       showStreetNames: json['showStreetNames'] != false,
       showMemories: json['showMemories'] != false,
-      detailedGps: json['detailedGps'] == true,
+      gpsIntervalSeconds: gpsIntervals.contains(json['gpsIntervalSeconds'])
+          ? (json['gpsIntervalSeconds'] as num).toInt()
+          : (json['detailedGps'] == true ? 2 : 5),
+      autoDownloadMaps: json['autoDownloadMaps'] != false,
       fillSmallGaps: json['fillSmallGaps'] == true,
       walkedLineWidth:
           width is num && width.isFinite && width >= 1 && width <= 6
