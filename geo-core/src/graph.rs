@@ -249,20 +249,89 @@ impl Graph {
         best
     }
 
-    /// Closest short section belonging to an already established street run.
-    pub fn nearest_on_parent(&self, p: LngLat, anchor: usize, radius: f64) -> Option<(usize, f64)> {
-        self.candidates(p, radius)
+    /// Bounded nearby candidates, ordered deterministically for sequence matching.
+    pub fn nearby_segments(&self, point: LngLat, radius: f64) -> Vec<(usize, f64)> {
+        let mut found: Vec<_> = self
+            .candidates(point, radius)
             .into_iter()
-            .filter(|&i| i == anchor || self.same_coverage_parent(i, anchor))
             .filter_map(|i| {
                 let distance = self.segments[i]
                     .polyline
                     .windows(2)
-                    .map(|w| point_to_segment_m(p, w[0], w[1], self.ref_lat_rad))
+                    .map(|p| point_to_segment_m(point, p[0], p[1], self.ref_lat_rad))
                     .fold(f64::INFINITY, f64::min);
                 (distance <= radius).then_some((i, distance))
             })
-            .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)))
+            .collect();
+        found.sort_by(|a, b| {
+            a.1.total_cmp(&b.1)
+                .then(self.segments[a.0].id.cmp(&self.segments[b.0].id))
+        });
+        found.truncate(8);
+        found
+    }
+
+    /// Network distance between projected observations, bounded by walking budget.
+    /// Sparse search avoids allocating a full-city table for every transition.
+    pub fn projected_distance(
+        &self,
+        from: usize,
+        to: usize,
+        start: LngLat,
+        end: LngLat,
+        budget: f64,
+    ) -> Option<f64> {
+        let a = self.segment(from);
+        let b = self.segment(to);
+        let x = a.project(start)?.0.min(a.length_m());
+        let y = b.project(end)?.0.min(b.length_m());
+        if from == to {
+            return ((x - y).abs() <= budget).then_some((x - y).abs());
+        }
+        let mut dist = HashMap::new();
+        let mut heap = BinaryHeap::new();
+        for (node, cost) in [
+            (self.seg_nodes[from].0, x),
+            (self.seg_nodes[from].1, a.length_m() - x),
+        ] {
+            if cost <= budget && cost < *dist.get(&node).unwrap_or(&f64::INFINITY) {
+                dist.insert(node, cost);
+                heap.push(HeapEntry { node, cost });
+            }
+        }
+        let mut best = f64::INFINITY;
+        let mut visited = 0;
+        while let Some(HeapEntry { node, cost }) = heap.pop() {
+            if cost > *dist.get(&node).unwrap_or(&f64::INFINITY) || cost > best {
+                continue;
+            }
+            visited += 1;
+            if visited > 2048 {
+                return None;
+            }
+            for (target, tail) in [
+                (self.seg_nodes[to].0, y),
+                (self.seg_nodes[to].1, b.length_m() - y),
+            ] {
+                if node == target && cost + tail <= budget {
+                    best = best.min(cost + tail);
+                }
+            }
+            for &(next, edge, length) in &self.adjacency[node] {
+                if edge == from || edge == to {
+                    continue;
+                }
+                let next_cost = cost + length;
+                if next_cost <= budget && next_cost < *dist.get(&next).unwrap_or(&f64::INFINITY) {
+                    dist.insert(next, next_cost);
+                    heap.push(HeapEntry {
+                        node: next,
+                        cost: next_cost,
+                    });
+                }
+            }
+        }
+        best.is_finite().then_some(best)
     }
 
     /// Avoid painting either candidate when the nearest two streets are within

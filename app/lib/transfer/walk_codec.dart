@@ -221,9 +221,12 @@ class WalkCodec {
       if (!missing.contains(i)) {
         b.write('<time>${p.timestamp.toUtc().toIso8601String()}</time>');
       }
-      b.writeln(
-        '<extensions><wl:accuracy>${p.accuracy}</wl:accuracy></extensions></trkpt>',
-      );
+      if (p.hasAccuracy || p.accuracy > 0) {
+        b.write(
+          '<extensions><wl:accuracy>${p.accuracy}</wl:accuracy></extensions>',
+        );
+      }
+      b.writeln('</trkpt>');
     }
     return (b..writeln('</trkseg></trk></gpx>')).toString();
   }

@@ -145,6 +145,31 @@ Field replay (4 October): the supplied three-walk backup produces four eligible 
 
 ### Sequence evidence and final display resolution
 
-Brief GPS excursions can be resolved using an established street run before the excursion and a return to the same canonical street afterwards. This uses the existing 25 m snap radius and 30-second continuity limit, cannot bridge outages or entirely ambiguous parallel runs, and preserves sustained detours supported by successive fixes. Artificial 15 m section boundaries retain parent-street continuity.
+The sequence model scores up to eight nearby street candidates and an unresolved
+state per fix. Forward/backward inference considers GPS accuracy, movement
+heading and projected distance through the connected street graph. Later clear
+fixes can resolve earlier ambiguous choices. Disconnected crossings cannot act
+as junctions; artificial 15 m sections retain parent-street continuity. A relative
+cost margin rejects unresolved alternatives, while clear local evidence can
+anchor a sequence. These costs are not calibrated probabilities.
 
-After native matching, automatic gap routing and explicit confirmations, a final display pass removes redundant fallback GPS pairs only when the nearest street at both endpoints and the midpoint is already covered. It uses the same 25 m corridor as snapping. A closer unpainted parallel street, missing intermediate section or off-network trace remains visible. This pass never adds heatmap credit; the raw GPS is unchanged and remains available in review. A 50 m spatial index bounds nearby geometry searches. Cache revision `sequence-display-v7` rebuilds saved results.
+Continuous runs stop at GPX boundaries, reversed/missing time transitions,
+intervals over 30 seconds, implausible speed or accuracy worse than 50 m.
+Moderately poorer accuracy requires more sustained along-street progress before
+credit. Existing short-connector safeguards and bounded longer-outage routing
+remain separate stages. Raw GPS is never changed.
+
+Live previews recompute the full sequence on the worker, replacing provisional
+coverage instead of accumulating earlier guesses. Hidden previews remain paused.
+GPX round-trips preserve unknown accuracy instead of inventing a zero-error fix.
+
+Validation includes parallel ambiguity resolved by later evidence, sustained
+poor-accuracy movement versus jitter, 2/5/10/20-second sampling and disconnected
+crossings, plus all earlier turn/branch/gap regressions. All four synthetic Bremen
+evaluation configurations pass with zero false street credits. Private field
+replays show both additional matches and more conservative choices; section
+counts alone do not establish correctness. A 694-fix replay took approximately
+40 ms for native matching on the development host, excluding graph loading and
+Flutter work. Phone performance still needs field testing.
+
+After native matching, automatic gap routing and explicit confirmations, a final display pass removes redundant fallback GPS pairs only when the nearest street at both endpoints and the midpoint is already covered. It uses the same 25 m corridor as snapping. A closer unpainted parallel street, missing intermediate section or off-network trace remains visible. This pass never adds heatmap credit; the raw GPS is unchanged and remains available in review. A 50 m spatial index bounds nearby geometry searches. Cache revision `sequence-model-v8` rebuilds saved results.

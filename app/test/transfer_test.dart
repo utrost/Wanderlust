@@ -88,8 +88,29 @@ void main() {
       expect('<time>'.allMatches(gpx).length, 2);
       final copy = WalkCodec.importGpx(gpx);
       expect(copy.traceKey, walk.traceKey);
+      expect(copy.points.map((p) => p.hasAccuracy), [true, false, false]);
     },
   );
+
+  test('GPX retains explicit zero and positive device accuracy', () {
+    final zero = WalkCodec.importGpx(segmentedGpx.replaceAll('4.5', '0.0'));
+    final copy = WalkCodec.importGpx(WalkCodec.exportGpx(zero));
+    expect(copy.points.first.hasAccuracy, isTrue);
+    expect(copy.points.first.accuracy, 0);
+    final point = fix(0);
+    expect(point.accuracy, greaterThan(0));
+    final recorded = SavedWalk(
+      1,
+      point.timestamp,
+      point.timestamp,
+      'completed',
+      [point],
+    );
+    expect(
+      WalkCodec.importGpx(WalkCodec.exportGpx(recorded)).points.first.accuracy,
+      point.accuracy,
+    );
+  });
 
   test('invalid GPX is rejected without silently dropping bad fixes', () {
     for (final gpx in [

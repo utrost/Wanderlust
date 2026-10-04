@@ -174,8 +174,8 @@ unmatched section.
 `UnmatchedTrails` keeps only derived unmatched coordinates, separate from street
 counts. Pair sets are intersected across loaded maps, so one map's coverage
 suppresses another map's fallback. Saved trails are rebuilt once per controller
-lifetime; live tails replace overlapping preview data as crossing evidence
-arrives. The matching revision invalidates old stored coverage. No new database
+lifetime; live previews replace the complete provisional result as sequence
+evidence arrives. The matching revision invalidates old stored coverage. No new database
 schema or private-data backup format is required. This currently costs a saved
 trace replay on startup; persisting derived trail caches is a future optimisation.
 
@@ -205,3 +205,13 @@ Disabling or stopping cancels pending requests; failures leave recording intact.
 Saved maps are refreshed into coverage after a successful save. The first map
 remains explicit. Settings, first-run text and the privacy policy disclose default
 network use; recorded routes are never uploaded.
+
+### Sequence-based street assignment
+
+`geo-core/src/sequence.rs` owns candidate scoring and forward/backward inference.
+It uses bounded graph-distance searches rather than independent nearest-fix
+choices. `matcher.rs` owns motion-supported coverage and connector safeguards;
+longer GPS-outage estimates remain in the shared Dart gap-routing service.
+The live controller recomputes full sequences in the worker so provisional
+choices can be retracted. Raw recordings and GPX remain independent of derived
+coverage. See MATCHING_EVIDENCE.md for thresholds and evaluation limits.

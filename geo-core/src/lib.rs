@@ -29,6 +29,7 @@ pub mod gpx;
 pub mod graph;
 pub mod matcher;
 pub mod schema;
+mod sequence;
 
 pub use geometry::LngLat;
 pub use graph::{Graph, Segment};

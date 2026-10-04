@@ -47,7 +47,7 @@ String decorated() => OsmNetwork.normalize(
 void main() {
   sqfliteFfiInit();
   test(
-    'returning from screen-off matches all unseen fixes, not just last 80',
+    'returning from screen-off recomputes the complete live sequence',
     () async {
       final dir = await Directory.systemTemp.createTemp('wanderlust-pocket-');
       final store = SqliteWalkStore(
@@ -88,12 +88,12 @@ void main() {
         expect(batches, [100]);
         controller.setPreviewActive(true);
         await drain();
-        expect(batches, [100, 280]);
+        expect(batches, [100, 300]);
         expect(controller.displayCounts, {1: 1});
         expect(controller.counts, isEmpty);
         controller.updateLive(snapshot(301));
         await drain();
-        expect(batches.last, 81);
+        expect(batches.last, 301);
       } finally {
         controller.dispose();
         await controller.settled;

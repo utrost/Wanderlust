@@ -9,6 +9,7 @@ use std::collections::HashSet;
 
 use crate::geometry::{haversine_m, point_to_segment_m, LngLat};
 use crate::graph::Graph;
+use crate::sequence::continuous;
 
 /// Tunables for a matching run.
 #[derive(Debug, Clone, Copy)]
@@ -140,19 +141,7 @@ pub fn match_gpx_tracks(
     let mut total = MatchResult::default();
     let mut direct = HashSet::new();
     for track in tracks {
-        // Snap once per fix. Single-fix excursions onto another street are
-        // common with walking GPS and must not become permanent coverage.
-        let mut snapped: Vec<_> = track
-            .iter()
-            .map(|p| {
-                if reliable(p) {
-                    graph.nearest_unambiguous_segment(p.pos, cfg.snap_radius_m)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        resolve_street_runs(graph, track, &mut snapped, cfg.snap_radius_m);
+        let snapped = crate::sequence::match_sequence(graph, track, cfg.snap_radius_m);
         let mut confirmed = vec![false; track.len()];
         let mut start = 0;
         while start < track.len() {
@@ -169,7 +158,18 @@ pub fn match_gpx_tracks(
                 end += 1;
             }
             let segment = graph.segment(edge);
-            let required_progress = (segment.length_m() * 0.2).clamp(2.0, 4.0);
+            let uncertainty = track[start..end]
+                .iter()
+                .filter_map(|p| p.accuracy_m)
+                .fold(0.0_f64, f64::max);
+            let required_progress =
+                (segment.length_m() * 0.2)
+                    .clamp(2.0, 4.0)
+                    .max(if uncertainty > 25.0 {
+                        uncertainty * 0.5
+                    } else {
+                        0.0
+                    });
             let mut low = f64::INFINITY;
             let mut high = f64::NEG_INFINITY;
             let mut supported = false;
@@ -245,73 +245,6 @@ pub fn match_gpx_tracks(
 
 /// Only infer between consecutive confirmed anchors within this GPX segment.
 /// Never join unrelated walks or bridge bad accuracy, outages or speed jumps.
-/// Use evidence before AND after a brief excursion to keep a walk on the same
-/// street. Never resolve an entirely ambiguous parallel run or bridge an outage.
-fn resolve_street_runs(
-    graph: &Graph,
-    track: &[crate::gpx::TrackPoint],
-    snapped: &mut [Option<(usize, f64)>],
-    radius: f64,
-) {
-    let observations = snapped.to_vec();
-    for start in 0..track.len().saturating_sub(2) {
-        let Some((anchor, _)) = observations[start] else {
-            continue;
-        };
-        // Require established movement before an excursion, not one lucky fix.
-        if start == 0
-            || !continuous(&track[start - 1], &track[start])
-            || !observations[start - 1]
-                .is_some_and(|(edge, _)| edge == anchor || graph.same_coverage_parent(edge, anchor))
-        {
-            continue;
-        }
-        for end in start + 1..track.len().min(start + 61) {
-            if !continuous(&track[end - 1], &track[end]) {
-                break;
-            }
-            if let (Some(a), Some(b)) = (track[start].time, track[end].time) {
-                if (b - a).num_milliseconds() > 30_000 {
-                    break;
-                }
-            }
-            let Some((last, _)) = observations[end] else {
-                continue;
-            };
-            if last != anchor && !graph.same_coverage_parent(last, anchor) {
-                continue;
-            }
-            if end > start + 1 {
-                // Preserve a real, sustained detour even if it returns quickly.
-                let sustained_detour =
-                    observations[start + 1..end]
-                        .windows(2)
-                        .any(|pair| match (pair[0], pair[1]) {
-                            (Some((a, _)), Some((b, _))) => {
-                                a != anchor
-                                    && !graph.same_coverage_parent(a, anchor)
-                                    && (a == b || graph.same_coverage_parent(a, b))
-                            }
-                            _ => false,
-                        });
-                if sustained_detour {
-                    break;
-                }
-                let replacements: Option<Vec<_>> = track[start + 1..end]
-                    .iter()
-                    .map(|p| graph.nearest_on_parent(p.pos, anchor, radius))
-                    .collect();
-                if let Some(replacements) = replacements {
-                    for (offset, candidate) in replacements.into_iter().enumerate() {
-                        snapped[start + 1 + offset] = Some(candidate);
-                    }
-                }
-            }
-            break;
-        }
-    }
-}
-
 fn interpolate_gaps(
     graph: &Graph,
     track: &[crate::gpx::TrackPoint],
@@ -395,12 +328,6 @@ fn reliable(point: &crate::gpx::TrackPoint) -> bool {
     point.accuracy_m.is_none_or(|metres| metres <= 25.0)
 }
 
-fn continuous(a: &crate::gpx::TrackPoint, b: &crate::gpx::TrackPoint) -> bool {
-    reliable(a)
-        && reliable(b)
-        && (continuous_seconds(a, b).is_some() || (a.time.is_none() && b.time.is_none()))
-}
-
 /// Estimate direction from spatial separation, not consecutive sample count.
 /// This remains conservative when Detailed GPS produces many nearby readings.
 /// Backward-only context gives the same decision during live and saved matching.
@@ -417,7 +344,7 @@ fn direction_supports(
         // Small sample-to-sample jumps can be GPS noise. Direction uses a wider
         // baseline; preserve time breaks and reject gross jumps, while direct
         // confirmation and gap filling retain their stricter speed checks.
-        if !reliable(&track[j]) || !reliable(&track[j + 1]) {
+        if !crate::sequence::usable(&track[j]) || !crate::sequence::usable(&track[j + 1]) {
             break;
         }
         if track[j].time.is_some()
