@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:wanderlust/recording/activity_type.dart';
 import 'package:wanderlust/recording/walk_recorder.dart';
 import 'package:wanderlust/recording/walk_store.dart';
 
@@ -37,7 +38,10 @@ class MemoryStore implements WalkStore {
   final statuses = <int, String>{};
   bool failAppend = false;
   @override
-  Future<int> begin(DateTime start) async {
+  Future<int> begin(
+    DateTime start, {
+    WalkActivity activity = WalkActivity.walk,
+  }) async {
     final id = ++nextId;
     starts[id] = start;
     points[id] = [];

@@ -5,9 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../transfer/walk_codec.dart';
+import 'activity_type.dart';
+import 'location_watchdog.dart';
 import 'saved_walk.dart';
 import 'walk_distance.dart';
-import 'location_watchdog.dart';
 import 'walk_journal.dart';
 
 enum RecorderError {
@@ -90,6 +91,7 @@ class WalkRecorder extends ChangeNotifier {
     required WalkStore store,
     DateTime Function()? now,
     this.showElapsed,
+    this.activityType,
     this.loadHistory,
   }) : _location = location ?? DeviceLocationSource(),
        _store = store,
@@ -98,6 +100,8 @@ class WalkRecorder extends ChangeNotifier {
   Future<List<SavedWalk>> _history() =>
       loadHistory?.call() ?? _store.recoverAndList();
   final bool Function()? showElapsed;
+  final WalkActivity Function()? activityType;
+  WalkActivity _activity = WalkActivity.walk;
   final LocationSource _location;
   final WalkStore _store;
   final DateTime Function() _now;
@@ -136,6 +140,7 @@ class WalkRecorder extends ChangeNotifier {
           null,
           'recording',
           List.unmodifiable(_points),
+          activity: _activity,
         );
   double get distanceMeters => _distance.meters;
   Duration get elapsed => _startedAt == null
@@ -204,7 +209,8 @@ class WalkRecorder extends ChangeNotifier {
       if (lastError != null || _disposed || !_foreground) return false;
       final startedAt = _now();
       try {
-        _walkId = await _store.begin(startedAt);
+        _activity = activityType?.call() ?? WalkActivity.walk;
+        _walkId = await _store.begin(startedAt, activity: _activity);
       } catch (_) {
         lastError = RecorderError.storageFailed;
         return false;
@@ -216,7 +222,7 @@ class WalkRecorder extends ChangeNotifier {
         return false;
       }
       _points.clear();
-      _distance = WalkDistance();
+      _distance = WalkDistance(maxSpeed: _activity.maxSpeed);
       _startedAt = startedAt;
       _endedAt = null;
       _writes = Future.value();
@@ -334,9 +340,19 @@ class WalkRecorder extends ChangeNotifier {
 
   /// Raw fixes retain timestamps and measured horizontal accuracy. Accuracy is
   /// a namespaced extension, not GPX hdop (which has different units).
-  String toGpx() => pointsToGpx(_points);
-  static String pointsToGpx(List<Position> points) => WalkCodec.exportGpx(
-    SavedWalk(0, DateTime.utc(1970), null, 'completed', points),
+  String toGpx() => pointsToGpx(_points, activity: _activity);
+  static String pointsToGpx(
+    List<Position> points, {
+    WalkActivity activity = WalkActivity.walk,
+  }) => WalkCodec.exportGpx(
+    SavedWalk(
+      0,
+      DateTime.utc(1970),
+      null,
+      'completed',
+      points,
+      activity: activity,
+    ),
   );
 
   Future<void> refreshSavedWalks() async {

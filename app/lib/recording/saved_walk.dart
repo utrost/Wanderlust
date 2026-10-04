@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'activity_type.dart';
+
 class SavedWalk {
   const SavedWalk(
     this.id,
@@ -11,6 +13,7 @@ class SavedWalk {
     this.status,
     this.points, {
     this.uid = '',
+    this.activity = WalkActivity.walk,
     this.segmentStarts = const [],
     this.untimed = const [],
     this.favourite = false,
@@ -18,6 +21,7 @@ class SavedWalk {
     this.storedPointCount,
     this.fingerprint,
   });
+  final WalkActivity activity;
   final int? storedPointCount;
   final String? fingerprint;
   int get pointCount => storedPointCount ?? points.length;
@@ -57,6 +61,21 @@ class SavedWalk {
         .toString();
   }
 
+  SavedWalk withActivity(WalkActivity value) => SavedWalk(
+    id,
+    startedAt,
+    endedAt,
+    status,
+    points,
+    uid: uid,
+    activity: value,
+    segmentStarts: segmentStarts,
+    untimed: untimed,
+    favourite: favourite,
+    confirmedSections: confirmedSections,
+    storedPointCount: storedPointCount,
+  );
+
   SavedWalk withFavourite(bool value) => SavedWalk(
     id,
     startedAt,
@@ -64,6 +83,7 @@ class SavedWalk {
     status,
     points,
     uid: uid,
+    activity: activity,
     segmentStarts: segmentStarts,
     untimed: untimed,
     favourite: value,
@@ -77,6 +97,7 @@ class SavedWalk {
     return {
       if (includeFavourite) 'favourite': favourite,
       'uid': uid,
+      'activity': activity.name,
       'confirmedSections': confirmedSections,
       'startedAt': startedAt.toUtc().toIso8601String(),
       'endedAt': endedAt?.toUtc().toIso8601String(),

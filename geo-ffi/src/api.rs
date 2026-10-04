@@ -23,6 +23,15 @@ impl Matcher {
     /// Match a GPX track, returning traversed segments (once each).
     pub fn match_gpx(&self, gpx_xml: &str, cfg: MatchConfig) -> Result<MatchResult, String> {
         let tracks = gpx::parse_tracks(gpx_xml)?;
+        let cycling = gpx::is_cycling(gpx_xml)?;
+        let cfg = if cycling {
+            MatchConfig {
+                max_speed_mps: 15.0,
+                ..cfg
+            }
+        } else {
+            cfg
+        };
         Ok(geo_core::matcher::match_gpx_tracks(
             &self.graph,
             &tracks,

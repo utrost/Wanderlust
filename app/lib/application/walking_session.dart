@@ -31,6 +31,7 @@ class WalkingSession extends ChangeNotifier {
           DeviceLocationSource(
             gpsIntervalSeconds: () => preferences.gpsIntervalSeconds,
           ),
+      activityType: () => preferences.activity,
       showElapsed: () => preferences.showTime,
       loadHistory: () => history.listSummaries(recover: true),
     );

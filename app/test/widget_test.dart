@@ -1,19 +1,22 @@
 import 'dart:async';
-import 'package:wanderlust/widgets/area_map.dart';
-import 'memory_fakes.dart';
-import 'package:wanderlust/memories/memory_repository.dart';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'recording_test.dart' show fix, FakeLocation;
+import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:wanderlust/screens/map_screen.dart';
-import 'package:wanderlust/recording/walk_store.dart';
 import 'package:wanderlust/data/area_network.dart';
 import 'package:wanderlust/maps/area_store.dart';
+import 'package:wanderlust/memories/memory_repository.dart';
+import 'package:wanderlust/recording/activity_type.dart';
+import 'package:wanderlust/recording/walk_store.dart';
+import 'package:wanderlust/screens/map_screen.dart';
 import 'package:wanderlust/settings/walk_preferences.dart';
+import 'package:wanderlust/widgets/area_map.dart';
+
 import 'coverage_test.dart' show networkJson;
+import 'memory_fakes.dart';
 import 'nearby_maps_test.dart' show smallNetwork;
+import 'recording_test.dart' show fix, FakeLocation;
 
 class BootStore extends SqliteWalkStore {
   final _memories = FakeMemoryStore();
@@ -30,7 +33,10 @@ class BootStore extends SqliteWalkStore {
   WalkPreferences preferences = const WalkPreferences();
   bool recording = false;
   @override
-  Future<int> begin(DateTime startedAt) async {
+  Future<int> begin(
+    DateTime startedAt, {
+    WalkActivity activity = WalkActivity.walk,
+  }) async {
     recording = true;
     return 1;
   }

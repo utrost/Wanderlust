@@ -1,25 +1,26 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wanderlust/maps/area_store.dart';
 import 'package:wanderlust/memories/memory.dart';
-import 'package:wanderlust/transfer/backup_contents.dart';
-import 'backup_fixture.dart';
 import 'package:wanderlust/memories/memory_repository.dart';
+import 'package:wanderlust/recording/activity_type.dart';
 import 'package:wanderlust/recording/saved_walk.dart';
 import 'package:wanderlust/recording/walk_history.dart';
 import 'package:wanderlust/screens/walk_library_screen.dart';
 import 'package:wanderlust/settings/preferences_store.dart';
 import 'package:wanderlust/settings/walk_preferences.dart';
+import 'package:wanderlust/transfer/backup_contents.dart';
 import 'package:wanderlust/transfer/backup_data.dart';
 import 'package:wanderlust/transfer/walk_codec.dart';
 import 'package:wanderlust/transfer/walk_files.dart';
 import 'package:wanderlust/transfer/walk_importer.dart';
 import 'package:wanderlust/transfer/walk_transfer.dart';
 
+import 'backup_fixture.dart';
 import 'coverage_test.dart' show networkJson;
 import 'memory_fakes.dart';
 import 'transfer_test.dart' show segmentedGpx;
@@ -47,6 +48,8 @@ class LibraryStore
 
   final walks = <SavedWalk>[];
   bool failFavourite = false;
+  @override
+  Future<void> setActivity(String uid, WalkActivity activity) async {}
   @override
   Future<void> setFavourite(String uid, bool value) async {
     if (failFavourite) throw StateError('Disk full');

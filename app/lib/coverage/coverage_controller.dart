@@ -6,8 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/area_network.dart';
-import '../geo/geo_core_ffi.dart';
 import '../geo/coverage_resolution.dart';
+import '../geo/geo_core_ffi.dart';
 import '../geo/matching_session.dart';
 import '../geo/matching_worker.dart';
 import '../recording/saved_walk.dart';
@@ -17,7 +17,7 @@ import 'coverage_store.dart';
 import 'unmatched_trails.dart';
 
 // Bump when matching rules change: old saved traces are then reprocessed once.
-const matchingRevision = 'sequence-model-v8';
+const matchingRevision = 'activity-model-v9';
 typedef MatchBatch = Future<List<MatchResult>> Function(String, List<String>);
 
 typedef CoverageFailure = MatchingFailure;
@@ -395,7 +395,7 @@ class CoverageController extends ChangeNotifier {
           if (walk.status == 'recording') continue;
           final traceHash = walk.fingerprint ?? _prepare(walk).$2;
           final fingerprint =
-              '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}/${_autoFillGaps ? 'auto-gaps-v1' : 'manual-gaps'}/$traceHash/${walk.confirmedSections.join(',')}';
+              '$matchingRevision/${walk.activity.name}/${_fillSmallGaps ? 'fill-v1' : 'direct'}/${_autoFillGaps ? 'auto-gaps-v1' : 'manual-gaps'}/$traceHash/${walk.confirmedSections.join(',')}';
           if (await _store.matchFingerprint(walk.id, area.coverageVersion) !=
                   fingerprint ||
               !_trails.contains(walk.id, area.version)) {

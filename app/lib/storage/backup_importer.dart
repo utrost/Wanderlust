@@ -70,6 +70,7 @@ class BackupImporter implements WalkImporter {
             'segmentStarts': walk.segmentStarts,
             'untimed': walk.untimed,
             'favourite': walk.favourite,
+            'activity': walk.activity.name,
             'confirmedSections': walk.confirmedSections,
           }),
         });

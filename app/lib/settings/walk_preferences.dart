@@ -1,5 +1,8 @@
+import '../recording/activity_type.dart';
+
 class WalkPreferences {
   const WalkPreferences({
+    this.activity = WalkActivity.walk,
     this.showTime = false,
     this.showSamples = false,
     this.showGps = false,
@@ -12,6 +15,7 @@ class WalkPreferences {
     this.walkedLineWidth = 3,
     this.mapSizeKm = 4,
   });
+  final WalkActivity activity;
   final bool showTime;
   final bool showSamples;
   final bool showGps;
@@ -28,6 +32,7 @@ class WalkPreferences {
   final int mapSizeKm;
 
   WalkPreferences copyWith({
+    WalkActivity? activity,
     bool? showTime,
     bool? showSamples,
     bool? showGps,
@@ -40,6 +45,7 @@ class WalkPreferences {
     double? walkedLineWidth,
     int? mapSizeKm,
   }) => WalkPreferences(
+    activity: activity ?? this.activity,
     showTime: showTime ?? this.showTime,
     showSamples: showSamples ?? this.showSamples,
     showGps: showGps ?? this.showGps,
@@ -54,6 +60,7 @@ class WalkPreferences {
   );
 
   Map<String, Object> toJson() => {
+    'activity': activity.name,
     'showTime': showTime,
     'showSamples': showSamples,
     'showGps': showGps,
@@ -70,6 +77,7 @@ class WalkPreferences {
     final width = json['walkedLineWidth'];
     final size = json['mapSizeKm'];
     return WalkPreferences(
+      activity: WalkActivity.parse(json['activity']),
       showTime: json['showTime'] == true,
       showSamples: json['showSamples'] == true,
       showGps: json['showGps'] == true,

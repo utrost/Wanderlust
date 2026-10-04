@@ -16,6 +16,7 @@ import 'package:wanderlust/settings/walk_preferences.dart';
 import 'package:wanderlust/transfer/walk_codec.dart';
 import 'package:wanderlust/widgets/area_map.dart';
 import 'package:wanderlust/widgets/gps_hud.dart';
+
 import 'coverage_test.dart' show networkJson;
 import 'nearby_maps_test.dart' show smallOsm;
 import 'recording_test.dart' show fix;
@@ -119,6 +120,7 @@ void main() {
       await store.close();
       store = open();
       expect((await store.readPreferences()).toJson(), {
+        'activity': 'walk',
         'showTime': true,
         'showSamples': true,
         'showGps': false,

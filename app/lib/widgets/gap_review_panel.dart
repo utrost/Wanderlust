@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../recording/saved_walk.dart';
 import '../review/gap_routes.dart';
 
@@ -32,14 +33,25 @@ class _GapReviewPanelState extends State<GapReviewPanel> {
       gaps == null || gaps!.isEmpty || gaps![gap].routes.isEmpty
       ? null
       : gaps![gap].routes[option];
+  @override
+  void didUpdateWidget(covariant GapReviewPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.walk.activity != widget.walk.activity) {
+      gaps = null;
+      gap = 0;
+      option = 0;
+    }
+  }
+
   Future<void> load() async {
+    final activity = widget.walk.activity;
     setState(() {
       busy = true;
       error = null;
     });
     try {
       final result = await widget.suggest(widget.maps, widget.walk);
-      if (!mounted) return;
+      if (!mounted || activity != widget.walk.activity) return;
       setState(() {
         gaps = result;
         gap = 0;

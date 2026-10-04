@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
+
 import '../recording/saved_walk.dart';
 import '../transfer/walk_codec.dart';
 
@@ -130,7 +132,7 @@ List<ReviewGap> _suggest((List<String>, SavedWalk) input) {
     final routes = <GapRoute>[];
     final budget = math.min(
       600.0,
-      math.min(seconds * 2.2, straight * 1.8 + 30),
+      math.min(seconds * walk.activity.gapSpeed, straight * 1.8 + 30),
     );
     if (start != null && end != null && start != end) {
       final first = route(start, end, budget, {});

@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:xml/xml.dart';
 
+import '../recording/activity_type.dart';
 import '../recording/saved_walk.dart';
 
 /// Bounded, versioned interchange. All validation completes before any DB write.
@@ -181,12 +182,20 @@ class WalkCodec {
         ? (importedAt ?? DateTime.now()).toUtc()
         : times.first;
     final end = times.isEmpty ? start : times.last;
+    final activities = children(root, 'extensions')
+        .expand((e) => e.childElements)
+        .where((e) => e.localName == 'activity' && e.namespaceUri == _wlNs)
+        .toList();
+    final activity = WalkActivity.parse(
+      activities.firstOrNull?.innerText.trim(),
+    );
     final walk = SavedWalk(
       0,
       start,
       end,
       'completed',
       points,
+      activity: activity,
       segmentStarts: starts.where((i) => i > 0).toList(),
       untimed: untimed,
     );
@@ -197,6 +206,7 @@ class WalkCodec {
       'completed',
       points,
       uid: walk.traceKey.substring(0, 32),
+      activity: activity,
       segmentStarts: walk.segmentStarts,
       untimed: untimed,
     );
@@ -228,7 +238,10 @@ class WalkCodec {
       }
       b.writeln('</trkpt>');
     }
-    return (b..writeln('</trkseg></trk></gpx>')).toString();
+    return (b..writeln(
+          '</trkseg></trk><extensions><wl:activity>${walk.activity.name}</wl:activity></extensions></gpx>',
+        ))
+        .toString();
   }
 
   static String exportBackup(List<SavedWalk> walks) {
@@ -382,6 +395,7 @@ class WalkCodec {
             points,
             uid: uid,
             favourite: r['favourite'] == true,
+            activity: WalkActivity.parse(r['activity']),
             confirmedSections: _confirmedSections(r['confirmedSections']),
             segmentStarts: starts,
             untimed: untimed,

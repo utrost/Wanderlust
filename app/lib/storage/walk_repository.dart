@@ -4,11 +4,12 @@ import 'package:crypto/crypto.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../recording/activity_type.dart';
 import '../recording/saved_walk.dart';
 import '../recording/walk_history.dart';
+import '../review/gap_review_store.dart';
 import '../transfer/walk_codec.dart';
 import 'app_database.dart';
-import '../review/gap_review_store.dart';
 
 class WalkRepository implements WalkHistory, GapReviewStore {
   WalkRepository(this.connection);
@@ -76,6 +77,7 @@ class WalkRepository implements WalkHistory, GapReviewStore {
           segmentStarts: (meta['segmentStarts'] as List? ?? []).cast<int>(),
           untimed: (meta['untimed'] as List? ?? []).cast<int>(),
           favourite: meta['favourite'] == true,
+          activity: WalkActivity.parse(meta['activity']),
           confirmedSections: (meta['confirmedSections'] as List? ?? [])
               .cast<int>(),
         ),
@@ -132,6 +134,7 @@ class WalkRepository implements WalkHistory, GapReviewStore {
             const [],
             uid: row['uid'] as String,
             favourite: meta['favourite'] == true,
+            activity: WalkActivity.parse(meta['activity']),
             confirmedSections: (meta['confirmedSections'] as List? ?? [])
                 .cast<int>(),
             fingerprint: fingerprint,
@@ -198,10 +201,39 @@ class WalkRepository implements WalkHistory, GapReviewStore {
     });
   }
 
-  Future<int> begin(DateTime startedAt) async => (await _db).insert(
-    'recorded_walk',
-    {'started_at': startedAt.toUtc().toIso8601String(), 'status': 'recording'},
-  );
+  @override
+  Future<void> setActivity(String uid, WalkActivity activity) async {
+    await (await _db).transaction((tx) async {
+      final rows = await tx.query(
+        'recorded_walk',
+        where: 'uid = ?',
+        whereArgs: [uid],
+      );
+      if (rows.isEmpty || rows.single['status'] == 'recording') {
+        throw StateError('Finish recording before changing activity');
+      }
+      final meta =
+          jsonDecode(rows.single['trace_metadata'] as String)
+              as Map<String, dynamic>;
+      if (WalkActivity.parse(meta['activity']) == activity) return;
+      meta['activity'] = activity.name;
+      await tx.update(
+        'recorded_walk',
+        {'trace_metadata': jsonEncode(meta), 'fingerprint': null},
+        where: 'uid = ?',
+        whereArgs: [uid],
+      );
+    });
+  }
+
+  Future<int> begin(
+    DateTime startedAt, {
+    WalkActivity activity = WalkActivity.walk,
+  }) async => (await _db).insert('recorded_walk', {
+    'started_at': startedAt.toUtc().toIso8601String(),
+    'status': 'recording',
+    'trace_metadata': jsonEncode({'activity': activity.name}),
+  });
 
   Future<void> append(int id, int sequence, Position point) async {
     await (await _db).transaction((tx) async {

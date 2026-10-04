@@ -173,3 +173,34 @@ counts alone do not establish correctness. A 694-fix replay took approximately
 Flutter work. Phone performance still needs field testing.
 
 After native matching, automatic gap routing and explicit confirmations, a final display pass removes redundant fallback GPS pairs only when the nearest street at both endpoints and the midpoint is already covered. It uses the same 25 m corridor as snapping. A closer unpainted parallel street, missing intermediate section or off-network trace remains visible. This pass never adds heatmap credit; the raw GPS is unchanged and remains available in review. A 50 m spatial index bounds nearby geometry searches. Cache revision `sequence-model-v8` rebuilds saved results.
+
+### Walking and cycling profiles
+
+Each recording now carries an explicit Walk/Cycle type, selected before starting
+and remembered in preferences. Existing recordings default to Walk. History →
+Review → Cycle changes the type and recomputes coverage without changing raw fixes,
+identity, favourites or explicit confirmations. Both activities contribute once
+per activity per section to the same heatmap. Changing type replaces membership;
+it does not add another traversal. GPX exports use a namespaced root extension,
+and full backups retain the type. Missing or unknown type defaults to walking.
+
+Walking retains its 3 m/s continuity ceiling. Cycling uses 15 m/s (54 km/h) as
+an outlier ceiling, not a target speed. The native sequence, raw fallback and
+short-connector checks use that ceiling; short inferred runs are capped at 150 m
+instead of 75 m. Time continuity remains 30 seconds. Long-outage candidates use
+8 m/s instead of 2.2 m/s, retaining the five-minute/600 m/route-detour bounds.
+Displayed distance uses the selected profile too. Accuracy, topology, ambiguity
+and trace-corridor safeguards remain in force.
+
+The profiles match against existing downloaded geometry. Downloads still use the
+pedestrian network policy: some cycle-only routes can be absent, and membership
+is not a cycling access or navigation recommendation. Missing map geometry stays
+as raw GPS evidence where reliable. A cycling-specific map download policy is a
+separate enhancement.
+
+The supplied 4 October ride (88 fixes) produces 100 matched sections on the
+Viertel map under cycling versus 11 under walking. This is recovery evidence,
+not proof of every inferred section. Synthetic tests cover 2/5/10/20-second rides,
+implausible jumps, outages, off-network fallback and per-call profile isolation.
+Storage/controller tests cover mode recovery, backup/GPX round-trips, live mode
+capture, changed fingerprints and idempotent replacement of heatmap membership.

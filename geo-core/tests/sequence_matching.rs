@@ -90,3 +90,41 @@ fn geometric_crossing_cannot_create_a_network_transition() {
         .projected_distance(0, 1, p(45., 0.), p(50., 5.), 100.)
         .is_none());
 }
+
+#[test]
+fn cycling_accepts_riding_speed_but_keeps_spike_and_outage_guards() {
+    let graph = Graph::build(vec![Segment::new(1, vec![p(0., 0.), p(1000., 0.)])]);
+    let cfg = MatchConfig {
+        max_speed_mps: 15.0,
+        fill_small_gaps: true,
+        ..MatchConfig::default()
+    };
+    for interval in [2, 5, 10, 20] {
+        let coords: Vec<_> = (0..5)
+            .map(|i| (5. + i as f64 * interval as f64 * 6., 2.))
+            .collect();
+        let riding = vec![track(&coords, 7., interval)];
+        assert!(match_gpx_tracks(&graph, &riding, MatchConfig::default())
+            .walked
+            .is_empty());
+        assert_eq!(
+            match_gpx_tracks(&graph, &riding, cfg).walked,
+            [0].into_iter().collect()
+        );
+    }
+    for (interval, coords) in [
+        (5, vec![(5., 0.), (200., 0.), (400., 0.)]),
+        (40, vec![(5., 0.), (20., 0.), (35., 0.)]),
+    ] {
+        let r = match_gpx_tracks(&graph, &[track(&coords, 7., interval)], cfg);
+        assert!(r.walked.is_empty());
+        assert!(r.unmatched.is_empty());
+    }
+    let off_network = match_gpx_tracks(
+        &graph,
+        &[track(&[(5., 40.), (35., 40.), (65., 40.)], 7., 5)],
+        cfg,
+    );
+    assert!(off_network.walked.is_empty());
+    assert_eq!(off_network.unmatched, [1, 2]);
+}

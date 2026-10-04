@@ -3,6 +3,8 @@ import 'package:geolocator/geolocator.dart';
 /// Conservative display distance. Raw fixes are journalled independently.
 /// Uncertain readings and outages break continuity instead of inventing travel.
 class WalkDistance {
+  WalkDistance({this.maxSpeed = 3});
+  final double maxSpeed;
   Position? _anchor;
   DateTime? _latest;
   double meters = 0;
@@ -32,7 +34,7 @@ class WalkDistance {
       point.longitude,
     );
     // Leave the good anchor in place after a spike, so its return is not counted.
-    if (distance / seconds > 3) return;
+    if (distance / seconds > maxSpeed) return;
     // Accumulate real progress from the last anchor without adding sub-metre jitter.
     if (distance < 2) return;
     meters += distance;

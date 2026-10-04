@@ -84,6 +84,24 @@ pub fn parse_tracks(xml: &str) -> Result<Vec<Vec<TrackPoint>>, String> {
     Ok(tracks)
 }
 
+/// Explicit Wanderlust activity metadata; absent or unknown means walking.
+pub fn is_cycling(xml: &str) -> Result<bool, String> {
+    let doc = roxmltree::Document::parse(xml).map_err(|e| e.to_string())?;
+    let cycling = doc
+        .root_element()
+        .children()
+        .filter(|n| n.is_element() && n.tag_name().name() == "extensions")
+        .flat_map(|n| n.children())
+        .any(|n| {
+            n.is_element()
+                && n.tag_name().name() == "activity"
+                && n.tag_name().namespace() == Some("https://wanderlust.local/gpx/1")
+                && n.text().is_some_and(|s| s.trim() == "cycle")
+        });
+
+    Ok(cycling)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

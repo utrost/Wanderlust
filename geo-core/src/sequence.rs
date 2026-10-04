@@ -9,16 +9,27 @@ pub(crate) fn usable(p: &TrackPoint) -> bool {
     p.accuracy_m.is_none_or(|a| a <= 50.0)
 }
 
-pub(crate) fn match_sequence(graph: &Graph, track: &[TrackPoint], radius: f64) -> Vec<Candidate> {
+pub(crate) fn match_sequence(
+    graph: &Graph,
+    track: &[TrackPoint],
+    radius: f64,
+    max_speed: f64,
+) -> Vec<Candidate> {
     let mut result = vec![None; track.len()];
     let mut start = 0;
     for end in 0..=track.len() {
         let boundary = end == track.len()
             || !usable(&track[end])
-            || (end > start && !continuous(&track[end - 1], &track[end]));
+            || (end > start && !continuous(&track[end - 1], &track[end], max_speed));
         if boundary {
             if end > start {
-                solve(graph, &track[start..end], radius, &mut result[start..end]);
+                solve(
+                    graph,
+                    &track[start..end],
+                    radius,
+                    max_speed,
+                    &mut result[start..end],
+                );
             }
             start = if end < track.len() && usable(&track[end]) {
                 end
@@ -30,21 +41,27 @@ pub(crate) fn match_sequence(graph: &Graph, track: &[TrackPoint], radius: f64) -
     result
 }
 
-pub(crate) fn continuous(a: &TrackPoint, b: &TrackPoint) -> bool {
+pub(crate) fn continuous(a: &TrackPoint, b: &TrackPoint, max_speed: f64) -> bool {
     if !usable(a) || !usable(b) {
         return false;
     }
     match (a.time, b.time) {
         (Some(a_time), Some(b_time)) => {
             let seconds = (b_time - a_time).num_milliseconds() as f64 / 1000.0;
-            seconds > 0.0 && seconds <= 30.0 && haversine_m(a.pos, b.pos) <= seconds * 3.0
+            seconds > 0.0 && seconds <= 30.0 && haversine_m(a.pos, b.pos) <= seconds * max_speed
         }
         (None, None) => true,
         _ => false,
     }
 }
 
-fn solve(graph: &Graph, points: &[TrackPoint], radius: f64, output: &mut [Candidate]) {
+fn solve(
+    graph: &Graph,
+    points: &[TrackPoint],
+    radius: f64,
+    max_speed: f64,
+    output: &mut [Candidate],
+) {
     let candidates: Vec<Vec<Candidate>> = points
         .iter()
         .map(|p| {
@@ -99,8 +116,8 @@ fn solve(graph: &Graph, points: &[TrackPoint], radius: f64, output: &mut [Candid
                 .zip(points[i - 1].time)
                 .map(|(b, a)| (b - a).num_milliseconds() as f64 / 1000.0);
             let budget = (observed * 2.5 + 20.0)
-                .min(seconds.map_or(150.0, |s| s * 3.0 + 10.0))
-                .min(150.0);
+                .min(seconds.map_or(150.0, |s| s * max_speed + 10.0))
+                .min((max_speed * 30.0).max(150.0));
             candidates[i - 1]
                 .iter()
                 .map(|a| {

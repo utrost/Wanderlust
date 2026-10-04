@@ -6,9 +6,9 @@ import 'package:crypto/crypto.dart';
 
 import '../data/area_network.dart';
 import '../memories/memory.dart';
-import 'backup_contents.dart';
 import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
+import 'backup_contents.dart';
 import 'backup_data.dart';
 import 'walk_codec.dart';
 
@@ -270,6 +270,7 @@ class BackupArchive {
                 walk.status,
                 const [],
                 uid: walk.uid,
+                activity: walk.activity,
                 storedPointCount: walk.points.length,
               ),
             );

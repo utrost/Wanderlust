@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../data/area_network.dart';
-import '../review/gap_review_store.dart';
 import '../recording/saved_walk.dart';
+import '../review/gap_review_store.dart';
 import '../settings/walk_preferences.dart';
 import '../transfer/backup_archive.dart';
 import '../transfer/walk_transfer.dart';
@@ -191,6 +191,11 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
       MaterialPageRoute<void>(
         builder: (_) => WalkReviewScreen(
           walk: walk,
+          saveActivity: (activity) async {
+            await _transfer.data.history.setActivity(walk.uid, activity);
+            await widget.onChanged();
+            await _load();
+          },
           saveConfirmed: _transfer.data.history is GapReviewStore
               ? (edges) async {
                   await (_transfer.data.history as GapReviewStore)
@@ -358,7 +363,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                                   .first,
                       ),
                       subtitle: Text(
-                        '${walk.status} · Tap to review${(_restoredPreferences?.showSamples ?? widget.showSamples) ? ' · ${walk.pointCount} GPS samples' : ''}',
+                        '${walk.activity.label} · ${walk.status} · Tap to review${(_restoredPreferences?.showSamples ?? widget.showSamples) ? ' · ${walk.pointCount} GPS samples' : ''}',
                       ),
                       trailing: IconButton(
                         tooltip: 'Export GPX',

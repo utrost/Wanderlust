@@ -3,14 +3,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../data/area_network.dart';
-import '../review/gap_routes.dart';
-import '../transfer/walk_codec.dart';
-import '../widgets/gap_review_panel.dart';
 import '../memories/memory.dart';
 import '../memories/memory_repository.dart';
+import '../recording/activity_type.dart';
 import '../recording/saved_walk.dart';
+import '../review/gap_routes.dart';
 import '../review/walk_review.dart';
+import '../transfer/walk_codec.dart';
+import '../widgets/activity_selector.dart';
 import '../widgets/area_map.dart';
+import '../widgets/gap_review_panel.dart';
 import '../widgets/walk_overlay.dart';
 import 'memories_screen.dart';
 
@@ -29,8 +31,10 @@ class WalkReviewScreen extends StatefulWidget {
     this.showMemories = true,
     this.match = matchWalkReview,
     this.saveConfirmed,
+    this.saveActivity,
   });
   final Future<void> Function(List<int>)? saveConfirmed;
+  final Future<void> Function(WalkActivity)? saveActivity;
   final SavedWalk walk;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
@@ -44,13 +48,15 @@ class WalkReviewScreen extends StatefulWidget {
 }
 
 class _WalkReviewScreenState extends State<WalkReviewScreen> {
+  late SavedWalk walk = widget.walk;
+  bool changingActivity = false;
   GapRoute? proposal;
-  late Set<int> confirmed = widget.walk.confirmedSections.toSet();
+  late Set<int> confirmed = walk.confirmedSections.toSet();
   List<WalkMemory> memories = [];
   Future<void> _loadMemories() async {
     if (widget.memoryStore == null) return;
     try {
-      final items = await widget.memoryStore!.list(walkUid: widget.walk.uid);
+      final items = await widget.memoryStore!.list(walkUid: walk.uid);
       if (mounted) setState(() => memories = items);
     } catch (_) {
       /* Library offers a retry; route review remains usable. */
@@ -72,7 +78,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
 
   bool gps = true, matched = true, inferred = true, busy = true;
   late bool fill = widget.fillSmallGaps;
-  late final trace = reviewTrace(widget.walk);
+  late final trace = reviewTrace(walk);
   late final coordinates = trace.expand((s) => s).toList();
   List<AreaNetwork> maps = [];
   AreaNetwork? viewport;
@@ -112,16 +118,16 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
       }
       final value = await widget.match(
         maps.map((m) => m.geojson).toList(),
-        widget.walk,
+        walk,
         fill,
       );
       final automatic = <int>{};
-      if (widget.autoFillGaps && hasReviewableGaps(widget.walk)) {
+      if (widget.autoFillGaps && hasReviewableGaps(walk)) {
         for (final map in maps) {
           automatic.addAll(
             (await automaticGapSections(
               map.geojson,
-              [WalkCodec.exportGpx(widget.walk)],
+              [WalkCodec.exportGpx(walk)],
               [confirmed.toList()],
             )).single,
           );
@@ -147,6 +153,25 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
     }
   }
 
+  Future<void> _changeActivity(WalkActivity value) async {
+    setState(() => changingActivity = true);
+    try {
+      await widget.saveActivity!(value);
+      if (!mounted) return;
+      setState(() {
+        walk = walk.withActivity(value);
+        proposal = null;
+      });
+      await _load();
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = 'Could not update activity. Please retry.');
+      }
+    } finally {
+      if (mounted) setState(() => changingActivity = false);
+    }
+  }
+
   Widget layer(
     String name,
     bool value,
@@ -161,9 +186,18 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
   );
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Review walk')),
+    appBar: AppBar(
+      title: Text(
+        walk.activity == WalkActivity.cycle ? 'Review ride' : 'Review walk',
+      ),
+    ),
     body: Column(
       children: [
+        if (widget.saveActivity != null)
+          ActivitySelector(
+            value: walk.activity,
+            onChanged: busy || changingActivity ? null : _changeActivity,
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Wrap(
@@ -206,7 +240,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
         ),
         if (widget.saveConfirmed != null)
           GapReviewPanel(
-            walk: widget.walk,
+            walk: walk,
             maps: maps.map((m) => m.geojson).toList(),
             save: widget.saveConfirmed!,
             onPreview: (route) => setState(() => proposal = route),
@@ -223,7 +257,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
                   builder: (_) => MemoriesScreen(
                     networks: widget.networks,
                     store: widget.memoryStore!,
-                    walkUid: widget.walk.uid,
+                    walkUid: walk.uid,
                   ),
                 ),
               );
@@ -243,7 +277,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
               ],
             ),
           ),
-        if (widget.walk.points.isEmpty)
+        if (walk.points.isEmpty)
           const Padding(
             padding: EdgeInsets.all(16),
             child: Text('This walk has no GPS readings.'),

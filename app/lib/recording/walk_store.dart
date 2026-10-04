@@ -5,8 +5,9 @@ import '../coverage/coverage_store.dart';
 import '../data/area_network.dart';
 import '../maps/area_store.dart';
 import '../memories/memory.dart';
-import '../memories/memory_store.dart';
 import '../memories/memory_repository.dart';
+import '../memories/memory_store.dart';
+import '../review/gap_review_store.dart';
 import '../settings/preferences_store.dart';
 import '../settings/walk_preferences.dart';
 import '../storage/app_database.dart';
@@ -17,9 +18,9 @@ import '../storage/preferences_repository.dart';
 import '../storage/walk_repository.dart';
 import '../transfer/backup_data.dart';
 import '../transfer/walk_importer.dart';
+import 'activity_type.dart';
 import 'saved_walk.dart';
 import 'walk_history.dart';
-import '../review/gap_review_store.dart';
 import 'walk_journal.dart';
 
 export 'saved_walk.dart';
@@ -60,6 +61,9 @@ class SqliteWalkStore
   Future<List<SavedWalk>> listSummaries({bool recover = false}) =>
       walksRepository.listSummaries(recover: recover);
   @override
+  Future<void> setActivity(String uid, WalkActivity activity) =>
+      walksRepository.setActivity(uid, activity);
+  @override
   Future<void> setFavourite(String uid, bool favourite) =>
       walksRepository.setFavourite(uid, favourite);
   @override
@@ -71,7 +75,10 @@ class SqliteWalkStore
   @override
   Future<List<SavedWalk>> recoverAndList() => walksRepository.recoverAndList();
   @override
-  Future<int> begin(DateTime startedAt) => walksRepository.begin(startedAt);
+  Future<int> begin(
+    DateTime startedAt, {
+    WalkActivity activity = WalkActivity.walk,
+  }) => walksRepository.begin(startedAt, activity: activity);
   @override
   Future<void> append(int id, int sequence, Position point) =>
       walksRepository.append(id, sequence, point);

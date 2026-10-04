@@ -17,6 +17,8 @@ pub struct MatchConfig {
     /// A GPS point further than this from any street is treated as unmatched
     /// (noise / off-network), not snapped.
     pub snap_radius_m: f64,
+    /// Activity-specific plausibility ceiling (m/s), never a target speed.
+    pub max_speed_mps: f64,
     /// Opt-in interpolation across short unconfirmed runs between strong anchors.
     pub fill_small_gaps: bool,
     /// Refuse to fill a gap whose shortest connecting path exceeds this multiple
@@ -31,6 +33,7 @@ impl Default for MatchConfig {
     fn default() -> Self {
         Self {
             snap_radius_m: 25.0,
+            max_speed_mps: 3.0,
             fill_small_gaps: false,
             max_fill_detour_ratio: 2.5,
             max_fill_len_m: 300.0,
@@ -141,7 +144,8 @@ pub fn match_gpx_tracks(
     let mut total = MatchResult::default();
     let mut direct = HashSet::new();
     for track in tracks {
-        let snapped = crate::sequence::match_sequence(graph, track, cfg.snap_radius_m);
+        let snapped =
+            crate::sequence::match_sequence(graph, track, cfg.snap_radius_m, cfg.max_speed_mps);
         let mut confirmed = vec![false; track.len()];
         let mut start = 0;
         while start < track.len() {
@@ -153,7 +157,7 @@ pub fn match_gpx_tracks(
             while end < track.len()
                 && snapped[end]
                     .is_some_and(|(e, _)| e == edge || graph.same_coverage_parent(e, edge))
-                && continuous(&track[end - 1], &track[end])
+                && continuous(&track[end - 1], &track[end], cfg.max_speed_mps)
             {
                 end += 1;
             }
@@ -185,6 +189,7 @@ pub fn match_gpx_tracks(
                                 && haversine_m(track[start].pos, track[i].pos) >= 4.0))
                         && direction_supports(
                             track,
+                            cfg.max_speed_mps,
                             i,
                             current,
                             current
@@ -219,7 +224,7 @@ pub fn match_gpx_tracks(
             let b = &track[i];
             if !reliable(a)
                 || !reliable(b)
-                || continuous_seconds(a, b).is_none()
+                || continuous_seconds(a, b, cfg.max_speed_mps).is_none()
                 || haversine_m(a.pos, b.pos) < 2.0
             {
                 continue;
@@ -258,7 +263,7 @@ fn interpolate_gaps(
         if i > 0
             && (!reliable(&track[i - 1])
                 || !reliable(&track[i])
-                || continuous_seconds(&track[i - 1], &track[i]).is_none())
+                || continuous_seconds(&track[i - 1], &track[i], cfg.max_speed_mps).is_none())
         {
             anchor = None;
         }
@@ -280,13 +285,13 @@ fn interpolate_gaps(
                     let limit = if i == j + 1 {
                         300.0_f64
                     } else if cfg.fill_small_gaps {
-                        75.0_f64
+                        (25.0 * cfg.max_speed_mps).min(150.0)
                     } else {
                         20.0_f64
                     };
                     let budget = limit
                         .min(cfg.max_fill_len_m)
-                        .min(seconds * 3.0)
+                        .min(seconds * cfg.max_speed_mps)
                         .min(distance * cfg.max_fill_detour_ratio.min(1.8));
                     if let Some(path) =
                         graph.unique_connection(a, b, track[j].pos, track[i].pos, budget)
@@ -333,6 +338,7 @@ fn reliable(point: &crate::gpx::TrackPoint) -> bool {
 /// Backward-only context gives the same decision during live and saved matching.
 fn direction_supports(
     track: &[crate::gpx::TrackPoint],
+    max_speed: f64,
     i: usize,
     segment: &crate::graph::Segment,
     tangent: (f64, f64),
@@ -349,7 +355,8 @@ fn direction_supports(
         }
         if track[j].time.is_some()
             && track[j + 1].time.is_some()
-            && haversine_m(track[j].pos, track[j + 1].pos) > 50.0
+            && haversine_m(track[j].pos, track[j + 1].pos)
+                > if max_speed > 3.0 { 450.0 } else { 50.0 }
         {
             break;
         }
@@ -378,8 +385,12 @@ fn direction_supports(
     false
 }
 
-fn continuous_seconds(a: &crate::gpx::TrackPoint, b: &crate::gpx::TrackPoint) -> Option<f64> {
+fn continuous_seconds(
+    a: &crate::gpx::TrackPoint,
+    b: &crate::gpx::TrackPoint,
+    max_speed: f64,
+) -> Option<f64> {
     let seconds = (b.time? - a.time?).num_milliseconds() as f64 / 1000.0;
-    (seconds > 0.0 && seconds <= 30.0 && haversine_m(a.pos, b.pos) <= seconds * 3.0)
+    (seconds > 0.0 && seconds <= 30.0 && haversine_m(a.pos, b.pos) <= seconds * max_speed)
         .then_some(seconds)
 }
