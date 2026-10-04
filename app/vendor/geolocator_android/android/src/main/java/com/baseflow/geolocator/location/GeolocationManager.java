@@ -32,6 +32,10 @@ public class GeolocationManager
       return geolocationManagerInstance;
   }
 
+  public String getLastReportedProvider() {
+    return LocationManagerClient.getLastReportedProvider();
+  }
+
   public void getLastKnownPosition(
       Context context,
       boolean forceLocationManager,

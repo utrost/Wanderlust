@@ -14,6 +14,7 @@ class SavedWalk {
     this.points, {
     this.uid = '',
     this.activity = WalkActivity.walk,
+    this.gpsDiagnostics = const {},
     this.segmentStarts = const [],
     this.untimed = const [],
     this.favourite = false,
@@ -22,6 +23,7 @@ class SavedWalk {
     this.fingerprint,
   });
   final WalkActivity activity;
+  final Map<String, Object?> gpsDiagnostics;
   final int? storedPointCount;
   final String? fingerprint;
   int get pointCount => storedPointCount ?? points.length;
@@ -68,6 +70,7 @@ class SavedWalk {
     status,
     points,
     uid: uid,
+    gpsDiagnostics: gpsDiagnostics,
     activity: value,
     segmentStarts: segmentStarts,
     untimed: untimed,
@@ -83,6 +86,7 @@ class SavedWalk {
     status,
     points,
     uid: uid,
+    gpsDiagnostics: gpsDiagnostics,
     activity: activity,
     segmentStarts: segmentStarts,
     untimed: untimed,
@@ -92,12 +96,17 @@ class SavedWalk {
     fingerprint: fingerprint,
   );
 
-  Map<String, Object?> toBackup({bool includeFavourite = true}) {
+  Map<String, Object?> toBackup({
+    bool includeFavourite = true,
+    bool includeDiagnostics = true,
+  }) {
     if (isSummary) throw StateError('Load the walk trace before backing up.');
     return {
       if (includeFavourite) 'favourite': favourite,
       'uid': uid,
       'activity': activity.name,
+      if (includeDiagnostics && gpsDiagnostics.isNotEmpty)
+        'gpsDiagnostics': gpsDiagnostics,
       'confirmedSections': confirmedSections,
       'startedAt': startedAt.toUtc().toIso8601String(),
       'endedAt': endedAt?.toUtc().toIso8601String(),

@@ -37,6 +37,40 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  test(
+    'warm-up cancels before recording or when hidden without journalling preview fixes',
+    () async {
+      for (final recording in [false, true]) {
+        final stream = StreamController<Position>();
+        final opened = Completer<void>();
+        final controller = MapLocationController(
+          recorder: recorder,
+          warmupPositions: () {
+            opened.complete();
+            return stream.stream;
+          },
+        );
+        final pending = controller.centerOnMe(automatic: true);
+        await opened.future;
+        stream.add(positionAt(fix(0), DateTime.now()));
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.currentFix, isNotNull);
+        expect(recorder.pointCount, 0);
+        if (recording) {
+          await controller.prepareRecording();
+        } else {
+          controller.setVisible(false);
+        }
+        await pending;
+        expect(stream.hasListener, isFalse);
+        expect(controller.locating, isFalse);
+        expect(controller.error, isNull);
+        controller.dispose();
+        await stream.close();
+      }
+    },
+  );
+
   for (final hide in [false, true]) {
     test(
       'late GPS result respects ${hide ? 'hide/reopen' : 'browsing'} intent',

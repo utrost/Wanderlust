@@ -268,7 +268,10 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
-        home: MapScreen(store: BootStore(source: networkJson())),
+        home: MapScreen(
+          store: BootStore(source: networkJson()),
+          locate: () => Geolocator.getCurrentPosition(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -302,7 +305,10 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
-          home: MapScreen(store: BootStore(source: networkJson())),
+          home: MapScreen(
+            store: BootStore(source: networkJson()),
+            locate: () => Geolocator.getCurrentPosition(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -343,7 +349,10 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
-          home: MapScreen(store: BootStore(source: networkJson())),
+          home: MapScreen(
+            store: BootStore(source: networkJson()),
+            locate: () => Geolocator.getCurrentPosition(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -412,7 +421,10 @@ void main() {
     });
     await tester.pumpWidget(
       MaterialApp(
-        home: MapScreen(store: BootStore(source: networkJson())),
+        home: MapScreen(
+          store: BootStore(source: networkJson()),
+          locate: () => Geolocator.getCurrentPosition(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -434,7 +446,10 @@ void main() {
             ).copyWith(textScaler: const TextScaler.linear(1.8)),
             child: child!,
           ),
-          home: MapScreen(store: BootStore(source: networkJson())),
+          home: MapScreen(
+            store: BootStore(source: networkJson()),
+            locate: () => Geolocator.getCurrentPosition(),
+          ),
         ),
       );
       await tester.pumpAndSettle();

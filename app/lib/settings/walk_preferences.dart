@@ -9,6 +9,7 @@ class WalkPreferences {
     this.showStreetNames = true,
     this.showMemories = true,
     this.gpsIntervalSeconds = 5,
+    this.automaticGpsSampling = true,
     this.autoDownloadMaps = true,
     this.fillSmallGaps = false,
     this.autoFillGaps = true,
@@ -23,6 +24,10 @@ class WalkPreferences {
   final bool showMemories;
   static const gpsIntervals = [2, 5, 10, 20];
   final int gpsIntervalSeconds;
+  final bool automaticGpsSampling;
+  int get effectiveGpsInterval => automaticGpsSampling
+      ? (activity == WalkActivity.cycle ? 2 : 5)
+      : gpsIntervalSeconds;
   final bool autoDownloadMaps;
   final bool fillSmallGaps;
   final bool autoFillGaps;
@@ -39,6 +44,7 @@ class WalkPreferences {
     bool? showStreetNames,
     bool? showMemories,
     int? gpsIntervalSeconds,
+    bool? automaticGpsSampling,
     bool? autoDownloadMaps,
     bool? fillSmallGaps,
     bool? autoFillGaps,
@@ -52,6 +58,9 @@ class WalkPreferences {
     showStreetNames: showStreetNames ?? this.showStreetNames,
     showMemories: showMemories ?? this.showMemories,
     gpsIntervalSeconds: gpsIntervalSeconds ?? this.gpsIntervalSeconds,
+    automaticGpsSampling:
+        automaticGpsSampling ??
+        (gpsIntervalSeconds != null ? false : this.automaticGpsSampling),
     autoDownloadMaps: autoDownloadMaps ?? this.autoDownloadMaps,
     fillSmallGaps: fillSmallGaps ?? this.fillSmallGaps,
     autoFillGaps: autoFillGaps ?? this.autoFillGaps,
@@ -67,6 +76,7 @@ class WalkPreferences {
     'showStreetNames': showStreetNames,
     'showMemories': showMemories,
     'gpsIntervalSeconds': gpsIntervalSeconds,
+    'automaticGpsSampling': automaticGpsSampling,
     'autoDownloadMaps': autoDownloadMaps,
     'fillSmallGaps': fillSmallGaps,
     'autoFillGaps': autoFillGaps,
@@ -83,6 +93,11 @@ class WalkPreferences {
       showGps: json['showGps'] == true,
       showStreetNames: json['showStreetNames'] != false,
       showMemories: json['showMemories'] != false,
+      automaticGpsSampling: json['automaticGpsSampling'] is bool
+          ? json['automaticGpsSampling'] as bool
+          : (json['detailedGps'] != true &&
+                (json['gpsIntervalSeconds'] == null ||
+                    json['gpsIntervalSeconds'] == 5)),
       gpsIntervalSeconds: gpsIntervals.contains(json['gpsIntervalSeconds'])
           ? (json['gpsIntervalSeconds'] as num).toInt()
           : (json['detailedGps'] == true ? 2 : 5),

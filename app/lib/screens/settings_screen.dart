@@ -140,56 +140,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? null
               : (v) => change(value.copyWith(fillSmallGaps: v)),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'GPS interval: ${WalkPreferences.gpsIntervals[(_previewInterval ?? WalkPreferences.gpsIntervals.indexOf(value.gpsIntervalSeconds).toDouble()).round()]} seconds',
-              ),
-              Slider(
-                key: const Key('gps-interval'),
-                min: 0,
-                max: 3,
-                divisions: 3,
-                value:
-                    _previewInterval ??
-                    WalkPreferences.gpsIntervals
-                        .indexOf(value.gpsIntervalSeconds)
-                        .toDouble(),
-                label:
-                    '${WalkPreferences.gpsIntervals[(_previewInterval ?? WalkPreferences.gpsIntervals.indexOf(value.gpsIntervalSeconds).toDouble()).round()]} s',
-                onChanged: busy
-                    ? null
-                    : (v) => setState(() => _previewInterval = v),
-                onChangeEnd: busy
-                    ? null
-                    : (v) async {
-                        await change(
-                          value.copyWith(
-                            gpsIntervalSeconds:
-                                WalkPreferences.gpsIntervals[v.round()],
-                          ),
-                        );
-                        if (mounted) setState(() => _previewInterval = null);
-                      },
-              ),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('2 s'),
-                  Text('5 s'),
-                  Text('10 s'),
-                  Text('20 s'),
-                ],
-              ),
-              const Text(
-                'Longer intervals may save battery but miss short turns. Applies to the next walk. Actual readings also depend on movement and your phone.',
-              ),
-            ],
+        SwitchListTile(
+          title: const Text('Automatic GPS sampling'),
+          subtitle: const Text(
+            'Walking: 5 s · Cycling: 2 s. Faster updates use more battery.',
           ),
+          value: value.automaticGpsSampling,
+          onChanged: busy
+              ? null
+              : (v) => change(value.copyWith(automaticGpsSampling: v)),
         ),
+        if (!value.automaticGpsSampling)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Manual GPS interval: ${WalkPreferences.gpsIntervals[(_previewInterval ?? WalkPreferences.gpsIntervals.indexOf(value.gpsIntervalSeconds).toDouble()).round()]} seconds',
+                ),
+                Slider(
+                  key: const Key('gps-interval'),
+                  min: 0,
+                  max: 3,
+                  divisions: 3,
+                  value:
+                      _previewInterval ??
+                      WalkPreferences.gpsIntervals
+                          .indexOf(value.gpsIntervalSeconds)
+                          .toDouble(),
+                  label:
+                      '${WalkPreferences.gpsIntervals[(_previewInterval ?? WalkPreferences.gpsIntervals.indexOf(value.gpsIntervalSeconds).toDouble()).round()]} s',
+                  onChanged: busy
+                      ? null
+                      : (v) => setState(() => _previewInterval = v),
+                  onChangeEnd: busy
+                      ? null
+                      : (v) async {
+                          await change(
+                            value.copyWith(
+                              gpsIntervalSeconds:
+                                  WalkPreferences.gpsIntervals[v.round()],
+                            ),
+                          );
+                          if (mounted) setState(() => _previewInterval = null);
+                        },
+                ),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('2 s'),
+                    Text('5 s'),
+                    Text('10 s'),
+                    Text('20 s'),
+                  ],
+                ),
+                const Text(
+                  'Longer intervals may save battery but miss short turns. Applies to the next walk. Actual readings also depend on movement and your phone.',
+                ),
+              ],
+            ),
+          ),
         SwitchListTile(
           title: const Text('Download maps as I walk'),
           subtitle: const Text(

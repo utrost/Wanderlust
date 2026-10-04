@@ -158,6 +158,7 @@ void main() {
         MaterialApp(
           home: SettingsScreen(
             initial: const WalkPreferences(
+              automaticGpsSampling: false,
               showTime: true,
               walkedLineWidth: 2,
               mapSizeKm: 6,

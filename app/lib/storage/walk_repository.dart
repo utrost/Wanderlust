@@ -6,12 +6,14 @@ import 'package:sqflite/sqflite.dart';
 
 import '../recording/activity_type.dart';
 import '../recording/saved_walk.dart';
+import '../recording/gps_diagnostics.dart';
 import '../recording/walk_history.dart';
 import '../review/gap_review_store.dart';
 import '../transfer/walk_codec.dart';
 import 'app_database.dart';
 
-class WalkRepository implements WalkHistory, GapReviewStore {
+class WalkRepository
+    implements WalkHistory, GapReviewStore, GpsDiagnosticsStore {
   WalkRepository(this.connection);
   final AppDatabase connection;
   Future<Database> get _db => connection.database;
@@ -78,6 +80,7 @@ class WalkRepository implements WalkHistory, GapReviewStore {
           untimed: (meta['untimed'] as List? ?? []).cast<int>(),
           favourite: meta['favourite'] == true,
           activity: WalkActivity.parse(meta['activity']),
+          gpsDiagnostics: readGpsDiagnostics(meta['gpsDiagnostics']),
           confirmedSections: (meta['confirmedSections'] as List? ?? [])
               .cast<int>(),
         ),
@@ -135,6 +138,7 @@ class WalkRepository implements WalkHistory, GapReviewStore {
             uid: row['uid'] as String,
             favourite: meta['favourite'] == true,
             activity: WalkActivity.parse(meta['activity']),
+            gpsDiagnostics: readGpsDiagnostics(meta['gpsDiagnostics']),
             confirmedSections: (meta['confirmedSections'] as List? ?? [])
                 .cast<int>(),
             fingerprint: fingerprint,
@@ -222,6 +226,32 @@ class WalkRepository implements WalkHistory, GapReviewStore {
         {'trace_metadata': jsonEncode(meta), 'fingerprint': null},
         where: 'uid = ?',
         whereArgs: [uid],
+      );
+    });
+  }
+
+  @override
+  Future<void> saveGpsDiagnostics(
+    int walkId,
+    Map<String, Object?> metrics,
+  ) async {
+    await (await _db).transaction((tx) async {
+      final rows = await tx.query(
+        'recorded_walk',
+        columns: ['trace_metadata'],
+        where: 'id = ?',
+        whereArgs: [walkId],
+      );
+      if (rows.isEmpty) return;
+      final meta =
+          jsonDecode(rows.single['trace_metadata'] as String)
+              as Map<String, dynamic>;
+      meta['gpsDiagnostics'] = readGpsDiagnostics(metrics);
+      await tx.update(
+        'recorded_walk',
+        {'trace_metadata': jsonEncode(meta)},
+        where: 'id = ?',
+        whereArgs: [walkId],
       );
     });
   }

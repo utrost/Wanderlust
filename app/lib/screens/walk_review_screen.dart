@@ -11,6 +11,7 @@ import '../review/gap_routes.dart';
 import '../review/walk_review.dart';
 import '../transfer/walk_codec.dart';
 import '../widgets/activity_selector.dart';
+import '../widgets/gps_diagnostics_view.dart';
 import '../widgets/area_map.dart';
 import '../widgets/gap_review_panel.dart';
 import '../widgets/walk_overlay.dart';
@@ -187,6 +188,17 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      actions: [
+        if (walk.gpsDiagnostics.isNotEmpty)
+          IconButton(
+            tooltip: 'GPS diagnostics',
+            icon: const Icon(Icons.satellite_alt_outlined),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => GpsDiagnosticsView(metrics: walk.gpsDiagnostics),
+            ),
+          ),
+      ],
       title: Text(
         walk.activity == WalkActivity.cycle ? 'Review ride' : 'Review walk',
       ),

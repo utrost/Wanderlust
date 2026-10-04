@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:xml/xml.dart';
 
 import '../recording/activity_type.dart';
+import '../recording/gps_diagnostics.dart';
 import '../recording/saved_walk.dart';
 
 /// Bounded, versioned interchange. All validation completes before any DB write.
@@ -396,6 +397,7 @@ class WalkCodec {
             uid: uid,
             favourite: r['favourite'] == true,
             activity: WalkActivity.parse(r['activity']),
+            gpsDiagnostics: readGpsDiagnostics(r['gpsDiagnostics']),
             confirmedSections: _confirmedSections(r['confirmedSections']),
             segmentStarts: starts,
             untimed: untimed,

@@ -53,8 +53,18 @@ class BackupImporter implements WalkImporter {
             txn,
             id: previousId,
           )).single;
-          if (jsonEncode(previous.toBackup(includeFavourite: false)) !=
-              jsonEncode(walk.toBackup(includeFavourite: false))) {
+          if (jsonEncode(
+                previous.toBackup(
+                  includeFavourite: false,
+                  includeDiagnostics: false,
+                ),
+              ) !=
+              jsonEncode(
+                walk.toBackup(
+                  includeFavourite: false,
+                  includeDiagnostics: false,
+                ),
+              )) {
             throw const FormatException(
               'A walk identity conflicts with existing data.',
             );
@@ -71,6 +81,8 @@ class BackupImporter implements WalkImporter {
             'untimed': walk.untimed,
             'favourite': walk.favourite,
             'activity': walk.activity.name,
+            if (walk.gpsDiagnostics.isNotEmpty)
+              'gpsDiagnostics': walk.gpsDiagnostics,
             'confirmedSections': walk.confirmedSections,
           }),
         });

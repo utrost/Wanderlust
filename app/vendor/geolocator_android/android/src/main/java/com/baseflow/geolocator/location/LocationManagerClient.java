@@ -204,10 +204,17 @@ class LocationManagerClient implements LocationClient, LocationListenerCompat {
     this.locationManager.removeUpdates(this);
   }
 
+  private static volatile String lastReportedProvider = "unknown";
+
+  public static String getLastReportedProvider() {
+    return lastReportedProvider;
+  }
+
   @Override
   public synchronized void onLocationChanged(Location location) {
     if (isBetterLocation(location, currentBestLocation)) {
       this.currentBestLocation = location;
+      lastReportedProvider = location.getProvider() == null ? "unknown" : location.getProvider();
 
       if (this.positionChangedCallback != null) {
         nmeaClient.enrichExtrasWithNmea(location);

@@ -19,6 +19,7 @@ import '../storage/walk_repository.dart';
 import '../transfer/backup_data.dart';
 import '../transfer/walk_importer.dart';
 import 'activity_type.dart';
+import 'gps_diagnostics.dart';
 import 'saved_walk.dart';
 import 'walk_history.dart';
 import 'walk_journal.dart';
@@ -31,6 +32,7 @@ export 'walk_journal.dart';
 class SqliteWalkStore
     implements
         WalkStore,
+        GpsDiagnosticsStore,
         WalkHistory,
         GapReviewStore,
         CoverageStore,
@@ -79,6 +81,9 @@ class SqliteWalkStore
     DateTime startedAt, {
     WalkActivity activity = WalkActivity.walk,
   }) => walksRepository.begin(startedAt, activity: activity);
+  @override
+  Future<void> saveGpsDiagnostics(int walkId, Map<String, Object?> metrics) =>
+      walksRepository.saveGpsDiagnostics(walkId, metrics);
   @override
   Future<void> append(int id, int sequence, Position point) =>
       walksRepository.append(id, sequence, point);

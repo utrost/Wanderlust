@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../transfer/walk_codec.dart';
 import 'activity_type.dart';
+import 'gps_diagnostics.dart';
 import 'location_watchdog.dart';
 import 'saved_walk.dart';
 import 'walk_distance.dart';
@@ -25,7 +26,11 @@ abstract class LocationSource {
   Stream<Position> positions();
 }
 
-class DeviceLocationSource implements LocationSource {
+abstract interface class DiagnosticLocationSource {
+  Future<Map<String, Object?>> diagnosticMetadata();
+}
+
+class DeviceLocationSource implements LocationSource, DiagnosticLocationSource {
   DeviceLocationSource({this.forRecording = true, this.gpsIntervalSeconds});
   final bool forRecording;
   final int Function()? gpsIntervalSeconds;
@@ -77,6 +82,23 @@ class DeviceLocationSource implements LocationSource {
   }
 
   @override
+  Future<Map<String, Object?>> diagnosticMetadata() async {
+    final result = <String, Object?>{};
+    try {
+      result['permissionAccuracy'] =
+          (await Geolocator.getLocationAccuracy()).name;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        result['lastReportedProvider'] = await const MethodChannel(
+          'flutter.baseflow.com/geolocator',
+        ).invokeMethod<String>('getLastReportedProvider');
+      }
+    } catch (_) {
+      /* Diagnostics must never prevent recording. */
+    }
+    return result;
+  }
+
+  @override
   Stream<Position> positions() => Geolocator.getPositionStream(
     locationSettings: settingsFor(
       defaultTargetPlatform,
@@ -92,6 +114,7 @@ class WalkRecorder extends ChangeNotifier {
     DateTime Function()? now,
     this.showElapsed,
     this.activityType,
+    this.gpsInterval,
     this.loadHistory,
   }) : _location = location ?? DeviceLocationSource(),
        _store = store,
@@ -101,6 +124,12 @@ class WalkRecorder extends ChangeNotifier {
       loadHistory?.call() ?? _store.recoverAndList();
   final bool Function()? showElapsed;
   final WalkActivity Function()? activityType;
+  final int Function()? gpsInterval;
+  int requestedGpsInterval = 5;
+  GpsDiagnostics? _diagnostics;
+  bool get locating => isRecording && !(_diagnostics?.hasFreshFix ?? false);
+  Map<String, Object?> get gpsDiagnostics =>
+      _diagnostics?.snapshot() ?? const {};
   WalkActivity _activity = WalkActivity.walk;
   final LocationSource _location;
   final WalkStore _store;
@@ -210,6 +239,12 @@ class WalkRecorder extends ChangeNotifier {
       final startedAt = _now();
       try {
         _activity = activityType?.call() ?? WalkActivity.walk;
+        requestedGpsInterval =
+            gpsInterval?.call() ?? (_activity == WalkActivity.cycle ? 2 : 5);
+        _diagnostics = GpsDiagnostics(
+          requestedIntervalSeconds: requestedGpsInterval,
+          startedAt: startedAt,
+        );
         _walkId = await _store.begin(startedAt, activity: _activity);
       } catch (_) {
         lastError = RecorderError.storageFailed;
@@ -230,6 +265,9 @@ class WalkRecorder extends ChangeNotifier {
       gpsStale = false;
       _watchdog = LocationWatchdog(
         open: _location.positions,
+        onRestart: () {
+          _diagnostics?.restarts++;
+        },
         onPoint: _onPoint,
         now: _now,
         onStale: (value) {
@@ -254,6 +292,7 @@ class WalkRecorder extends ChangeNotifier {
 
   void _onPoint(Position point) {
     if (!isRecording || _disposed) return;
+    _diagnostics?.add(point, _now());
     if (!point.latitude.isFinite ||
         !point.longitude.isFinite ||
         point.latitude.abs() > 90 ||
@@ -273,7 +312,35 @@ class WalkRecorder extends ChangeNotifier {
           lastError = RecorderError.storageFailed;
           unawaited(stop(interrupted: true));
         });
+    if (_points.length % 30 == 0) {
+      _writes = _writes.then((_) => _persistDiagnostics());
+    }
     _notify();
+  }
+
+  Future<void> _persistDiagnostics() async {
+    final store = _store;
+    if (store is! GpsDiagnosticsStore ||
+        _walkId == null ||
+        _diagnostics == null) {
+      return;
+    }
+    final metrics = _diagnostics!.snapshot();
+    try {
+      if (_location is DiagnosticLocationSource) {
+        metrics.addAll(
+          await (_location as DiagnosticLocationSource)
+              .diagnosticMetadata()
+              .timeout(const Duration(seconds: 2)),
+        );
+      }
+      await (store as GpsDiagnosticsStore).saveGpsDiagnostics(
+        _walkId!,
+        metrics,
+      );
+    } catch (_) {
+      /* Optional metrics must never jeopardize the recording. */
+    }
   }
 
   Future<void> stop({bool interrupted = false}) {
@@ -294,6 +361,7 @@ class WalkRecorder extends ChangeNotifier {
       await _watchdog?.close();
       _watchdog = null;
       await _writes;
+      await _persistDiagnostics();
       await _store.finish(
         _walkId!,
         _endedAt!,

@@ -99,3 +99,34 @@ and [foreground-service start restrictions](https://developer.android.com/develo
 ### Stalled GPS recovery
 
 During a user-started walk, a separate watchdog checks for fresh location events every 10 seconds, including while the map is hidden. After 45 seconds without a fresh fix the recording pill shows a GPS-off icon with an explanatory tooltip. After 60 seconds it cancels and reopens the stream, at most once a minute. Stream errors/completion keep the journal open for recovery. Stop/dispose cancels retries; raw fixes are never synthesized. The OS may suspend execution, and recovery cannot guarantee satellite reception. Resuming the app checks immediately. The elapsed-time display remains optional.
+
+## GPS acquisition and local diagnostics — 4 October 2026
+
+Automatic sampling requests five-second fixes when walking and two-second fixes
+when cycling. Settings offers manual 2/5/10/20-second intervals. Existing non-default
+interval choices remain manual; old five-second defaults adopt automatic mode.
+The interval is captured when recording starts and retained through watchdog
+restarts. Requests are not delivery guarantees: the existing distance filter is
+2 m for two-second sampling and 5 m otherwise, so stationary periods can be quiet.
+
+Opening/reopening the map with permission already granted starts a foreground-only
+warm-up for at most 20 seconds. Two distinct fresh readings with reported accuracy
+at most 15 m finish it early. Hidden/disposed screens cancel it; starting a recording
+awaits cancellation and opens the recording stream with its own settings. Warm-up
+fixes update the position marker but are never added to an activity. Recording is
+not gated on reaching a particular accuracy; a small locating icon is shown until
+a fresh fix arrives. No permission prompt is triggered by automatic warm-up.
+
+Each activity stores bounded acquisition statistics: requested interval, received
+fixes, average/worst reported accuracy, delivery and GPS timestamp intervals,
+fix age, time to first fresh fix, invalid/stale/future counts and watchdog restarts.
+The Android bridge supplies the last provider reported within this app; this is
+not per-fix provider attribution. Permission accuracy is sampled with diagnostics.
+Snapshots are saved every 30 fixes and when stopping, so recovery after force-stop
+may have only partial statistics. Missing platform metadata is allowed, and metric
+storage failure cannot fail raw recording. No new network request is involved.
+
+Review → satellite icon shows diagnostics and offers explicit clipboard copying.
+Full backups include them; GPX does not. Metrics never affect the raw trace identity,
+matching fingerprint or heatmap. These figures distinguish sparse sampling from
+late delivery but cannot measure true positional error without ground truth.

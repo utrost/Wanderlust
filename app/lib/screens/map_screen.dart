@@ -603,6 +603,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _onStartWalk() async {
+    await _mapLocation.prepareRecording();
+    if (!mounted) return;
     final ok = await _recorder.start();
     if (!mounted) return;
     if (ok) {
@@ -664,6 +666,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Widget _recordingPanel() => RecordingPanel(
     gpsStale: _recorder.gpsStale,
+    locating: _recorder.locating,
     elapsed: _recorder.elapsed,
     distanceMeters: _recorder.distanceMeters,
     pointCount: _recorder.pointCount,

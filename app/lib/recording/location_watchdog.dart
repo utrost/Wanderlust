@@ -9,11 +9,13 @@ class LocationWatchdog {
     required this.onPoint,
     required this.onStale,
     required this.now,
+    this.onRestart,
   });
   final Stream<Position> Function() open;
   final void Function(Position) onPoint;
   final void Function(bool) onStale;
   final DateTime Function() now;
+  final void Function()? onRestart;
   StreamSubscription<Position>? _subscription;
   Timer? _timer;
   DateTime? _lastFix, _lastAttempt;
@@ -82,6 +84,7 @@ class LocationWatchdog {
 
   Future<void> _restart() async {
     _restarting = true;
+    onRestart?.call();
     _lastAttempt = now();
     ++_generation;
     try {

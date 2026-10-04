@@ -12,12 +12,14 @@ class RecordingPanel extends StatelessWidget {
     required this.showSamples,
     required this.onStop,
     this.gpsStale = false,
+    this.locating = false,
   });
   final Duration elapsed;
   final double distanceMeters;
   final int pointCount;
   final bool showTime, showSamples;
   final bool gpsStale;
+  final bool locating;
   final VoidCallback onStop;
   String _twoDigits(int n) => n.toString().padLeft(2, '0');
 
@@ -43,7 +45,16 @@ class RecordingPanel extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (gpsStale)
+          if (locating)
+            const Tooltip(
+              message: 'Locating · recording has started',
+              child: Icon(
+                Icons.gps_not_fixed,
+                size: 20,
+                semanticLabel: 'Locating, recording has started',
+              ),
+            )
+          else if (gpsStale)
             const Tooltip(
               message: 'GPS updates paused · trying to reconnect',
               child: Icon(

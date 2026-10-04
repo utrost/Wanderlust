@@ -13,7 +13,9 @@ map sides are implemented. GPX import/export and raw-walk backup/restore exist. 
 with offline memory pins, drafts, saved-walk associations and full backup/restore
 ([UX concept](MEMORIES.md)); actual-phone validation remains open.
 Screen-off recording and persistent APK signing are implemented, and the signing
-credential is provisioned. Actual-phone battery testing remains open.
+credential is provisioned. Actual-phone battery testing remains open. Activity-aware GPS sampling, a bounded
+foreground warm-up and per-activity local GPS diagnostics are implemented for the
+next field test.
 See [screen-off recording](SCREEN_OFF_RECORDING.md), [Android updates](ANDROID_UPDATES.md)
 and [nearby maps](NEARBY_MAPS.md).
 

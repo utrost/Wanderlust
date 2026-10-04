@@ -61,6 +61,9 @@ class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
   @Override
   public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
     switch (call.method) {
+      case "getLastReportedProvider":
+        result.success(geolocationManager.getLastReportedProvider());
+        break;
       case "checkPermission":
         onCheckPermission(result);
         break;

@@ -1,5 +1,5 @@
 Wanderlust privacy policy
-Updated 3 October 2026
+Updated 4 October 2026
 
 Wanderlust is developed by Uwe Trostheide. It is an offline-first walking map.
 There are no accounts, advertising or analytics in the app.
@@ -10,7 +10,10 @@ find nearby maps, pin memories and record walks. Starting a walk enables a
 location foreground service and a notification so recording can continue with
 the screen off. Stop ends recording. There is no automatic tracking on boot.
 GPS readings and explored-street counts are stored in the app's private storage.
-The app does not upload your recorded routes to the developer.
+GPS acquisition statistics (such as accuracy, update intervals and provider)
+are stored locally with activities and included in full backups. A brief location
+warm-up can run while the map is open; it does not create a recorded activity.
+The app does not upload your recorded routes or diagnostics to the developer.
 Android and your device's location provider have their own privacy settings.
 
 Map downloads
