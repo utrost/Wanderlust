@@ -19,6 +19,7 @@ import '../transfer/backup_data.dart';
 import '../transfer/walk_importer.dart';
 import 'saved_walk.dart';
 import 'walk_history.dart';
+import '../review/gap_review_store.dart';
 import 'walk_journal.dart';
 
 export 'saved_walk.dart';
@@ -30,6 +31,7 @@ class SqliteWalkStore
     implements
         WalkStore,
         WalkHistory,
+        GapReviewStore,
         CoverageStore,
         AreaStore,
         PreferencesStore,
@@ -43,6 +45,9 @@ class SqliteWalkStore
   late final preferencesRepository = PreferencesRepository(database);
   late final importerRepository = BackupImporter(database);
   late final MemoryRepository memories = MemoryStore(() => database.database);
+  @override
+  Future<void> saveConfirmedSections(String uid, List<int> edges) =>
+      walksRepository.saveConfirmedSections(uid, edges);
   BackupData get backupData =>
       BackupData(history: this, maps: this, settings: this, memories: memories);
   @override

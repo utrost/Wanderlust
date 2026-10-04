@@ -11,11 +11,13 @@ class RecordingPanel extends StatelessWidget {
     required this.showTime,
     required this.showSamples,
     required this.onStop,
+    this.gpsStale = false,
   });
   final Duration elapsed;
   final double distanceMeters;
   final int pointCount;
   final bool showTime, showSamples;
+  final bool gpsStale;
   final VoidCallback onStop;
   String _twoDigits(int n) => n.toString().padLeft(2, '0');
 
@@ -41,14 +43,24 @@ class RecordingPanel extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: WanderlustColors.accent,
-              shape: BoxShape.circle,
+          if (gpsStale)
+            const Tooltip(
+              message: 'GPS updates paused · trying to reconnect',
+              child: Icon(
+                Icons.gps_off,
+                size: 20,
+                semanticLabel: 'GPS updates paused, trying to reconnect',
+              ),
+            )
+          else
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: WanderlustColors.accent,
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
           const SizedBox(width: 10),
           Flexible(
             child: Text(

@@ -14,6 +14,16 @@ class WalkCodec {
   static const _gpxNs = 'http://www.topografix.com/GPX/1/1';
   static const _wlNs = 'https://wanderlust.local/gpx/1';
 
+  static List<int> _confirmedSections(Object? value) {
+    if (value == null) return const [];
+    if (value is! List ||
+        value.length > 10000 ||
+        value.any((v) => v is! int || v <= 0 || v > 9007199254740991)) {
+      throw const FormatException('Invalid confirmed sections');
+    }
+    return value.cast<int>().toSet().toList()..sort();
+  }
+
   static String decodeBytes(List<int> bytes) {
     if (bytes.length > maxBytes) {
       throw const FormatException('File exceeds the 32 MiB limit.');
@@ -369,6 +379,7 @@ class WalkCodec {
             points,
             uid: uid,
             favourite: r['favourite'] == true,
+            confirmedSections: _confirmedSections(r['confirmedSections']),
             segmentStarts: starts,
             untimed: untimed,
           ),

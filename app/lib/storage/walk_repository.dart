@@ -8,8 +8,9 @@ import '../recording/saved_walk.dart';
 import '../recording/walk_history.dart';
 import '../transfer/walk_codec.dart';
 import 'app_database.dart';
+import '../review/gap_review_store.dart';
 
-class WalkRepository implements WalkHistory {
+class WalkRepository implements WalkHistory, GapReviewStore {
   WalkRepository(this.connection);
   final AppDatabase connection;
   Future<Database> get _db => connection.database;
@@ -75,6 +76,8 @@ class WalkRepository implements WalkHistory {
           segmentStarts: (meta['segmentStarts'] as List? ?? []).cast<int>(),
           untimed: (meta['untimed'] as List? ?? []).cast<int>(),
           favourite: meta['favourite'] == true,
+          confirmedSections: (meta['confirmedSections'] as List? ?? [])
+              .cast<int>(),
         ),
       );
     }
@@ -129,6 +132,8 @@ class WalkRepository implements WalkHistory {
             const [],
             uid: row['uid'] as String,
             favourite: meta['favourite'] == true,
+            confirmedSections: (meta['confirmedSections'] as List? ?? [])
+                .cast<int>(),
             fingerprint: fingerprint,
             storedPointCount: row['point_count'] as int,
             segmentStarts: (meta['segmentStarts'] as List? ?? []).cast<int>(),
@@ -158,6 +163,35 @@ class WalkRepository implements WalkHistory {
       await txn.update(
         'recorded_walk',
         {'trace_metadata': jsonEncode(metadata)},
+        where: 'uid = ?',
+        whereArgs: [uid],
+      );
+    });
+  }
+
+  @override
+  Future<void> saveConfirmedSections(String uid, List<int> edges) async {
+    if (edges.length > 10000 ||
+        edges.any((e) => e <= 0 || e > 9007199254740991)) {
+      throw const FormatException('Invalid confirmed sections');
+    }
+    await (await _db).transaction((tx) async {
+      final rows = await tx.query(
+        'recorded_walk',
+        columns: ['trace_metadata', 'status'],
+        where: 'uid = ?',
+        whereArgs: [uid],
+      );
+      if (rows.isEmpty || rows.single['status'] == 'recording') {
+        throw StateError('Finish the walk before reviewing gaps');
+      }
+      final meta =
+          jsonDecode(rows.single['trace_metadata'] as String)
+              as Map<String, dynamic>;
+      meta['confirmedSections'] = edges.toSet().toList()..sort();
+      await tx.update(
+        'recorded_walk',
+        {'trace_metadata': jsonEncode(meta)},
         where: 'uid = ?',
         whereArgs: [uid],
       );

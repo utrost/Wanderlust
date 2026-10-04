@@ -623,6 +623,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Widget _recordingPanel() => RecordingPanel(
+    gpsStale: _recorder.gpsStale,
     elapsed: _recorder.elapsed,
     distanceMeters: _recorder.distanceMeters,
     pointCount: _recorder.pointCount,

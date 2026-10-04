@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../data/area_network.dart';
+import '../review/gap_routes.dart';
+import '../widgets/gap_review_panel.dart';
 import '../memories/memory.dart';
 import '../memories/memory_repository.dart';
 import '../recording/saved_walk.dart';
@@ -24,7 +26,9 @@ class WalkReviewScreen extends StatefulWidget {
     this.memoryStore,
     this.showMemories = true,
     this.match = matchWalkReview,
+    this.saveConfirmed,
   });
+  final Future<void> Function(List<int>)? saveConfirmed;
   final SavedWalk walk;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
@@ -37,6 +41,8 @@ class WalkReviewScreen extends StatefulWidget {
 }
 
 class _WalkReviewScreenState extends State<WalkReviewScreen> {
+  GapRoute? proposal;
+  late Set<int> confirmed = widget.walk.confirmedSections.toSet();
   List<WalkMemory> memories = [];
   Future<void> _loadMemories() async {
     if (widget.memoryStore == null) return;
@@ -176,6 +182,14 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
                   _load();
                 },
         ),
+        if (widget.saveConfirmed != null)
+          GapReviewPanel(
+            walk: widget.walk,
+            maps: maps.map((m) => m.geojson).toList(),
+            save: widget.saveConfirmed!,
+            onPreview: (route) => setState(() => proposal = route),
+            onConfirmed: (edges) => setState(() => confirmed = edges),
+          ),
         if (widget.memoryStore != null)
           TextButton.icon(
             onPressed: () async {
@@ -220,6 +234,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
           child: viewport == null
               ? const Center(child: Text('Loading map…'))
               : AreaMap(
+                  key: ValueKey(proposal),
                   showStreetNames: widget.showStreetNames,
                   memories: widget.showMemories ? memories : const [],
                   onMemory: widget.memoryStore == null ? null : _openMemory,
@@ -227,11 +242,17 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
                   coverageScreenWidth: 4,
                   networks: maps,
                   counts: matched
-                      ? {for (final id in result.direct) id: 1}
+                      ? {
+                          for (final id in {...result.direct, ...confirmed})
+                            id: 1,
+                        }
                       : {},
                   trace: gps ? trace : const [],
-                  inferred: inferred ? result.inferred : const {},
-                  fitCoordinates: coordinates,
+                  inferred: {
+                    ...(inferred ? result.inferred : <int>{}),
+                    ...?proposal?.edges,
+                  },
+                  fitCoordinates: proposal?.coordinates ?? coordinates,
                 ),
         ),
         const Padding(

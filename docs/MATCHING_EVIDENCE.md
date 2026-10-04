@@ -130,3 +130,9 @@ At 6 m noise the safeguards add no coverage. These are synthetic traces, not a
 claim that every gap in the phone screenshot will fill. Reproduce with
 `python3 tools/evaluate_matching.py --fill-small-gaps --check`, and repeat with
 `--step-m 5`. CI evaluates both policies.
+
+### User-confirmed longer gaps
+
+Walk history → Review walk → Review GPS gaps offers explicit review of gaps between reliable (≤25 m) timed fixes lasting over 30 seconds and at most five minutes. Poor fixes may be skipped, but GPX segment boundaries, missing timestamps and reversed time break inference. Routing uses saved OSM node topology, never coordinate-only crossings. Routes are bounded by 600 m, elapsed time at 2.2 m/s, and 1.8× straight distance plus 30 m; endpoints must have a graph node within 25 m. Up to three candidate routes are shown in purple. Alternative searches and per-route visited nodes are bounded; the list is not exhaustive or a claim of certainty.
+
+“I walked this” explicitly adds the selected section IDs once per walk to heatmap membership. Undo removes all user confirmations for that walk. Raw GPS and GPX exports stay unchanged. Confirmed IDs live in walk metadata, round-trip through full backups, participate in coverage cache identity, and only contribute to downloaded maps containing those IDs. Changing to another section-ID scheme would require reviewing confirmations again.

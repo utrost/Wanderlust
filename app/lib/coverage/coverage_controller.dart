@@ -377,7 +377,7 @@ class CoverageController extends ChangeNotifier {
           if (walk.status == 'recording') continue;
           final traceHash = walk.fingerprint ?? _prepare(walk).$2;
           final fingerprint =
-              '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}/$traceHash';
+              '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}/$traceHash/${walk.confirmedSections.join(',')}';
           if (await _store.matchFingerprint(walk.id, area.coverageVersion) !=
                   fingerprint ||
               !_trails.contains(walk.id, area.version)) {
@@ -399,6 +399,9 @@ class CoverageController extends ChangeNotifier {
           if (!area.edgeIds.containsAll(edges)) {
             throw StateError('Matcher returned unknown street ids');
           }
+          edges.addAll(
+            nonempty[i].$1.confirmedSections.where(area.edgeIds.contains),
+          );
           matched[nonempty[i].$1.id] = edges;
           _trails.put(nonempty[i].$1, area.version, results[i].unmatched);
         }

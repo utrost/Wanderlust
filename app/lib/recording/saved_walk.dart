@@ -14,6 +14,7 @@ class SavedWalk {
     this.segmentStarts = const [],
     this.untimed = const [],
     this.favourite = false,
+    this.confirmedSections = const [],
     this.storedPointCount,
     this.fingerprint,
   });
@@ -22,6 +23,7 @@ class SavedWalk {
   int get pointCount => storedPointCount ?? points.length;
   bool get isSummary => storedPointCount != null;
   final bool favourite;
+  final List<int> confirmedSections;
   final int id;
   final String uid;
   final DateTime startedAt;
@@ -65,6 +67,7 @@ class SavedWalk {
     segmentStarts: segmentStarts,
     untimed: untimed,
     favourite: value,
+    confirmedSections: confirmedSections,
     storedPointCount: storedPointCount,
     fingerprint: fingerprint,
   );
@@ -74,6 +77,7 @@ class SavedWalk {
     return {
       if (includeFavourite) 'favourite': favourite,
       'uid': uid,
+      'confirmedSections': confirmedSections,
       'startedAt': startedAt.toUtc().toIso8601String(),
       'endedAt': endedAt?.toUtc().toIso8601String(),
       'status': status,

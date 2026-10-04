@@ -95,3 +95,7 @@ real-device power consumption or resilience to a manufacturer's battery policy.
 
 Platform references: [Android location foreground services](https://developer.android.com/develop/background-work/services/fgs/service-types#location)
 and [foreground-service start restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start).
+
+### Stalled GPS recovery
+
+During a user-started walk, a separate watchdog checks for fresh location events every 10 seconds, including while the map is hidden. After 45 seconds without a fresh fix the recording pill shows a GPS-off icon with an explanatory tooltip. After 60 seconds it cancels and reopens the stream, at most once a minute. Stream errors/completion keep the journal open for recovery. Stop/dispose cancels retries; raw fixes are never synthesized. The OS may suspend execution, and recovery cannot guarantee satellite reception. Resuming the app checks immediately. The elapsed-time display remains optional.

@@ -225,28 +225,38 @@ void main() {
   );
 
   for (final diskFailure in [false, true]) {
-    test('${diskFailure ? 'storage' : 'GPS'} failure stops safely', () async {
-      final source = FakeLocation();
-      final store = MemoryStore()..failAppend = diskFailure;
-      final recorder = WalkRecorder(location: source, store: store);
-      await recorder.start();
-      if (diskFailure) {
-        source.stream.add(fix(1));
-      } else {
-        source.stream.addError(StateError('GPS gone'));
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      expect(recorder.state, RecorderState.idle);
-      expect(
-        recorder.lastError,
-        diskFailure
-            ? RecorderError.storageFailed
-            : RecorderError.locationFailed,
-      );
-      expect(store.statuses[1], 'interrupted');
-      recorder.dispose();
-      await source.stream.close();
-    });
+    test(
+      diskFailure
+          ? 'storage stops safely'
+          : 'GPS failure keeps the journal open',
+      () async {
+        final source = FakeLocation();
+        final store = MemoryStore()..failAppend = diskFailure;
+        final recorder = WalkRecorder(location: source, store: store);
+        await recorder.start();
+        if (diskFailure) {
+          source.stream.add(fix(1));
+        } else {
+          source.stream.addError(StateError('GPS gone'));
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(
+          recorder.state,
+          diskFailure ? RecorderState.idle : RecorderState.recording,
+        );
+        expect(
+          recorder.lastError,
+          diskFailure ? RecorderError.storageFailed : null,
+        );
+        expect(store.statuses[1], diskFailure ? 'interrupted' : 'recording');
+        if (!diskFailure) {
+          expect(recorder.gpsStale, isTrue);
+          await recorder.stop();
+        }
+        recorder.dispose();
+        await source.stream.close();
+      },
+    );
   }
 
   test(
@@ -276,7 +286,7 @@ void main() {
     },
   );
 
-  test('stream completion retains a recoverable interrupted walk', () async {
+  test('stream completion keeps recording open for recovery', () async {
     final source = FakeLocation();
     final store = MemoryStore();
     final recorder = WalkRecorder(location: source, store: store);
@@ -284,9 +294,11 @@ void main() {
     source.stream.add(fix(1));
     await source.stream.close();
     await Future<void>.delayed(Duration.zero);
-    expect(recorder.state, RecorderState.idle);
-    expect(store.statuses[1], 'interrupted');
+    expect(recorder.state, RecorderState.recording);
+    expect(recorder.gpsStale, isTrue);
     expect(store.points[1], hasLength(1));
+    await recorder.stop();
+    expect(store.statuses[1], 'completed');
     recorder.dispose();
   });
 

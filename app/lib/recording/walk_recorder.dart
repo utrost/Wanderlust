@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import '../transfer/walk_codec.dart';
 import 'saved_walk.dart';
 import 'walk_distance.dart';
+import 'location_watchdog.dart';
 import 'walk_journal.dart';
 
 enum RecorderError {
@@ -103,7 +104,8 @@ class WalkRecorder extends ChangeNotifier {
   final List<Position> _points = [];
   List<SavedWalk> _savedWalks = [];
   List<SavedWalk> get savedWalks => List.unmodifiable(_savedWalks);
-  StreamSubscription<Position>? _sub;
+  LocationWatchdog? _watchdog;
+  bool gpsStale = false;
   Timer? _ticker;
   DateTime? _startedAt;
   DateTime? _endedAt;
@@ -149,7 +151,10 @@ class WalkRecorder extends ChangeNotifier {
   void setForeground(bool value) {
     _foreground = value;
     _updateTicker();
-    if (value) _notify();
+    if (value) {
+      _watchdog?.check();
+      _notify();
+    }
   }
 
   void refreshDisplayClock() => _updateTicker();
@@ -216,11 +221,18 @@ class WalkRecorder extends ChangeNotifier {
       _endedAt = null;
       _writes = Future.value();
       state = RecorderState.recording;
-      _sub = _location.positions().listen(
-        _onPoint,
-        onError: (Object error, StackTrace stack) => _locationEnded(),
-        onDone: _locationEnded,
-      );
+      gpsStale = false;
+      _watchdog = LocationWatchdog(
+        open: _location.positions,
+        onPoint: _onPoint,
+        now: _now,
+        onStale: (value) {
+          if (gpsStale != value) {
+            gpsStale = value;
+            _notify();
+          }
+        },
+      )..start();
       _updateTicker();
       _notify();
       return true;
@@ -258,12 +270,6 @@ class WalkRecorder extends ChangeNotifier {
     _notify();
   }
 
-  void _locationEnded() {
-    if (!isRecording || _disposed) return;
-    lastError = RecorderError.locationFailed;
-    unawaited(stop(interrupted: true));
-  }
-
   Future<void> stop({bool interrupted = false}) {
     if (_stopping != null) return _stopping!;
     if (!isRecording) return Future.value();
@@ -279,8 +285,8 @@ class WalkRecorder extends ChangeNotifier {
 
   Future<void> _finish(bool interrupted) async {
     try {
-      await _sub?.cancel();
-      _sub = null;
+      await _watchdog?.close();
+      _watchdog = null;
       await _writes;
       await _store.finish(
         _walkId!,
@@ -352,7 +358,7 @@ class WalkRecorder extends ChangeNotifier {
 
   Future<void> _close() async {
     try {
-      await _sub?.cancel();
+      await _watchdog?.close();
       await _starting;
       await _initializing;
       await _stopping;

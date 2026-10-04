@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/area_network.dart';
+import '../review/gap_review_store.dart';
 import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
 import '../transfer/backup_archive.dart';
@@ -182,14 +183,19 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
   }
 
   Future<void> _review(SavedWalk summary) async {
-    final walk = summary.isSummary
-        ? await _transfer.data.history.loadWalk(summary.id)
-        : summary;
+    final walk = await _transfer.data.history.loadWalk(summary.id);
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => WalkReviewScreen(
           walk: walk,
+          saveConfirmed: _transfer.data.history is GapReviewStore
+              ? (edges) async {
+                  await (_transfer.data.history as GapReviewStore)
+                      .saveConfirmedSections(walk.uid, edges);
+                  await widget.onChanged();
+                }
+              : null,
           networks: _networks,
           fillSmallGaps:
               _restoredPreferences?.fillSmallGaps ?? widget.fillSmallGaps,
