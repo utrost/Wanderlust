@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../data/area_network.dart';
 import '../review/gap_routes.dart';
+import '../transfer/walk_codec.dart';
 import '../widgets/gap_review_panel.dart';
 import '../memories/memory.dart';
 import '../memories/memory_repository.dart';
@@ -22,6 +23,7 @@ class WalkReviewScreen extends StatefulWidget {
     required this.walk,
     this.networks = const [],
     this.fillSmallGaps = false,
+    this.autoFillGaps = true,
     this.showStreetNames = true,
     this.memoryStore,
     this.showMemories = true,
@@ -32,6 +34,7 @@ class WalkReviewScreen extends StatefulWidget {
   final SavedWalk walk;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
+  final bool autoFillGaps;
   final bool showStreetNames;
   final MemoryRepository? memoryStore;
   final bool showMemories;
@@ -112,7 +115,26 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
         widget.walk,
         fill,
       );
-      if (mounted && token == generation) setState(() => result = value);
+      final automatic = <int>{};
+      if (widget.autoFillGaps && hasReviewableGaps(widget.walk)) {
+        for (final map in maps) {
+          automatic.addAll(
+            (await automaticGapSections(
+              map.geojson,
+              [WalkCodec.exportGpx(widget.walk)],
+              [confirmed.toList()],
+            )).single,
+          );
+        }
+      }
+      if (mounted && token == generation) {
+        setState(
+          () => result = WalkReviewResult(value.direct, {
+            ...value.inferred,
+            ...automatic.difference(value.direct),
+          }),
+        );
+      }
     } catch (_) {
       if (mounted && token == generation) {
         setState(
@@ -188,7 +210,10 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
             maps: maps.map((m) => m.geojson).toList(),
             save: widget.saveConfirmed!,
             onPreview: (route) => setState(() => proposal = route),
-            onConfirmed: (edges) => setState(() => confirmed = edges),
+            onConfirmed: (edges) {
+              setState(() => confirmed = edges);
+              _load();
+            },
           ),
         if (widget.memoryStore != null)
           TextButton.icon(

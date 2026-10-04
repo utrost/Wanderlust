@@ -8,6 +8,7 @@ class WalkPreferences {
     this.gpsIntervalSeconds = 5,
     this.autoDownloadMaps = true,
     this.fillSmallGaps = false,
+    this.autoFillGaps = true,
     this.walkedLineWidth = 3,
     this.mapSizeKm = 4,
   });
@@ -20,6 +21,7 @@ class WalkPreferences {
   final int gpsIntervalSeconds;
   final bool autoDownloadMaps;
   final bool fillSmallGaps;
+  final bool autoFillGaps;
 
   /// Maximum screen-space stroke width; keeps zoomed-in coverage legible.
   final double walkedLineWidth;
@@ -34,6 +36,7 @@ class WalkPreferences {
     int? gpsIntervalSeconds,
     bool? autoDownloadMaps,
     bool? fillSmallGaps,
+    bool? autoFillGaps,
     double? walkedLineWidth,
     int? mapSizeKm,
   }) => WalkPreferences(
@@ -45,6 +48,7 @@ class WalkPreferences {
     gpsIntervalSeconds: gpsIntervalSeconds ?? this.gpsIntervalSeconds,
     autoDownloadMaps: autoDownloadMaps ?? this.autoDownloadMaps,
     fillSmallGaps: fillSmallGaps ?? this.fillSmallGaps,
+    autoFillGaps: autoFillGaps ?? this.autoFillGaps,
     walkedLineWidth: walkedLineWidth ?? this.walkedLineWidth,
     mapSizeKm: mapSizeKm ?? this.mapSizeKm,
   );
@@ -58,6 +62,7 @@ class WalkPreferences {
     'gpsIntervalSeconds': gpsIntervalSeconds,
     'autoDownloadMaps': autoDownloadMaps,
     'fillSmallGaps': fillSmallGaps,
+    'autoFillGaps': autoFillGaps,
     'walkedLineWidth': walkedLineWidth,
     'mapSizeKm': mapSizeKm,
   };
@@ -75,6 +80,7 @@ class WalkPreferences {
           : (json['detailedGps'] == true ? 2 : 5),
       autoDownloadMaps: json['autoDownloadMaps'] != false,
       fillSmallGaps: json['fillSmallGaps'] == true,
+      autoFillGaps: json['autoFillGaps'] != false,
       walkedLineWidth:
           width is num && width.isFinite && width >= 1 && width <= 6
           ? width.toDouble()

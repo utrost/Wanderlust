@@ -121,6 +121,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Padding(padding: const EdgeInsets.all(16), child: Text(error!)),
         const Divider(),
         SwitchListTile(
+          title: const Text('Fill GPS gaps automatically'),
+          subtitle: const Text(
+            'Use the shortest plausible walking route for missing GPS stretches. Turn off to review gaps manually. Applies to live and saved walks.',
+          ),
+          value: value.autoFillGaps,
+          onChanged: busy
+              ? null
+              : (v) => change(value.copyWith(autoFillGaps: v)),
+        ),
+        SwitchListTile(
           title: const Text('Fill small gaps'),
           subtitle: const Text(
             'Infer short missing sections between matched streets when one nearby route fits your walk. Applies to live and saved walks. Turn off to remove these estimates.',

@@ -127,6 +127,7 @@ void main() {
         'gpsIntervalSeconds': 5,
         'autoDownloadMaps': true,
         'fillSmallGaps': false,
+        'autoFillGaps': true,
         'walkedLineWidth': 3.0,
         'mapSizeKm': 4,
       });
@@ -155,6 +156,7 @@ void main() {
       expect(
         tester
             .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+            .where((w) => (w.title as Text?)?.data?.startsWith('Show ') == true)
             .every((w) => !w.value),
         isTrue,
       );

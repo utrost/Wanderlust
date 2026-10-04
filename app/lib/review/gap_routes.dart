@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import '../recording/saved_walk.dart';
+import '../transfer/walk_codec.dart';
 
 /// A suggestion is display-only until explicitly accepted. Raw fixes stay intact.
 class GapRoute {
@@ -40,6 +41,8 @@ Future<List<ReviewGap>> suggestGapRoutes(List<String> maps, SavedWalk walk) =>
 
 List<ReviewGap> _suggest((List<String>, SavedWalk) input) {
   final walk = input.$2;
+  final anchors = _gapAnchors(walk).take(30).toList();
+  if (anchors.isEmpty) return [];
   final edges = <int, _Edge>{};
   for (final source in input.$1) {
     final data = jsonDecode(source) as Map;
@@ -117,6 +120,42 @@ List<ReviewGap> _suggest((List<String>, SavedWalk) input) {
   }
 
   final result = <ReviewGap>[];
+  for (final (startIndex, endIndex) in anchors) {
+    final a = walk.points[startIndex], p = walk.points[endIndex];
+    final seconds = p.timestamp.difference(a.timestamp).inMilliseconds / 1000;
+    final from = Offset(a.longitude, a.latitude),
+        to = Offset(p.longitude, p.latitude);
+    final straight = _distance(from, to);
+    final start = nearest(from), end = nearest(to);
+    final routes = <GapRoute>[];
+    final budget = math.min(
+      600.0,
+      math.min(seconds * 2.2, straight * 1.8 + 30),
+    );
+    if (start != null && end != null && start != end) {
+      final first = route(start, end, budget, {});
+      if (first != null) {
+        routes.add(first);
+        // Search alternate connections by excluding each shortest-path edge.
+        // Bounded work; these are options, never a claim of route certainty.
+        for (final edge in first.edges.take(80)) {
+          final alternative = route(start, end, budget, {edge});
+          if (alternative != null &&
+              !routes.any((r) => listEquals(r.edges, alternative.edges))) {
+            routes.add(alternative);
+          }
+        }
+        routes.sort((a, b) => a.meters.compareTo(b.meters));
+      }
+    }
+    result.add(ReviewGap(a.timestamp, p.timestamp, routes.take(3).toList()));
+  }
+  return result;
+}
+
+bool hasReviewableGaps(SavedWalk walk) => _gapAnchors(walk).isNotEmpty;
+
+Iterable<(int, int)> _gapAnchors(SavedWalk walk) sync* {
   final breaks = walk.segmentStarts.toSet(), untimed = walk.untimed.toSet();
   int? anchor;
   for (var i = 0; i < walk.points.length; i++) {
@@ -132,41 +171,37 @@ List<ReviewGap> _suggest((List<String>, SavedWalk) input) {
     if (anchor != null) {
       final a = walk.points[anchor];
       final seconds = p.timestamp.difference(a.timestamp).inMilliseconds / 1000;
-      final from = Offset(a.longitude, a.latitude),
-          to = Offset(p.longitude, p.latitude);
-      final straight = _distance(from, to);
       if (seconds > 30 &&
           seconds <= 300 &&
-          straight >= 25 &&
-          result.length < 30) {
-        final start = nearest(from), end = nearest(to);
-        final routes = <GapRoute>[];
-        final budget = math.min(
-          600.0,
-          math.min(seconds * 2.2, straight * 1.8 + 30),
-        );
-        if (start != null && end != null && start != end) {
-          final first = route(start, end, budget, {});
-          if (first != null) {
-            routes.add(first);
-            // Search alternate connections by excluding each shortest-path edge.
-            // Bounded work; these are options, never a claim of route certainty.
-            for (final edge in first.edges.take(80)) {
-              final alternative = route(start, end, budget, {edge});
-              if (alternative != null &&
-                  !routes.any((r) => listEquals(r.edges, alternative.edges))) {
-                routes.add(alternative);
-              }
-            }
-            routes.sort((a, b) => a.meters.compareTo(b.meters));
-          }
-        }
-        result.add(
-          ReviewGap(a.timestamp, p.timestamp, routes.take(3).toList()),
-        );
+          _distance(
+                Offset(a.longitude, a.latitude),
+                Offset(p.longitude, p.latitude),
+              ) >=
+              25) {
+        yield (anchor, i);
       }
     }
     anchor = i;
   }
-  return result;
 }
+
+/// Same bounded candidates as manual review; automatically choose the shortest.
+/// Explicit confirmations take precedence over an automatic alternative.
+Future<List<Set<int>>> automaticGapSections(
+  String network,
+  List<String> gpx,
+  List<List<int>> confirmed,
+) => compute(_automatic, (network, gpx, confirmed));
+
+List<Set<int>> _automatic((String, List<String>, List<List<int>>) input) => [
+  for (var i = 0; i < input.$2.length; i++)
+    {
+      for (final gap in _suggest((
+        [input.$1],
+        WalkCodec.importGpx(input.$2[i]),
+      )))
+        if (gap.routes.isNotEmpty &&
+            !gap.routes.any((r) => input.$3[i].toSet().containsAll(r.edges)))
+          ...gap.routes.first.edges,
+    },
+];

@@ -607,6 +607,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           showSamples: _preferences.showSamples,
           networks: _coverage.networks,
           fillSmallGaps: _preferences.fillSmallGaps,
+          autoFillGaps: _preferences.autoFillGaps,
           showStreetNames: _preferences.showStreetNames,
           showMemories: _preferences.showMemories,
           onChanged: () async {

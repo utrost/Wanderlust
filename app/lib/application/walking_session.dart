@@ -64,6 +64,7 @@ class WalkingSession extends ChangeNotifier {
         await coverage.setFillSmallGaps(
           value.fillSmallGaps,
           recorder.savedWalks,
+          autoFillGaps: value.autoFillGaps,
         );
       },
     );

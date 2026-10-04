@@ -16,6 +16,7 @@ class WalkLibraryScreen extends StatefulWidget {
     this.showSamples = false,
     this.networks = const [],
     this.fillSmallGaps = false,
+    this.autoFillGaps = true,
     this.showStreetNames = true,
     this.showMemories = true,
   });
@@ -24,6 +25,7 @@ class WalkLibraryScreen extends StatefulWidget {
   final bool showSamples;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
+  final bool autoFillGaps;
   final bool showStreetNames;
   final bool showMemories;
 
@@ -197,6 +199,8 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                 }
               : null,
           networks: _networks,
+          autoFillGaps:
+              _restoredPreferences?.autoFillGaps ?? widget.autoFillGaps,
           fillSmallGaps:
               _restoredPreferences?.fillSmallGaps ?? widget.fillSmallGaps,
           showStreetNames:

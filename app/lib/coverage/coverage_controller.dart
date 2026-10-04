@@ -10,6 +10,7 @@ import '../geo/geo_core_ffi.dart';
 import '../geo/matching_session.dart';
 import '../geo/matching_worker.dart';
 import '../recording/saved_walk.dart';
+import '../review/gap_routes.dart';
 import '../transfer/walk_codec.dart';
 import 'coverage_store.dart';
 import 'unmatched_trails.dart';
@@ -144,7 +145,9 @@ class CoverageController extends ChangeNotifier {
           final edges = <int>{};
           final unmatchedByArea = <Set<int>>[];
           for (final area in networks) {
-            final result = await _runMatch(area.geojson, [gpx]);
+            final result = await _runMatch(area.geojson, [
+              gpx,
+            ], gapWalks: tailStart == 0 ? null : [WalkCodec.exportGpx(walk)]);
             if (result.length != 1 ||
                 !area.edgeIds.containsAll(result.single.walked)) {
               throw StateError('Invalid live coverage result');
@@ -200,19 +203,55 @@ class CoverageController extends ChangeNotifier {
   final MatchBatch? _match;
   final MatchingWorker _worker = MatchingWorker();
   bool _fillSmallGaps = false;
+  bool _autoFillGaps = true;
 
-  Future<List<MatchResult>> _runMatch(String network, List<String> walks) =>
-      _match?.call(network, walks) ??
-      _worker.match(network, walks, fillSmallGaps: _fillSmallGaps);
+  Future<List<MatchResult>> _runMatch(
+    String network,
+    List<String> walks, {
+    List<List<int>>? confirmed,
+    List<String>? gapWalks,
+  }) async {
+    final results =
+        await (_match?.call(network, walks) ??
+            _worker.match(network, walks, fillSmallGaps: _fillSmallGaps));
+    if (!_autoFillGaps || walks.isEmpty) return results;
+    final estimates = await automaticGapSections(
+      network,
+      gapWalks ?? walks,
+      confirmed ?? List.generate(walks.length, (_) => <int>[]),
+    );
+    return [
+      for (var i = 0; i < results.length; i++)
+        MatchResult(
+          walked: {...results[i].walked, ...estimates[i]}.toList(),
+          inferred: {
+            ...results[i].inferred,
+            ...estimates[i].difference(results[i].walked.toSet()),
+          }.toList(),
+          unmatched: results[i].unmatched,
+          gapsFilled: results[i].gapsFilled,
+          gapsRejected: results[i].gapsRejected,
+        ),
+    ];
+  }
 
   /// Serialize policy changes with matching. Invalidate any in-flight preview,
   /// then rebuild saved memberships and the whole current walk under the policy.
-  Future<void> setFillSmallGaps(bool enabled, List<SavedWalk> walks) {
+  Future<void> setFillSmallGaps(
+    bool enabled,
+    List<SavedWalk> walks, {
+    bool? autoFillGaps,
+  }) {
     if (_disposed) return Future.value();
     _liveEpoch++;
     final snapshot = List<SavedWalk>.of(walks);
     _queue = _queue.then((_) async {
-      if (_disposed || _fillSmallGaps == enabled) return;
+      if (_disposed ||
+          (_fillSmallGaps == enabled &&
+              (autoFillGaps == null || _autoFillGaps == autoFillGaps))) {
+        return;
+      }
+      _autoFillGaps = autoFillGaps ?? _autoFillGaps;
       _fillSmallGaps = enabled;
       _trails.clear();
       _savedTrailLines = const [];
@@ -377,7 +416,7 @@ class CoverageController extends ChangeNotifier {
           if (walk.status == 'recording') continue;
           final traceHash = walk.fingerprint ?? _prepare(walk).$2;
           final fingerprint =
-              '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}/$traceHash/${walk.confirmedSections.join(',')}';
+              '$matchingRevision/${_fillSmallGaps ? 'fill-v1' : 'direct'}/${_autoFillGaps ? 'auto-gaps-v1' : 'manual-gaps'}/$traceHash/${walk.confirmedSections.join(',')}';
           if (await _store.matchFingerprint(walk.id, area.coverageVersion) !=
                   fingerprint ||
               !_trails.contains(walk.id, area.version)) {
@@ -389,7 +428,11 @@ class CoverageController extends ChangeNotifier {
         final nonempty = pending.where((p) => p.$1.points.isNotEmpty).toList();
         final results = nonempty.isEmpty
             ? <MatchResult>[]
-            : await _runMatch(area.geojson, nonempty.map((p) => p.$2).toList());
+            : await _runMatch(
+                area.geojson,
+                nonempty.map((p) => p.$2).toList(),
+                confirmed: nonempty.map((p) => p.$1.confirmedSections).toList(),
+              );
         if (results.length != nonempty.length) {
           throw StateError('Matcher returned an incomplete batch');
         }
