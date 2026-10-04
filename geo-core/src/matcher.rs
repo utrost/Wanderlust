@@ -142,7 +142,7 @@ pub fn match_gpx_tracks(
     for track in tracks {
         // Snap once per fix. Single-fix excursions onto another street are
         // common with walking GPS and must not become permanent coverage.
-        let snapped: Vec<_> = track
+        let mut snapped: Vec<_> = track
             .iter()
             .map(|p| {
                 if reliable(p) {
@@ -152,6 +152,7 @@ pub fn match_gpx_tracks(
                 }
             })
             .collect();
+        resolve_street_runs(graph, track, &mut snapped, cfg.snap_radius_m);
         let mut confirmed = vec![false; track.len()];
         let mut start = 0;
         while start < track.len() {
@@ -244,6 +245,73 @@ pub fn match_gpx_tracks(
 
 /// Only infer between consecutive confirmed anchors within this GPX segment.
 /// Never join unrelated walks or bridge bad accuracy, outages or speed jumps.
+/// Use evidence before AND after a brief excursion to keep a walk on the same
+/// street. Never resolve an entirely ambiguous parallel run or bridge an outage.
+fn resolve_street_runs(
+    graph: &Graph,
+    track: &[crate::gpx::TrackPoint],
+    snapped: &mut [Option<(usize, f64)>],
+    radius: f64,
+) {
+    let observations = snapped.to_vec();
+    for start in 0..track.len().saturating_sub(2) {
+        let Some((anchor, _)) = observations[start] else {
+            continue;
+        };
+        // Require established movement before an excursion, not one lucky fix.
+        if start == 0
+            || !continuous(&track[start - 1], &track[start])
+            || !observations[start - 1]
+                .is_some_and(|(edge, _)| edge == anchor || graph.same_coverage_parent(edge, anchor))
+        {
+            continue;
+        }
+        for end in start + 1..track.len().min(start + 61) {
+            if !continuous(&track[end - 1], &track[end]) {
+                break;
+            }
+            if let (Some(a), Some(b)) = (track[start].time, track[end].time) {
+                if (b - a).num_milliseconds() > 30_000 {
+                    break;
+                }
+            }
+            let Some((last, _)) = observations[end] else {
+                continue;
+            };
+            if last != anchor && !graph.same_coverage_parent(last, anchor) {
+                continue;
+            }
+            if end > start + 1 {
+                // Preserve a real, sustained detour even if it returns quickly.
+                let sustained_detour =
+                    observations[start + 1..end]
+                        .windows(2)
+                        .any(|pair| match (pair[0], pair[1]) {
+                            (Some((a, _)), Some((b, _))) => {
+                                a != anchor
+                                    && !graph.same_coverage_parent(a, anchor)
+                                    && (a == b || graph.same_coverage_parent(a, b))
+                            }
+                            _ => false,
+                        });
+                if sustained_detour {
+                    break;
+                }
+                let replacements: Option<Vec<_>> = track[start + 1..end]
+                    .iter()
+                    .map(|p| graph.nearest_on_parent(p.pos, anchor, radius))
+                    .collect();
+                if let Some(replacements) = replacements {
+                    for (offset, candidate) in replacements.into_iter().enumerate() {
+                        snapped[start + 1 + offset] = Some(candidate);
+                    }
+                }
+            }
+            break;
+        }
+    }
+}
+
 fn interpolate_gaps(
     graph: &Graph,
     track: &[crate::gpx::TrackPoint],

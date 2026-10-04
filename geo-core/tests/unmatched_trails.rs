@@ -143,3 +143,40 @@ fn painted_neighbours_do_not_hide_a_missing_short_sections_gps_trail() {
     assert!(!result.walked.contains(&1));
     assert!(result.unmatched.contains(&3));
 }
+
+#[test]
+fn brief_branch_excursion_resolves_to_established_street_run() {
+    let mut segments = vec![
+        Segment::new(1, vec![pos(0., 0.), pos(20., 0.)]),
+        Segment::new(2, vec![pos(20., 0.), pos(30., 0.)]),
+        Segment::new(3, vec![pos(30., 0.), pos(50., 0.)]),
+    ];
+    for segment in &mut segments {
+        segment.coverage_parent = Some(100);
+    }
+    segments.push(Segment::new(4, vec![pos(25., 0.), pos(25., 50.)]));
+    let graph = Graph::build(segments);
+    let track = points(&[(5., 0.), (15., 0.), (25., 8.), (35., 0.), (45., 0.)]);
+    let result = match_gpx_tracks(&graph, &[track], MatchConfig::default());
+    assert_eq!(result.walked, [0, 1, 2].into_iter().collect());
+    assert!(result.inferred.is_empty());
+}
+
+#[test]
+fn sustained_out_and_back_branch_is_not_smoothed_away() {
+    let graph = Graph::build(vec![
+        Segment::new(1, vec![pos(0., 0.), pos(100., 0.)]),
+        Segment::new(2, vec![pos(25., 0.), pos(25., 50.)]),
+    ]);
+    let track = points(&[
+        (5., 0.),
+        (15., 0.),
+        (25., 8.),
+        (25., 18.),
+        (25., 8.),
+        (35., 0.),
+        (45., 0.),
+    ]);
+    let result = match_gpx_tracks(&graph, &[track], MatchConfig::default());
+    assert!(result.walked.contains(&1));
+}

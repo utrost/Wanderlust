@@ -249,6 +249,22 @@ impl Graph {
         best
     }
 
+    /// Closest short section belonging to an already established street run.
+    pub fn nearest_on_parent(&self, p: LngLat, anchor: usize, radius: f64) -> Option<(usize, f64)> {
+        self.candidates(p, radius)
+            .into_iter()
+            .filter(|&i| i == anchor || self.same_coverage_parent(i, anchor))
+            .filter_map(|i| {
+                let distance = self.segments[i]
+                    .polyline
+                    .windows(2)
+                    .map(|w| point_to_segment_m(p, w[0], w[1], self.ref_lat_rad))
+                    .fold(f64::INFINITY, f64::min);
+                (distance <= radius).then_some((i, distance))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)))
+    }
+
     /// Avoid painting either candidate when the nearest two streets are within
     /// three metres of one another in snap distance (junctions/parallel paths).
     pub fn nearest_unambiguous_segment(&self, p: LngLat, max_dist_m: f64) -> Option<(usize, f64)> {

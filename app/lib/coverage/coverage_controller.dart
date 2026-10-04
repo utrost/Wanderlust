@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/area_network.dart';
 import '../geo/geo_core_ffi.dart';
+import '../geo/coverage_resolution.dart';
 import '../geo/matching_session.dart';
 import '../geo/matching_worker.dart';
 import '../recording/saved_walk.dart';
@@ -16,7 +17,7 @@ import 'coverage_store.dart';
 import 'unmatched_trails.dart';
 
 // Bump when matching rules change: old saved traces are then reprocessed once.
-const matchingRevision = 'sections-15m-v6';
+const matchingRevision = 'sequence-display-v7';
 typedef MatchBatch = Future<List<MatchResult>> Function(String, List<String>);
 
 typedef CoverageFailure = MatchingFailure;
@@ -214,13 +215,15 @@ class CoverageController extends ChangeNotifier {
     final results =
         await (_match?.call(network, walks) ??
             _worker.match(network, walks, fillSmallGaps: _fillSmallGaps));
-    if (!_autoFillGaps || walks.isEmpty) return results;
-    final estimates = await automaticGapSections(
-      network,
-      gapWalks ?? walks,
-      confirmed ?? List.generate(walks.length, (_) => <int>[]),
-    );
-    return [
+    if (walks.isEmpty) return results;
+    final estimates = _autoFillGaps
+        ? await automaticGapSections(
+            network,
+            gapWalks ?? walks,
+            confirmed ?? List.generate(walks.length, (_) => <int>[]),
+          )
+        : List.generate(walks.length, (_) => <int>{});
+    final resolved = [
       for (var i = 0; i < results.length; i++)
         MatchResult(
           walked: {...results[i].walked, ...estimates[i]}.toList(),
@@ -233,6 +236,12 @@ class CoverageController extends ChangeNotifier {
           gapsRejected: results[i].gapsRejected,
         ),
     ];
+    return resolveCoverageDisplay(
+      network,
+      walks,
+      resolved,
+      confirmed: confirmed,
+    );
   }
 
   /// Serialize policy changes with matching. Invalidate any in-flight preview,
