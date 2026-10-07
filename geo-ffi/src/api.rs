@@ -27,6 +27,7 @@ impl Matcher {
         let cfg = if cycling {
             MatchConfig {
                 max_speed_mps: 15.0,
+                cycling: true,
                 ..cfg
             }
         } else {

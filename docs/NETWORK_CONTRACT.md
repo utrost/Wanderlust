@@ -6,7 +6,8 @@ server or map download in this slice.
 
 Each Feature has a positive, unique integer `id`, a LineString `geometry`, and
 properties `osm_way_id`, `from_node`, `to_node`, `highway`, and `length_m`.
-Optional name/access/bridge/tunnel/layer tags provide context. Coordinates are
+Optional `name`, `foot`, `bicycle`, `footway`, `access`, `bridge`, `tunnel` and
+`layer` tags provide matching context. Missing tags remain unknown. Coordinates are
 WGS84 longitude/latitude pairs. Invalid coordinates, duplicate ids, inconsistent
 node positions, missing endpoint ids, and unsupported contract versions are
 rejected by the Rust loader. MultiLineStrings must be normalized into individually

@@ -304,6 +304,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           ? const Center(child: Text('Loading saved streets…'))
                           : AreaMap(
                               unmatchedTrails: _coverage.unmatchedTrails,
+                              inferred: _coverage.estimatedEdges,
                               network: _coverage.network!,
                               networks: _coverage.networks,
                               counts: _coverage.displayCounts,

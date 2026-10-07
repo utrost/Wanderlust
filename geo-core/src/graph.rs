@@ -18,6 +18,75 @@ pub struct Segment {
     pub node_ids: Option<[u64; 2]>,
     /// Original street edge for artificial coverage subdivisions.
     pub coverage_parent: Option<u64>,
+    /// Optional OSM evidence; missing tags never imply permission or identity.
+    pub street: StreetInfo,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct StreetInfo {
+    pub way_id: Option<u64>,
+    pub name: String,
+    pub highway: String,
+    pub bicycle: String,
+    pub foot: String,
+    pub access: String,
+    pub footway: String,
+    pub layer: String,
+    pub bridge: String,
+    pub tunnel: String,
+}
+
+impl StreetInfo {
+    fn road(&self) -> bool {
+        matches!(
+            self.highway.as_str(),
+            "primary" | "secondary" | "tertiary" | "unclassified" | "residential" | "living_street"
+        )
+    }
+
+    /// Soft evidence only: recordings can include dismounting or stale OSM tags.
+    pub(crate) fn activity_cost(&self, cycling: bool) -> f64 {
+        let allowed = |s: &str| matches!(s, "yes" | "designated" | "permissive" | "official");
+        let specific = if cycling { &self.bicycle } else { &self.foot };
+        if allowed(specific) {
+            return 0.0;
+        }
+        if matches!(specific.as_str(), "no" | "private") {
+            return 2.0;
+        }
+        if matches!(self.access.as_str(), "no" | "private") {
+            return 1.5;
+        }
+        if cycling && matches!(self.highway.as_str(), "steps" | "footway" | "pedestrian") {
+            return if self.highway == "steps" { 1.5 } else { 0.4 };
+        }
+        if !cycling && self.highway == "cycleway" {
+            return 0.4;
+        }
+        0.0
+    }
+
+    fn same_level(&self, other: &Self) -> bool {
+        let a_layer = if self.layer.is_empty() {
+            "0"
+        } else {
+            &self.layer
+        };
+        let b_layer = if other.layer.is_empty() {
+            "0"
+        } else {
+            &other.layer
+        };
+        let structure = |s: &str| !s.is_empty() && s != "no";
+        a_layer == b_layer
+            && structure(&self.bridge) == structure(&other.bridge)
+            && structure(&self.tunnel) == structure(&other.tunnel)
+    }
+
+    fn same_identity(&self, other: &Self) -> bool {
+        self.way_id.is_some() && self.way_id == other.way_id
+            || (!self.name.is_empty() && self.name == other.name)
+    }
 }
 
 impl Segment {
@@ -27,6 +96,7 @@ impl Segment {
             polyline,
             node_ids: None,
             coverage_parent: None,
+            street: StreetInfo::default(),
         }
     }
 
@@ -198,6 +268,92 @@ impl Graph {
     pub fn same_coverage_parent(&self, a: usize, b: usize) -> bool {
         self.segments[a].coverage_parent.is_some()
             && self.segments[a].coverage_parent == self.segments[b].coverage_parent
+    }
+
+    /// Consecutive pieces of one street can support each other. This does not
+    /// create routing links, nor combine an adjoining perpendicular branch.
+    pub(crate) fn same_street_run(&self, a: usize, b: usize, at: LngLat) -> bool {
+        if a == b || self.same_coverage_parent(a, b) {
+            return true;
+        }
+        let (x, y) = (&self.segments[a], &self.segments[b]);
+        if !x.street.same_level(&y.street)
+            || !x.street.same_identity(&y.street)
+            || x.street.highway != y.street.highway
+            || !Self::parallel_at(x, y, at, 0.94)
+        {
+            return false;
+        }
+        self.adjacent(a, b)
+            || self
+                .unique_connection(a, b, at, at, 60.0)
+                .is_some_and(|path| {
+                    path.iter().all(|&edge| {
+                        let s = &self.segments[edge];
+                        x.street.same_identity(&s.street)
+                            && x.street.same_level(&s.street)
+                            && x.street.highway == s.street.highway
+                            && Self::parallel_at(x, s, at, 0.94)
+                    })
+                })
+    }
+
+    fn parallel_at(a: &Segment, b: &Segment, at: LngLat, threshold: f64) -> bool {
+        match (a.project(at), b.project(at)) {
+            (Some((_, x)), Some((_, y))) => (x.0 * y.0 + x.1 * y.1).abs() >= threshold,
+            _ => false,
+        }
+    }
+
+    /// Same street corridor at this observation, not a routing connection.
+    /// Require identity, compatible type/level, close parallel geometry and
+    /// longitudinal overlap. A shared name alone is never sufficient.
+    pub(crate) fn same_corridor(&self, a: usize, b: usize, at: LngLat) -> bool {
+        if a == b || self.same_coverage_parent(a, b) {
+            return true;
+        }
+        let (x, y) = (&self.segments[a], &self.segments[b]);
+        if !x.street.same_level(&y.street)
+            || !x.street.same_identity(&y.street)
+            || !Self::parallel_at(x, y, at, 0.97)
+        {
+            return false;
+        }
+        if self.same_street_run(a, b, at) {
+            return true;
+        }
+        let roadside = |s: &StreetInfo| {
+            s.highway == "cycleway" || s.highway == "footway" && s.footway == "sidewalk"
+        };
+        if !(x.street.road() && y.street.road() && x.street.highway == y.street.highway
+            || x.street.road() && roadside(&y.street)
+            || y.street.road() && roadside(&x.street))
+        {
+            return false;
+        }
+        let reference = at.lat.to_radians();
+        let close = |point, line: &Segment| {
+            line.polyline
+                .windows(2)
+                .any(|p| point_to_segment_m(point, p[0], p[1], reference) <= 18.0)
+        };
+        // Requiring both ends of the shorter piece avoids grouping diverging
+        // roads that merely pass close at an intersection.
+        let (short, long) = if x.length_m() <= y.length_m() {
+            (x, y)
+        } else {
+            (y, x)
+        };
+        if short.length_m() < 8.0 || !close(short.start(), long) || !close(short.end(), long) {
+            return false;
+        }
+        let Some((start, _)) = long.project(short.start()) else {
+            return false;
+        };
+        let Some((end, _)) = long.project(short.end()) else {
+            return false;
+        };
+        (end - start).abs() >= short.length_m().min(10.0) * 0.7
     }
 
     /// True if two segments share a junction node.
