@@ -126,8 +126,8 @@ class StreamHandlerImpl implements EventChannel.StreamHandler {
     }
     if (foregroundNotificationOptions != null) {
       Log.e(TAG, "Geolocator position updates started using Android foreground service");
-      foregroundLocationService.startLocationService(forceLocationManager, locationOptions, events);
       foregroundLocationService.enableBackgroundMode(foregroundNotificationOptions);
+      foregroundLocationService.startLocationService(forceLocationManager, locationOptions, events);
     } else {
       Log.e(TAG, "Geolocator position updates started");
       locationClient =

@@ -98,7 +98,40 @@ and [foreground-service start restrictions](https://developer.android.com/develo
 
 ### Stalled GPS recovery
 
-During a user-started walk, a separate watchdog checks for fresh location events every 10 seconds, including while the map is hidden. After 45 seconds without a fresh fix the recording pill shows a GPS-off icon with an explanatory tooltip. After 60 seconds it cancels and reopens the stream, at most once a minute. Stream errors/completion keep the journal open for recovery. Stop/dispose cancels retries; raw fixes are never synthesized. The OS may suspend execution, and recovery cannot guarantee satellite reception. Resuming the app checks immediately. The elapsed-time display remains optional.
+During a user-started walk, a separate watchdog checks for fresh location events
+every 10 seconds, including while the map is hidden. After 45 seconds without a
+fresh fix the recording pill shows a GPS-off icon with an explanatory tooltip.
+After 60 seconds it renews the native Android location request, at most once a
+minute, retaining the existing event subscription, foreground service,
+notification and wake lock. Other location sources cancel and reopen their
+stream. Failed native recovery leaves the subscription intact for another retry;
+only a fresh fix clears the stale warning. Stop/dispose cancels retries; raw
+fixes are never synthesized. The OS may suspend execution, and recovery cannot
+guarantee satellite reception. Resuming the app checks immediately. The
+elapsed-time display remains optional.
+
+### Screen-off recovery correction — 7 October 2026
+
+Honor Magic V6 field recordings still contained multi-minute GPS delivery gaps
+after enabling background running and excluding the app from battery
+optimization. Those settings alone did not resolve the issue.
+
+Code review found that the previous watchdog cancelled the event subscription,
+which removed foreground status and released the CPU wake lock, then attempted
+to promote the service again while hidden. Android restricts starting location
+foreground services from the background. Recovery now replaces only the native
+location request, retaining the session's original options and event sink.
+Late callbacks from removed requests are ignored, and recovery cannot start a
+stopped recording. Initial recording promotes the service before requesting GPS.
+
+The provider diagnostic also used the wrong method-channel name; it now calls
+the Android plugin's actual channel. This restores the existing provider field
+for subsequent backups. These fixes address demonstrated code defects; their
+effect on the Honor gaps still requires a new screen-off field recording.
+
+Validation: 19 focused Flutter recording/recovery tests and five native Android
+unit tests passed; the ARM64 debug APK built successfully. Native recovery tests
+also run in CI. No physical device was connected for screen-off validation.
 
 ## GPS acquisition and local diagnostics — 4 October 2026
 

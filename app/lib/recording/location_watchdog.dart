@@ -10,12 +10,17 @@ class LocationWatchdog {
     required this.onStale,
     required this.now,
     this.onRestart,
+    this.recover,
   });
   final Stream<Position> Function() open;
   final void Function(Position) onPoint;
   final void Function(bool) onStale;
   final DateTime Function() now;
   final void Function()? onRestart;
+
+  /// Renew native requests without dropping a recording's foreground service.
+  /// Failures retain the subscription and are retried on the next interval.
+  final Future<void> Function()? recover;
   StreamSubscription<Position>? _subscription;
   Timer? _timer;
   DateTime? _lastFix, _lastAttempt;
@@ -86,8 +91,12 @@ class LocationWatchdog {
     _restarting = true;
     onRestart?.call();
     _lastAttempt = now();
-    ++_generation;
     try {
+      if (recover != null) {
+        await recover!();
+        return;
+      }
+      ++_generation;
       await _subscription?.cancel();
       _subscription = null;
       if (!_closed) _connect();
