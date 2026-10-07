@@ -55,8 +55,8 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    override fun onResume() { super.onResume(); recordingVisible = true }
-    override fun onPause() { recordingVisible = false; super.onPause() }
+    override fun onResume() { super.onResume(); recordingVisible = true; RecordingService.visibility(true) }
+    override fun onPause() { recordingVisible = false; RecordingService.visibility(false); super.onPause() }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

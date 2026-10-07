@@ -109,6 +109,9 @@ Map<String, Object?> readGpsDiagnostics(Object? value) {
     'maxFixIntervalMs',
   };
   return Map.unmodifiable({
+    if (value['evidenceLog'] is String &&
+        (value['evidenceLog'] as String).length <= 1000000)
+      'evidenceLog': value['evidenceLog'],
     for (final key in numbers)
       if (value[key] is num &&
           (value[key] as num).isFinite &&

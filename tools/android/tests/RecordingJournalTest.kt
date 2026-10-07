@@ -27,6 +27,18 @@ class RecordingJournalTest {
     }
     @After fun close() { journal.close(); file.delete() }
     private fun fix(time: Long) = Location("gps").apply { latitude=53.0; longitude=8.8; accuracy=5f; this.time=time }
+    @Test fun `evidence persists without fixes and survives subsequent metrics writes`() {
+        val id = journal.start("walk", 1000, null)
+        RecordingJournal(file.path).use { other ->
+            other.evidence(id, JSONObject().put("event", "heartbeat").put("wall", 3000))
+        }
+        journal.close(); journal = RecordingJournal(file.path)
+        assertEquals(0L, journal.state()!!["pointCount"])
+        journal.append(id, fix(4000), 0.0, JSONObject().put("receivedFixes", 1))
+        val diagnostics = journal.state()!!["diagnostics"] as Map<*, *>
+        assertTrue((diagnostics["evidenceLog"] as String).contains("heartbeat"))
+        assertEquals(1, diagnostics["receivedFixes"])
+    }
     @Test fun `native capture survives reconnection without duplicate points or sessions`() {
         val id = journal.start("walk", 1000, null)
         assertTrue(journal.append(id, fix(2000), 0.0, JSONObject()))

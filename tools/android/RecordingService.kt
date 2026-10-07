@@ -16,6 +16,37 @@ import java.util.concurrent.*
 
 /** Started service: no Flutter engine, event subscription, or activity is needed to record. */
 class RecordingService : Service() {
+    private val evidenceWorker = Executors.newSingleThreadScheduledExecutor()
+    private var evidenceWatch: ScheduledFuture<*>? = null
+    @Volatile private var workerBeat = 0L
+    @Volatile private var callbackBeat = 0L
+    private var receiverRegistered = false
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) { evidence(intent?.action ?: "broadcast") }
+    }
+    private fun evidence(event: String) {
+        val id = activeId ?: return
+        val wall = System.currentTimeMillis()
+        val elapsed = SystemClock.elapsedRealtime()
+        val uptime = SystemClock.uptimeMillis()
+        val workerAt = workerBeat
+        val callbackAt = callbackBeat
+        try { evidenceWorker.execute {
+            try {
+                val power = getSystemService(POWER_SERVICE) as PowerManager
+                val data = JSONObject().put("event", event).put("wall", wall)
+                    .put("elapsed", elapsed).put("uptime", uptime).put("pid", android.os.Process.myPid())
+                    .put("writeElapsed", SystemClock.elapsedRealtime()).put("workerAt", workerAt).put("callbackAt", callbackAt)
+                    .put("interactive", power.isInteractive).put("idle", power.isDeviceIdleMode)
+                    .put("powerSave", power.isPowerSaveMode).put("batteryExempt", power.isIgnoringBatteryOptimizations(packageName))
+                    .put("wakeLockHeld", lock?.isHeld == true)
+                    .put("schema", 1).put("sdk", Build.VERSION.SDK_INT).put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
+                preferences(this).getString("database", null)?.let { path ->
+                    RecordingJournal(path).use { it.evidence(id, data) }
+                }
+            } catch (e: Exception) { android.util.Log.w("WanderlustEvidence", "Evidence write failed", e) }
+        } } catch (_: RejectedExecutionException) { /* Service already destroyed. */ }
+    }
     private var journal: RecordingJournal? = null
     @Volatile private var activeId: Long? = null
     private var policy: RecordingPolicy? = null
@@ -101,6 +132,17 @@ class RecordingService : Service() {
                     metrics = JSONObject(state["diagnostics"] as Map<*, *>)
                     lastReceived = SystemClock.elapsedRealtime()
                     lock = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Wanderlust:recording").apply { setReferenceCounted(false); acquire() }
+                    workerBeat = SystemClock.elapsedRealtime()
+                    evidence(if (intent == null) "sticky_start" else if (resume != null) "resume" else "start")
+                    val filter = IntentFilter().apply {
+                        addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF)
+                        addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+                        addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                    }
+                    if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                    else registerReceiver(screenReceiver, filter)
+                    receiverRegistered = true
+                    evidenceWatch = evidenceWorker.scheduleWithFixedDelay({ evidence("heartbeat") }, 30, 30, TimeUnit.SECONDS)
                     requestUpdates()
                     watch = worker.scheduleWithFixedDelay({ tick() }, 5, 5, TimeUnit.SECONDS)
                 } else if (intent?.hasExtra("resumeId") == true) {
@@ -119,17 +161,18 @@ class RecordingService : Service() {
 
     private fun requestUpdates() {
         val p = policy ?: return
+        evidence("request_updates")
         generation++
         val epoch = generation
         listener?.let { locations.removeUpdates(it) }
         cadence = p.interval(SystemClock.elapsedRealtime())
         lastAttempt = SystemClock.elapsedRealtime()
         val freshListener = object : LocationListener {
-            override fun onLocationChanged(location: Location) { val copy = Location(location); worker.execute {
+            override fun onLocationChanged(location: Location) { callbackBeat = SystemClock.elapsedRealtime(); val copy = Location(location); worker.execute {
                 if (activeId != null && epoch == generation) accept(copy)
             } }
             override fun onProviderEnabled(name: String) { worker.execute { if (activeId != null && epoch == generation) requestUpdates() } }
-            override fun onProviderDisabled(name: String) { /* Native watchdog retries and updates the notification. */ }
+            override fun onProviderDisabled(name: String) { evidence("provider_disabled:$name") }
             @Deprecated("Legacy Android callback")
             override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
         }
@@ -195,10 +238,12 @@ class RecordingService : Service() {
 
     private fun tick() {
         if (activeId == null) return
+        workerBeat = SystemClock.elapsedRealtime()
         try {
             val elapsed = SystemClock.elapsedRealtime()
             val stalled = elapsed - lastReceived >= 45000
             if (stalled && elapsed - lastAttempt >= 60000) {
+                evidence("watchdog_retry")
                 journal?.restart()
                 requestUpdates()
             } else if (!stalled && policy?.interval(elapsed) != cadence) requestUpdates()
@@ -213,6 +258,7 @@ class RecordingService : Service() {
         } catch (_: Exception) { storageFailure() }
     }
     private fun storageFailure() {
+        evidence("recording_failure")
         notifyAttention("Recording paused", "Your saved route is safe. Open Wanderlust to check recording.")
         shutdown()
     }
@@ -246,12 +292,15 @@ class RecordingService : Service() {
     private fun stopSession(id: Long, interrupted: Boolean) {
         try {
             if (activeId != id) return // An old notification cannot stop another walk.
+            evidence("stop")
             journal?.finish(id, System.currentTimeMillis(), interrupted)
             notifications.cancel(ALERT_ID)
             shutdown()
         } catch (_: Exception) { storageFailure() }
     }
     private fun releaseResources() {
+        evidenceWatch?.cancel(false); evidenceWatch = null
+        if (receiverRegistered) { unregisterReceiver(screenReceiver); receiverRegistered = false }
         activeId = null; generation++
         watch?.cancel(false); watch = null
         listener?.let { try { locations.removeUpdates(it) } catch (_: Exception) {} }; listener = null
@@ -266,8 +315,9 @@ class RecordingService : Service() {
         main.post { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
     }
     override fun onDestroy() {
+        evidence("service_destroy")
         if (current === this) current = null
-        worker.execute { releaseResources(); callbacks.quitSafely() }
+        worker.execute { releaseResources(); callbacks.quitSafely(); evidenceWorker.shutdown() }
         super.onDestroy()
     }
 
@@ -288,6 +338,7 @@ class RecordingService : Service() {
         }
         private fun parseTime(value: String) = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(value)!!.time
 
+        fun visibility(visible: Boolean) { current?.evidence(if (visible) "app_visible" else "app_hidden") }
         fun handle(activity: Activity, visible: Boolean, call: MethodCall, result: MethodChannel.Result) {
             val path = call.argument<String>("database")
             if (path == null || File(path).canonicalPath != activity.getDatabasePath("wanderlust.db").canonicalPath) {
