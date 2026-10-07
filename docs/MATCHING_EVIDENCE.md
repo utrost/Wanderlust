@@ -246,3 +246,14 @@ A private replay of the reported area reduced native unmatched samples from
 21 to 3 of 35 nearby fixes against the larger downloaded map. The route and
 backup are not committed. Some ambiguity remains; road credit and recovered
 section counts do not prove the exact carriageway travelled.
+
+## Unified route display
+
+The main map now draws matched streets, automatically filled gaps and remaining
+recorded movement in the same solid brown style. Filled street sections count
+once per activity in the heatmap, including across overlapping offline maps.
+Raw movement remains available where no street match is possible; it does not
+invent a street identity. Original GPS samples and matching evidence are retained.
+Activity review defaults to the combined route, with GPS trace available as an
+optional inspection layer. This supersedes the separate purple and grey-green
+overlays described above.

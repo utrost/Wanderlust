@@ -502,6 +502,17 @@ class AreaMapPainter extends CustomPainter {
       ),
       textScale,
     );
+    paintUnmatchedTrails(
+      canvas,
+      unmatchedTrails,
+      project,
+      width:
+          coverageScreenWidth ??
+          math.min(
+            walkedLineWidth,
+            HeatRamp.width(1) * math.sqrt(zoom) * walkedLineWidth / 4.5,
+          ),
+    );
     // Labels must never erase walked coverage, including other streets that
     // cross a label's background. Street labels are offset from their own road.
     canvas.save();
@@ -511,7 +522,6 @@ class AreaMapPainter extends CustomPainter {
       draw(edge, counts[edge.id]!);
     }
     canvas.restore();
-    paintUnmatchedTrails(canvas, unmatchedTrails, project);
     paintWalkOverlay(canvas, maps.toList(), inferred, trace, project);
     canvas.restore();
   }

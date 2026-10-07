@@ -123,7 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SwitchListTile(
           title: const Text('Fill GPS gaps automatically'),
           subtitle: const Text(
-            'Show plausible routes across missing GPS stretches as purple dashes. Estimates do not add heatmap visits; confirmed routes do. Turn off to review gaps manually. Applies to live and saved activities.',
+            'Connect missing GPS stretches along nearby streets and include them in your heatmap. Applies to live and saved activities.',
           ),
           value: value.autoFillGaps,
           onChanged: busy

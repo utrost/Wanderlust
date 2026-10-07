@@ -18,16 +18,14 @@ class CoverageEvidence {
   Map<int, int> counts(Iterable<String> areas) {
     final result = <int, int>{};
     for (final maps in _walks.values) {
-      final supported = {for (final area in areas) ...?maps[area]?.$1};
+      final supported = {
+        for (final area in areas) ...?maps[area]?.$1,
+        for (final area in areas) ...?maps[area]?.$2,
+      };
       for (final edge in supported) {
         result.update(edge, (n) => n + 1, ifAbsent: () => 1);
       }
     }
     return result;
   }
-
-  Set<int> estimates(Iterable<String> areas) => {
-    for (final maps in _walks.values)
-      for (final area in areas) ...?maps[area]?.$2,
-  }.difference(counts(areas).keys.toSet());
 }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../data/area_network.dart';
+import '../theme/heat_ramp.dart';
 
 const reviewTraceColor = Color(0xFF1976D2);
-const reviewInferredColor = Color(0xFF86629C);
 
 void paintWalkOverlay(
   Canvas canvas,
@@ -13,7 +13,7 @@ void paintWalkOverlay(
 ) {
   final seen = <int>{};
   final pen = Paint()
-    ..color = reviewInferredColor
+    ..color = HeatRamp.color(1, dark: false)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 4
     ..strokeCap = StrokeCap.round;
@@ -29,11 +29,7 @@ void paintWalkOverlay(
           path.lineTo(p.dx, p.dy);
         }
       }
-      for (final metric in path.computeMetrics()) {
-        for (double start = 0; start < metric.length; start += 10) {
-          canvas.drawPath(metric.extractPath(start, start + 6), pen);
-        }
-      }
+      canvas.drawPath(path, pen);
     }
   }
   pen
@@ -64,16 +60,17 @@ void paintWalkOverlay(
   }
 }
 
-/// Muted, dashed raw movement; deliberately distinct from counted street heat.
+/// Recorded movement uses the same solid ink as street coverage.
 void paintUnmatchedTrails(
   Canvas canvas,
   List<List<Offset>> trails,
-  Offset Function(Offset) project,
-) {
+  Offset Function(Offset) project, {
+  double width = 4,
+}) {
   final pen = Paint()
-    ..color = const Color(0xFF748C89)
+    ..color = HeatRamp.color(1, dark: false)
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.8
+    ..strokeWidth = width
     ..strokeCap = StrokeCap.round;
   for (final trail in trails) {
     if (trail.length < 2) continue;
@@ -86,10 +83,6 @@ void paintUnmatchedTrails(
         path.lineTo(point.dx, point.dy);
       }
     }
-    for (final metric in path.computeMetrics()) {
-      for (double start = 0; start < metric.length; start += 8) {
-        canvas.drawPath(metric.extractPath(start, start + 4), pen);
-      }
-    }
+    canvas.drawPath(path, pen);
   }
 }

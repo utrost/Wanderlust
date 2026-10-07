@@ -43,7 +43,7 @@ class HeatmapLegend extends StatelessWidget {
       ),
       const SizedBox(height: 16),
       const Text(
-        'Darker streets are more familiar. A section counts once per walk, even if you pass it several times. The current walk adds a live preview. Purple dashes show estimated connections, which do not add heatmap visits. Manually confirmed routes do count. Grey-green dashes show recorded movement that could not be matched to a street.',
+        'Darker streets are more familiar. A section counts once per walk, even if you pass it several times. The current walk adds a live preview. Routes include automatically filled GPS gaps.',
       ),
     ],
   );
