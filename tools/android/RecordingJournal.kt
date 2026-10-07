@@ -17,7 +17,7 @@ class RecordingJournal(path: String) : AutoCloseable {
     init {
         check(db.rawQuery("PRAGMA application_id", null).use { it.moveToFirst(); it.getInt(0) } == 0x57414e44)
         db.execSQL("PRAGMA foreign_keys=ON")
-        db.rawQuery("PRAGMA busy_timeout=5000", null).close()
+        db.rawQuery("PRAGMA busy_timeout=5000", null).use { it.moveToFirst() }
         db.execSQL("CREATE TABLE IF NOT EXISTS native_recording (id INTEGER PRIMARY KEY CHECK(id=1), walk_id INTEGER NOT NULL REFERENCES recorded_walk(id) ON DELETE CASCADE, active INTEGER NOT NULL, meters REAL NOT NULL DEFAULT 0, last_fix INTEGER NOT NULL DEFAULT 0, alerted INTEGER NOT NULL DEFAULT 0, restarts INTEGER NOT NULL DEFAULT 0, resume_boundary INTEGER NOT NULL DEFAULT 0, manual_interval INTEGER NOT NULL DEFAULT 0)")
     }
     fun state(): MutableMap<String, Any?>? = db.rawQuery(

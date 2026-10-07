@@ -35,8 +35,12 @@ class RecordingPolicy(val cycling: Boolean, val started: Long, initialMeters: Do
             anchor = null; resting = null; stationary = false; last = p
             return
         }
+        val previous = last
+        if (previous != null && p.time - previous.time > 45000) {
+            anchor = null; resting = null; stationary = false; movingAt = now
+        }
         val r = resting
-        val movementRadius = max(6.0, min(15.0, p.accuracy * 0.65))
+        val movementRadius = max(8.0, min(20.0, p.accuracy * 1.25))
         val moving = (p.speed ?: 0.0) >= 0.7 || (r != null && distance(r, p) > movementRadius)
         if (moving) {
             stationary = false; movingAt = now; resting = p
@@ -44,17 +48,16 @@ class RecordingPolicy(val cycling: Boolean, val started: Long, initialMeters: Do
             if (r == null) { resting = p; movingAt = now }
             if (now - movingAt >= 60000) stationary = true
         }
-        val previous = last
         if (moving && previous?.bearing != null && p.bearing != null) {
             val turn = abs((p.bearing - previous.bearing + 540) % 360 - 180)
             if (turn >= 25) turningUntil = now + 10000
         }
         val a = anchor
-        if (a == null || p.time - a.time > 45000) {
+        if (a == null) {
             anchor = p
         } else if (stationary) {
             anchor = p
-        } else if (p.speed != null && p.speed < 0.3 && !moving) {
+        } else if ((p.speed == null || p.speed < 0.3) && !moving) {
             // Keep the anchor while position confirms whether zero-speed readings
             // are a rest stop or slow movement. A device can under-report speed.
         } else {

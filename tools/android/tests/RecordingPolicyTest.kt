@@ -33,6 +33,18 @@ class RecordingPolicyTest {
         assertTrue(policy.meters <= 25)
         assertFalse(policy.stationary)
     }
+    @Test fun `stationary jitter without provider speed does not add distance`() {
+        val policy = RecordingPolicy(false, 0)
+        for (s in 0..180 step 3) policy.add(fix(s, (s%5).toDouble()), s*1000L)
+        assertEquals(0.0, policy.meters, 0.01)
+        assertTrue(policy.stationary)
+    }
+    @Test fun `continuous slow movement is not mistaken for a GPS outage`() {
+        val policy = RecordingPolicy(false, 0)
+        for (s in 0..180 step 3) policy.add(fix(s, s*0.2), s*1000L)
+        assertTrue(policy.meters >= 30)
+        assertTrue(policy.meters <= 36.1)
+    }
     @Test fun `manual cadence remains explicitly selected`() {
         val policy = RecordingPolicy(false, 0, manualInterval=10000)
         for (s in 1..150 step 3) policy.add(fix(s, 0.0, 0.0), s*1000L)
