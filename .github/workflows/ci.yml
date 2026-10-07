@@ -97,7 +97,7 @@ jobs:
 
       - name: Test Android location service recovery
         working-directory: app/android
-        run: ./gradlew :geolocator_android:testDebugUnitTest
+        run: ./gradlew :app:testDebugUnitTest :geolocator_android:testDebugUnitTest
 
       - name: Verify APK native libraries and Bremen asset
         run: python3 tools/verify_apk.py app/build/app/outputs/flutter-apk/app-debug.apk

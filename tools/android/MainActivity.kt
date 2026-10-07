@@ -11,10 +11,13 @@ import io.flutter.plugin.common.MethodChannel
 /** Notification permission is requested only when the user starts a walk. */
 class MainActivity : FlutterActivity() {
     private val backupFiles by lazy { BackupFiles(this) }
+    private var recordingVisible = false
     private var pendingNotification: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/recorder")
+            .setMethodCallHandler { call, result -> RecordingService.handle(this, recordingVisible, call, result) }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/backups")
             .setMethodCallHandler(backupFiles::handle)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/about")
@@ -51,6 +54,9 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
+
+    override fun onResume() { super.onResume(); recordingVisible = true }
+    override fun onPause() { recordingVisible = false; super.onPause() }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

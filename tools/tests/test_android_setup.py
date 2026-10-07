@@ -32,6 +32,12 @@ class AndroidSetupTest(unittest.TestCase):
             self.assertIsNotNone(root.find('application/activity'))
             self.assertTrue((manifest.parent / 'kotlin/com/simiono/wanderlust/MainActivity.kt').exists())
             application = root.find('application')
+            services = application.findall('service')
+            self.assertEqual(len(services), 1)
+            self.assertEqual(services[0].get(f'{{{module.ANDROID}}}name'), 'com.simiono.wanderlust.RecordingService')
+            self.assertEqual(services[0].get(f'{{{module.ANDROID}}}exported'), 'false')
+            self.assertEqual(services[0].get(f'{{{module.ANDROID}}}foregroundServiceType'), 'location')
+            self.assertEqual(services[0].get(f'{{{module.ANDROID}}}stopWithTask'), 'false')
             self.assertEqual(application.get(f'{{{module.ANDROID}}}allowBackup'), 'false')
             for filename, sections in [('backup_rules.xml', [None]),
                                        ('data_extraction_rules.xml', ['cloud-backup', 'device-transfer'])]:
@@ -45,7 +51,7 @@ class AndroidSetupTest(unittest.TestCase):
             self.assertNotIn('signingConfigs.getByName("debug")', gradle)
             self.assertIn('namespace = "com.simiono.wanderlust"', gradle)
             self.assertIn('applicationId = "com.simiono.wanderlust"', gradle)
-            for name in ('MainActivity.kt', 'BackupFiles.kt'):
+            for name in ('MainActivity.kt', 'BackupFiles.kt', 'RecordingService.kt', 'RecordingJournal.kt', 'RecordingPolicy.kt'):
                 self.assertTrue((manifest.parent / 'kotlin/com/simiono/wanderlust' / name).read_text().startswith('package com.simiono.wanderlust'))
 
 

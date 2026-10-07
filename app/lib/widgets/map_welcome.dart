@@ -22,7 +22,7 @@ class MapWelcome extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Start by downloading streets around your location. Then put your phone away and explore at your own pace.',
+                'Tap Start walk, put your phone away and explore at your own pace. Download nearby streets whenever you want to see your walking map.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),

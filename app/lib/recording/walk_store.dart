@@ -19,6 +19,7 @@ import '../storage/walk_repository.dart';
 import '../transfer/backup_data.dart';
 import '../transfer/walk_importer.dart';
 import 'activity_type.dart';
+import 'native_recording.dart';
 import 'gps_diagnostics.dart';
 import 'saved_walk.dart';
 import 'walk_history.dart';
@@ -32,6 +33,7 @@ export 'walk_journal.dart';
 class SqliteWalkStore
     implements
         WalkStore,
+        NativeRecordingStore,
         GpsDiagnosticsStore,
         WalkHistory,
         GapReviewStore,
@@ -42,6 +44,9 @@ class SqliteWalkStore
   SqliteWalkStore({DatabaseFactory? factory, String? databasePath})
     : database = AppDatabase(factory: factory, databasePath: databasePath);
   final AppDatabase database;
+  @override
+  Future<String> get recordingDatabasePath async =>
+      (await database.database).path;
   late final walksRepository = WalkRepository(database);
   late final mapsRepository = OfflineMapRepository(database);
   late final coverageRepository = CoverageRepository(database);

@@ -8,6 +8,7 @@ import '../transfer/walk_codec.dart';
 import 'activity_type.dart';
 import 'gps_diagnostics.dart';
 import 'location_watchdog.dart';
+import 'native_recording.dart';
 import 'saved_walk.dart';
 import 'walk_distance.dart';
 import 'walk_journal.dart';
@@ -132,21 +133,38 @@ class WalkRecorder extends ChangeNotifier {
     this.showElapsed,
     this.activityType,
     this.gpsInterval,
+    this.automaticGps,
     this.loadHistory,
+    this.nativeRecording,
   }) : _location = location ?? DeviceLocationSource(),
        _store = store,
        _now = now ?? DateTime.now;
+  final NativeRecordingBackend? nativeRecording;
+  Timer? _nativePoll;
+  Future<void>? _nativeSync;
+  bool _recoverable = false;
+  bool get hasRecoverableWalk => _recoverable;
+  double? _nativeMeters;
+  Map<String, Object?> _nativeDiagnostics = const {};
+  List<int> _nativeSegments = const [];
+  bool _nativeHasFix = false;
   final Future<List<SavedWalk>> Function()? loadHistory;
   Future<List<SavedWalk>> _history() =>
       loadHistory?.call() ?? _store.recoverAndList();
   final bool Function()? showElapsed;
   final WalkActivity Function()? activityType;
   final int Function()? gpsInterval;
+  final bool Function()? automaticGps;
   int requestedGpsInterval = 5;
   GpsDiagnostics? _diagnostics;
-  bool get locating => isRecording && !(_diagnostics?.hasFreshFix ?? false);
-  Map<String, Object?> get gpsDiagnostics =>
-      _diagnostics?.snapshot() ?? const {};
+  bool get locating =>
+      isRecording &&
+      !(nativeRecording != null
+          ? _nativeHasFix
+          : (_diagnostics?.hasFreshFix ?? false));
+  Map<String, Object?> get gpsDiagnostics => nativeRecording != null
+      ? _nativeDiagnostics
+      : (_diagnostics?.snapshot() ?? const {});
   WalkActivity _activity = WalkActivity.walk;
   final LocationSource _location;
   final WalkStore _store;
@@ -187,8 +205,9 @@ class WalkRecorder extends ChangeNotifier {
           'recording',
           List.unmodifiable(_points),
           activity: _activity,
+          segmentStarts: _nativeSegments,
         );
-  double get distanceMeters => _distance.meters;
+  double get distanceMeters => _nativeMeters ?? _distance.meters;
   Duration get elapsed => _startedAt == null
       ? Duration.zero
       : (_endedAt ?? _now()).difference(_startedAt!);
@@ -202,7 +221,9 @@ class WalkRecorder extends ChangeNotifier {
   void setForeground(bool value) {
     _foreground = value;
     _updateTicker();
+    _updateNativePolling();
     if (value) {
+      if (nativeRecording != null && _initialized) unawaited(_pollNative());
       _watchdog?.check();
       _notify();
     }
@@ -224,8 +245,12 @@ class WalkRecorder extends ChangeNotifier {
   Future<void> initialize() => _initializing ??= _initialize();
   Future<void> _initialize() async {
     try {
-      _savedWalks = await _history();
+      if (nativeRecording != null) await _syncNative();
+      _savedWalks = (await _history())
+          .where((w) => w.status != 'recording')
+          .toList();
       _initialized = true;
+      _updateNativePolling();
     } catch (_) {
       lastError = RecorderError.storageFailed;
     }
@@ -253,6 +278,26 @@ class WalkRecorder extends ChangeNotifier {
       if (!_initialized) return false;
       lastError = await _location.authorize();
       if (lastError != null || _disposed || !_foreground) return false;
+      if (nativeRecording != null) {
+        await _nativeSync;
+        final resumeId = _recoverable ? _walkId : null;
+        await nativeRecording!.start(
+          resumeId != null
+              ? _activity.name
+              : (activityType?.call() ?? WalkActivity.walk).name,
+          resumeId: resumeId,
+          intervalSeconds: (automaticGps?.call() ?? true)
+              ? null
+              : gpsInterval?.call(),
+        );
+        if (resumeId == null) {
+          _walkId = null;
+          _points.clear();
+        }
+        await _syncNative();
+        _updateNativePolling();
+        return isRecording;
+      }
       final startedAt = _now();
       try {
         _activity = activityType?.call() ?? WalkActivity.walk;
@@ -304,7 +349,14 @@ class WalkRecorder extends ChangeNotifier {
       return true;
     } catch (_) {
       lastError = RecorderError.locationFailed;
-      if (state == RecorderState.recording) await stop(interrupted: true);
+      if (nativeRecording != null) {
+        // A timeout can occur after the service committed Start. Reattach instead
+        // of creating a second walk or stopping a successfully running service.
+        await _pollNative();
+        _updateNativePolling();
+      } else if (state == RecorderState.recording) {
+        await stop(interrupted: true);
+      }
       return false;
     } finally {
       if (state == RecorderState.starting) state = RecorderState.idle;
@@ -367,7 +419,7 @@ class WalkRecorder extends ChangeNotifier {
 
   Future<void> stop({bool interrupted = false}) {
     if (_stopping != null) return _stopping!;
-    if (!isRecording) return Future.value();
+    if (!isRecording && !_recoverable) return Future.value();
     state = RecorderState.stopping;
     _endedAt = _now();
     _ticker?.cancel();
@@ -380,6 +432,20 @@ class WalkRecorder extends ChangeNotifier {
 
   Future<void> _finish(bool interrupted) async {
     try {
+      if (nativeRecording != null) {
+        await _nativeSync;
+        await nativeRecording!.stop(_walkId!);
+        await _syncNative();
+        if (isRecording || _recoverable) {
+          throw StateError('Walk has not stopped');
+        }
+        _savedWalks = (await _history())
+            .where((w) => w.status != 'recording')
+            .toList();
+        _pendingSave = false;
+        lastError = null;
+        return;
+      }
       await _watchdog?.close();
       _watchdog = null;
       await _writes;
@@ -413,6 +479,19 @@ class WalkRecorder extends ChangeNotifier {
     state = RecorderState.stopping;
     _notify();
     try {
+      if (nativeRecording != null) {
+        await _syncNative();
+        if (_walkId != null && (isRecording || _recoverable)) {
+          await nativeRecording!.stop(_walkId!);
+          await _syncNative();
+        }
+        _savedWalks = (await _history())
+            .where((w) => w.status != 'recording')
+            .toList();
+        _pendingSave = false;
+        lastError = null;
+        return;
+      }
       for (var i = 0; i < _points.length; i++) {
         await _store.append(_walkId!, i, _points[i]);
       }
@@ -428,9 +507,104 @@ class WalkRecorder extends ChangeNotifier {
     }
   }
 
+  void _updateNativePolling() {
+    _nativePoll?.cancel();
+    _nativePoll = null;
+    if (nativeRecording != null &&
+        _foreground &&
+        !_disposed &&
+        (isRecording || _recoverable || isBusy || lastError != null)) {
+      _nativePoll = Timer.periodic(const Duration(seconds: 2), (_) {
+        if (!isBusy) unawaited(_pollNative());
+      });
+    }
+  }
+
+  Future<void> _pollNative() async {
+    try {
+      await _syncNative();
+    } catch (_) {
+      /* Service continues recording. */
+    }
+  }
+
+  Future<void> _syncNative() => _nativeSync ??= _readNative().whenComplete(() {
+    _nativeSync = null;
+  });
+
+  Future<void> _readNative() async {
+    try {
+      Map<String, dynamic>? snapshot;
+      do {
+        snapshot = await nativeRecording!.snapshot(
+          walkId: _walkId,
+          after: _points.length - 1,
+        );
+        if (snapshot == null || _disposed) return;
+        final id = (snapshot['walkId'] as num).toInt();
+        if (snapshot['active'] != true && _walkId == null) return;
+        if (id != _walkId) {
+          _walkId = id;
+          _points.clear();
+        }
+        final page = snapshot['points'] as List? ?? const [];
+        if (page.isEmpty &&
+            _points.length < (snapshot['pointCount'] as num).toInt()) {
+          throw StateError('Native journal page is missing');
+        }
+        for (final value in page) {
+          final row = Map<String, dynamic>.from(value as Map);
+          final seq = (row['sequence'] as num).toInt();
+          if (seq < _points.length) continue;
+          if (seq != _points.length) {
+            throw StateError('Incomplete native journal page');
+          }
+          _points.add(
+            Position.fromMap(Map<String, dynamic>.from(row['position'] as Map)),
+          );
+        }
+      } while (_points.length < (snapshot['pointCount'] as num).toInt());
+      final wasRecording = isRecording;
+      _startedAt = DateTime.parse(snapshot['startedAt'] as String);
+      _endedAt = snapshot['endedAt'] == null
+          ? null
+          : DateTime.parse(snapshot['endedAt'] as String);
+      _activity = WalkActivity.parse(snapshot['activity']);
+      _nativeSegments = (snapshot['segments'] as List? ?? const []).cast<int>();
+      _nativeMeters = (snapshot['meters'] as num).toDouble();
+      _nativeDiagnostics = readGpsDiagnostics(snapshot['diagnostics']);
+      _nativeHasFix = _points.isNotEmpty;
+      requestedGpsInterval = (snapshot['intervalSeconds'] as num? ?? 3).toInt();
+      _recoverable = snapshot['active'] == true && snapshot['running'] != true;
+      gpsStale = snapshot['stale'] == true;
+      state = snapshot['active'] == true && snapshot['running'] == true
+          ? RecorderState.recording
+          : RecorderState.idle;
+      if (wasRecording && !isRecording) {
+        _savedWalks = (await _history())
+            .where((w) => w.status != 'recording')
+            .toList();
+      }
+      if (!_pendingSave &&
+          (isRecording || lastError == RecorderError.storageFailed)) {
+        lastError = null;
+      }
+      _updateTicker();
+      _updateNativePolling();
+      _notify();
+    } catch (_) {
+      // Capture continues in Android even if the interface temporarily cannot read.
+      lastError = RecorderError.storageFailed;
+      _notify();
+      rethrow;
+    }
+  }
+
   /// Raw fixes retain timestamps and measured horizontal accuracy. Accuracy is
   /// a namespaced extension, not GPX hdop (which has different units).
-  String toGpx() => pointsToGpx(_points, activity: _activity);
+  String toGpx() => nativeRecording != null && recordingSnapshot != null
+      ? WalkCodec.exportGpx(recordingSnapshot!)
+      : pointsToGpx(_points, activity: _activity);
   static String pointsToGpx(
     List<Position> points, {
     WalkActivity activity = WalkActivity.walk,
@@ -457,6 +631,7 @@ class WalkRecorder extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _ticker?.cancel();
+    _nativePoll?.cancel();
     // Leave the database session open for recovery as interrupted on relaunch.
     unawaited(_close());
     super.dispose();
@@ -465,6 +640,7 @@ class WalkRecorder extends ChangeNotifier {
   Future<void> _close() async {
     try {
       await _watchdog?.close();
+      await _nativeSync;
       await _starting;
       await _initializing;
       await _stopping;

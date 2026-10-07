@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -7,6 +8,7 @@ import '../coverage/coverage_store.dart';
 import '../maps/area_store.dart';
 import '../maps/automatic_maps.dart';
 import '../recording/walk_history.dart';
+import '../recording/native_recording.dart';
 import '../recording/walk_journal.dart';
 import '../recording/walk_recorder.dart';
 import '../settings/preferences_store.dart';
@@ -26,12 +28,19 @@ class WalkingSession extends ChangeNotifier {
   }) {
     recorder = WalkRecorder(
       store: journal,
+      nativeRecording:
+          Platform.isAndroid &&
+              location == null &&
+              journal is NativeRecordingStore
+          ? AndroidRecordingBackend(journal as NativeRecordingStore)
+          : null,
       location:
           location ??
           DeviceLocationSource(
             gpsIntervalSeconds: () => recorder.requestedGpsInterval,
           ),
       gpsInterval: () => preferences.effectiveGpsInterval,
+      automaticGps: () => preferences.automaticGpsSampling,
       activityType: () => preferences.activity,
       showElapsed: () => preferences.showTime,
       loadHistory: () => history.listSummaries(recover: true),
