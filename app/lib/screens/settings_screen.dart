@@ -143,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SwitchListTile(
           title: const Text('Automatic GPS sampling'),
           subtitle: const Text(
-            'Walking: 5 s · Cycling: 2 s. Faster updates use more battery.',
+            'Starts quickly, follows your movement and slows GPS sampling during rest stops. Applies to the next walk.',
           ),
           value: value.automaticGpsSampling,
           onChanged: busy

@@ -1,68 +1,100 @@
 # Screen-off walking on Android
 
-Start a walk while Wanderlust is visible. The existing Geolocator stream now
-uses an Android location foreground service, a quiet **Walk in progress**
-notification and a partial CPU wake lock. Lock the screen or switch apps; GPS
-fixes continue to be committed individually to the SQLite recording journal.
-Tap the notification to return, then Stop to save. Starting while hidden is
-guarded; no boot receiver, background auto-start or always-on tracking is added.
+Tap **Start walk** while Wanderlust is visible, then put the phone away. Android's
+native `RecordingService` owns GPS, the recovery watchdog, notification and
+SQLite writes. Flutter is a reader of that journal; hiding or disposing its
+screen does not stop capture. Maps are optional for recording.
 
-Android 13+ asks once for notification permission when starting the first walk.
-Refusing notifications does not prevent recording, but the return shortcut is
-absent from the notification drawer; use the app icon. Android's active-apps
-controls still show the foreground service. Location permission and enabled
-location services remain required. Center on me does not request notifications
-or start a recording service.
+Each valid ordered fix from the session is committed atomically with its sequence and diagnostics
+before it appears in the interface. Late-delivered fixes are retained, but only
+a fresh fix clears the stalled-GPS warning. Existing walk IDs, raw points, GPX and backup
+formats remain compatible. A small `native_recording` table holds durable session
+state. Legacy interruption recovery excludes its active session. GPS callbacks,
+commands and watchdog work share one native worker; SQLite writes are off the
+Android main thread. Flutter reads unseen fixes in pages of at most 500, only
+while visible, and never duplicates the native writes. Live matching and nearby
+map download checks catch up on return; native recording does not need map data.
 
-## Work and battery budget
+## Sampling and rest stops
 
-- High-accuracy location requests use a five-second desired interval and a
-  five-metre distance filter by default. Settings → GPS interval offers 2, 5, 10
-  and 20 seconds for the next walk (2 s uses a two-metre movement filter). Actual
-  delivery depends on the location provider.
-- No Wi-Fi lock, route upload, screen wake lock or constant notification update.
-  Automatic nearby map downloads may use the network during a started walk,
-  including while hidden, unless disabled in Settings.
-- Display clocks and live map matching pause while hidden. On return, matching
-  catches up with every unseen fix, retaining overlap for consecutive evidence.
-- Stop cancels the stream and releases the foreground notification and partial
-  wake lock. GPS or storage errors follow the existing interrupted-save path.
+Automatic sampling requests one-second updates for the first 20 seconds (up to
+45 seconds while acquiring a fix), then three seconds walking or two cycling.
+Turns temporarily request one-second updates. After at least a minute without
+clear movement, the request interval becomes 15 seconds. A significant-motion
+sensor, where available, wakes normal sampling sooner; GPS movement also exits
+rest mode. Stops remain part of the same walk. Uncertain fixes, implausible jumps,
+outages and trustworthy zero-speed drift do not inflate display distance. Raw
+accepted positions are still retained for future matching improvements.
 
-This is a conservative first policy, not adaptive sampling. A partial wake lock
-costs power; emulator results cannot establish a real phone battery budget.
-Initial field acceptance target: a one-hour screen-off walk with no unexplained
-moving gaps over 30 seconds and at most five percentage points of battery use,
-measured against the same phone's idle baseline. Record device, duration, battery
-before/after, GPS conditions and other active apps. Revise the target with data.
+Manual 2/5/10/20-second settings remain available and persist across service
+restarts. Provider delivery is advisory, not guaranteed. The service holds one
+partial CPU wake lock only while recording, never a screen or Wi-Fi lock.
+Stationary cadence and turn handling are initial defaults awaiting the Honor
+field test; no battery saving percentage is claimed.
 
-## Limits and recovery
+## Notification and recovery
 
-This service is tied to the app's Flutter engine. Screen-off and switching apps
-are supported; force-stop, task removal, reboot or OS process termination may
-end recording. There is no promise of uninterrupted collection after process
-death. On relaunch, committed fixes are recovered as an **interrupted** walk;
-GPS never silently restarts. Already committed readings remain exportable and
-can produce coverage. Pending uncommitted writes can be lost.
+The quiet recording notification shows distance, an elapsed-time chronometer and
+**Stop**. Stop commits the end of the walk without opening Flutter, then releases
+GPS, its wake lock and foreground notification. Old notification actions are
+checked against the current walk ID and cannot stop a newer session.
 
-Manufacturers can impose additional battery restrictions. Field testing on the
-actual phone remains required; no blanket battery-optimization exemption is
-requested in this slice.
+The native watchdog checks every five seconds. After 45 seconds without a fresh
+fix it shows reconnecting status; it renews native GPS requests at most once per
+minute while preserving the recording service. After two minutes it posts one
+attention notification per walk. Fresh fixes clear that notification. Storage
+failure pauses capture while retaining the last durable journal and offers
+continuation when the app reopens.
 
-## Repeatable acceptance checks
+The service requests Android sticky restart. If Android restarts it, it resumes
+the same journal with a segment break at the next fix. If it does not (including
+force-stop or reboot), reopening offers **Continue your walk** and **Finish this
+walk**. Finishing an interrupted session uses its last saved fix as its end time,
+not the reopening time. No boot receiver, always-on tracking or background
+location permission is introduced. Android and manufacturer policies can still
+stop recording; successful emulator tests do not establish Honor reliability.
 
-1. Start with precise while-in-use location permission; check the notification.
-2. Lock the screen and walk for at least 15 minutes. Return and verify the trace
-   includes the hidden portion and live colour catches up before Stop.
-3. Switch to another app for several minutes; repeat the continuity check.
-4. Stop; verify the walk is saved and the notification disappears.
-5. Start another walk, then force-stop. Reopen: committed points must be retained
-   in an interrupted walk, without a new GPS service starting automatically.
-6. Repeat with notification permission refused and with location disabled.
-7. Measure the one-hour battery/trace acceptance target above on the real phone.
+Android 13+ asks once for notification permission at first Start. Refusing it
+leaves recording available but removes drawer controls and alerts; reopen the
+app to Stop. Location permission and enabled location services remain required.
 
-The unit suite checks hidden journaling, suspended display ticks, stream cleanup,
-start/permission races, and coverage catch-up beyond 80 fixes. SQLite recovery
-tests reopen the real database.
+## Validation and field checks
+
+Native tests cover atomic journal rollback, reconnect/paging, session identity,
+sticky restart without Flutter, notification Stop, late callbacks, one-time
+stalled-GPS alerts, adaptive/manual sampling and rest-stop distance. Flutter tests
+cover reconnecting the same session, continuation, notification Stop, read/save
+failures and legacy database recovery. CI runs both native and Flutter suites.
+
+On the Honor Magic V6, try a five-minute walk, a one-hour pocket walk and a longer
+outing with a rest stop. Include screen lock, another app, reopening during the
+walk and Stop from the notification. Record battery before/after and export the
+walk if any section is missing. Real-device acceptance and battery measurements
+remain the user's next step.
+
+Platform references: [Android location foreground services](https://developer.android.com/develop/background-work/services/fgs/service-types#location)
+and [foreground-service restart restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start).
+
+## Native recorder emulator smoke test — 7 October 2026
+
+On an isolated API 35 emulator, a real installed APK recorded with Wi-Fi/mobile
+data off and the display asleep. Force-stop left 32 committed points in the
+original journal; reopening offered Continue/Finish. Continuing retained that
+walk ID and added a segment boundary at point 32. The notification displayed a
+chronometer, distance and Stop. Stop from the drawer saved all 67 points as one
+completed walk, removed the recording service and left zero held wake locks.
+SQLite integrity checks passed before and after recovery.
+
+The smoke test exposed zero-speed readings accompanying clear coordinate
+movement; the distance policy was corrected and a regression test added. The
+corrected resumed leg counted 24.09 metres for a 24-metre injected movement.
+These are functional tests with public synthetic coordinates, not a measurement
+of Honor background reliability, GPS quality or battery consumption.
+
+## Earlier implementation and field evidence
+
+The entries below describe previous builds, superseded by the native recorder
+above; their field observations are retained for comparison.
 
 ## Evaluation — 2026-09-29
 

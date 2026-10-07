@@ -293,8 +293,14 @@ class WalkRepository
 
   /// Use the last durable fix, never the relaunch time, as recovery end.
   static Future<void> recoverInterrupted(DatabaseExecutor db) async {
+    final nativeTable = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='native_recording'",
+    );
+    final exceptNative = nativeTable.isEmpty
+        ? ''
+        : ' AND id NOT IN (SELECT walk_id FROM native_recording WHERE active=1)';
     await db.rawUpdate(
-      "UPDATE recorded_walk SET status = 'interrupted', ended_at = COALESCE((SELECT timestamp FROM recorded_point WHERE walk_id = recorded_walk.id ORDER BY seq DESC LIMIT 1), started_at) WHERE status = 'recording'",
+      "UPDATE recorded_walk SET status = 'interrupted', ended_at = COALESCE((SELECT timestamp FROM recorded_point WHERE walk_id = recorded_walk.id ORDER BY seq DESC LIMIT 1), started_at) WHERE status = 'recording'$exceptNative",
     );
   }
 }

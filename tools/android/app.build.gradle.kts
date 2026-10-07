@@ -40,6 +40,7 @@ android {
             }
         }
     }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     buildTypes {
         release {
             signingConfig = if (releaseKey != null) signingConfigs.getByName("production") else null
@@ -66,4 +67,15 @@ val verifyFreeDependencies by tasks.registering {
 }
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     dependsOn(verifyFreeDependencies)
+}
+
+// Local service/database tests use Android shadows; no test SDK ships in the APK.
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+}
+
+// Flutter supplies assets outside AGP's merge task; host-test packaging must wait.
+tasks.matching { it.name == "packageDebugUnitTestForUnitTest" }.configureEach {
+    dependsOn("copyFlutterAssetsDebug")
 }

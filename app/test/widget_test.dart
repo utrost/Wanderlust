@@ -113,16 +113,17 @@ void main() {
         .setMockMethodCallHandler(geoChannel, null);
   });
 
-  testWidgets('fresh installation offers local map setup without Bremen', (
-    tester,
-  ) async {
-    await tester.pumpWidget(MaterialApp(home: MapScreen(store: BootStore())));
-    await tester.pumpAndSettle();
-    expect(find.text('Set up my map'), findsOneWidget);
-    expect(find.text('Bremen center'), findsNothing);
-    expect(find.text('Start walk'), findsNothing);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'fresh installation offers recording and optional local map setup',
+    (tester) async {
+      await tester.pumpWidget(MaterialApp(home: MapScreen(store: BootStore())));
+      await tester.pumpAndSettle();
+      expect(find.text('Set up my map'), findsOneWidget);
+      expect(find.text('Bremen center'), findsNothing);
+      expect(find.text('Start walk'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'first map setup selects local download and deleting it returns to welcome',
     (tester) async {

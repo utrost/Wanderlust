@@ -354,7 +354,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                 children: [
                                   _mapDock(),
                                   if (!_recorder.isRecording &&
-                                      !_recorder.isBusy)
+                                      !_recorder.isBusy &&
+                                      !_recorder.hasRecoverableWalk)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 8),
                                       child: Material(
@@ -389,6 +390,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                             label: Text(
                                               _recorder.needsSaveRetry
                                                   ? 'Retry saving walk'
+                                                  : _recorder.hasRecoverableWalk
+                                                  ? 'Continue your walk'
                                                   : _preferences.activity ==
                                                         WalkActivity.cycle
                                                   ? 'Start ride'
@@ -396,6 +399,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                             ),
                                           ),
                                   ),
+                                  if (_recorder.hasRecoverableWalk &&
+                                      !_recorder.isBusy)
+                                    TextButton(
+                                      onPressed: _recorder.stop,
+                                      child: const Text('Finish this walk'),
+                                    ),
                                   _attribution(),
                                 ],
                               ),
@@ -442,11 +451,25 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             onPressed: _recorder.retrySave,
             child: const Text('Retry saving walk'),
           )
-        else
+        else if (_recorder.hasRecoverableWalk) ...[
+          FilledButton(
+            onPressed: _onStartWalk,
+            child: const Text('Continue your walk'),
+          ),
+          TextButton(
+            onPressed: _recorder.stop,
+            child: const Text('Finish this walk'),
+          ),
+        ] else ...[
+          FilledButton(
+            onPressed: _onStartWalk,
+            child: const Text('Start walk'),
+          ),
           TextButton(
             onPressed: _showSavedWalks,
             child: const Text('Walk history and import'),
           ),
+        ],
       ],
     ],
   );
@@ -513,7 +536,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     historyEnabled:
         !_recorder.isRecording &&
         !_recorder.isBusy &&
-        !_recorder.needsSaveRetry,
+        !_recorder.needsSaveRetry &&
+        !_recorder.hasRecoverableWalk,
     onAddMemory: _addMemory,
     onMemories: _showMemories,
     onHistory: _showSavedWalks,
@@ -634,7 +658,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!mounted ||
         _recorder.isRecording ||
         _recorder.isBusy ||
-        _recorder.needsSaveRetry) {
+        _recorder.needsSaveRetry ||
+        _recorder.hasRecoverableWalk) {
       return;
     }
     await Navigator.of(context).push(
