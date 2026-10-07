@@ -154,7 +154,7 @@ def normalize(raw, bbox, area_id='bremen-center', name='Bremen center'):
             eid = edge_id(wid, a, b, chain[1:-1])
             properties = {'osm_way_id': wid, 'from_node': a, 'to_node': b,
                           'highway': t['highway'], 'length_m': round(length, 3)}
-            for key in ('name', 'bridge', 'tunnel', 'layer', 'foot', 'access'):
+            for key in ('name', 'bridge', 'tunnel', 'layer', 'foot', 'bicycle', 'footway', 'access'):
                 if key in t:
                     properties[key] = t[key]
             feature = {'type': 'Feature', 'id': eid, 'properties': properties,

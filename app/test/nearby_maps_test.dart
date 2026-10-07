@@ -32,6 +32,28 @@ String smallNetwork() => OsmNetwork.normalize(
 
 void main() {
   sqfliteFfiInit();
+  test('downloaded maps preserve activity and roadside matching metadata', () {
+    final source = smallOsm.replaceFirst(
+      '<tag k="name" v="Example path"/>',
+      '<tag k="name" v="Example path"/><tag k="bicycle" v="designated"/><tag k="footway" v="sidewalk"/>',
+    );
+    final network = AreaNetwork.parse(
+      OsmNetwork.normalize(
+        source,
+        [8.79, 53.09, 8.81, 53.11],
+        areaId: 'example',
+        name: 'Example',
+      ),
+    );
+    final features = (jsonDecode(network.geojson) as Map)['features'] as List;
+    final paths = features.where((f) => f['properties']['osm_way_id'] == 10);
+    expect(paths, isNotEmpty);
+    for (final f in paths) {
+      expect(f['properties']['bicycle'], 'designated');
+      expect(f['properties']['footway'], 'sidewalk');
+      expect(f['properties']['name'], 'Example path');
+    }
+  });
   test(
     'mobile builder reproduces all bundled Bremen edge IDs and geometry',
     () {

@@ -27,3 +27,23 @@ fn explicit_cycle_metadata_selects_policy_without_leaking_between_calls() {
         assert_eq!(r.walked.len(), count);
     }
 }
+
+#[test]
+fn road_tags_reach_matching_and_activity_does_not_leak_between_calls() {
+    let network = r#"{"type":"FeatureCollection","features":[
+      {"type":"Feature","id":1,"properties":{"highway":"footway","bicycle":"no"},"geometry":{"type":"LineString","coordinates":[[0,0],[0.001,0]]}},
+      {"type":"Feature","id":2,"properties":{"highway":"secondary"},"geometry":{"type":"LineString","coordinates":[[0,0.00009],[0.001,0.00009]]}}
+    ]}"#;
+    let matcher = Matcher::from_geojson(network).unwrap();
+    let gpx = r#"<gpx xmlns:wl="https://wanderlust.local/gpx/1"><extensions><wl:activity>ACTIVITY</wl:activity></extensions><trk><trkseg>
+      <trkpt lon="0.0001" lat="0.000045"><time>2026-10-07T10:00:00Z</time><extensions><wl:accuracy>10</wl:accuracy></extensions></trkpt>
+      <trkpt lon="0.0002" lat="0.000045"><time>2026-10-07T10:00:05Z</time><extensions><wl:accuracy>10</wl:accuracy></extensions></trkpt>
+      <trkpt lon="0.0003" lat="0.000045"><time>2026-10-07T10:00:10Z</time><extensions><wl:accuracy>10</wl:accuracy></extensions></trkpt>
+    </trkseg></trk></gpx>"#;
+    for (activity, expected) in [("walk", vec![]), ("cycle", vec![2]), ("walk", vec![])] {
+        let r = matcher
+            .match_gpx(&gpx.replace("ACTIVITY", activity), MatchConfig::default())
+            .unwrap();
+        assert_eq!(matcher.walked_ids(&r), expected);
+    }
+}

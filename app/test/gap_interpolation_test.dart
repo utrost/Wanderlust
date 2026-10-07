@@ -82,7 +82,8 @@ void main() {
         expect(controller.displayCounts, {1: 2, 3: 2});
         await controller.setFillSmallGaps(true, walks);
         await drain();
-        expect(controller.displayCounts, {1: 2, 2: 2, 3: 2});
+        expect(controller.displayCounts, {1: 2, 3: 2});
+        expect(controller.estimatedEdges, {2});
         await controller.setFillSmallGaps(false, walks);
         await drain();
         expect(controller.displayCounts, {1: 2, 3: 2});

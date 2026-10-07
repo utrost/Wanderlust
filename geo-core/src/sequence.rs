@@ -14,6 +14,7 @@ pub(crate) fn match_sequence(
     track: &[TrackPoint],
     radius: f64,
     max_speed: f64,
+    cycling: bool,
 ) -> Vec<Candidate> {
     let mut result = vec![None; track.len()];
     let mut start = 0;
@@ -28,6 +29,7 @@ pub(crate) fn match_sequence(
                     &track[start..end],
                     radius,
                     max_speed,
+                    cycling,
                     &mut result[start..end],
                 );
             }
@@ -60,6 +62,7 @@ fn solve(
     points: &[TrackPoint],
     radius: f64,
     max_speed: f64,
+    cycling: bool,
     output: &mut [Candidate],
 ) {
     let candidates: Vec<Vec<Candidate>> = points
@@ -85,7 +88,8 @@ fn solve(
                         return 3.0;
                     };
                     let sigma = p.accuracy_m.unwrap_or(8.0).clamp(4.0, 50.0);
-                    let mut cost = 0.5 * (distance / sigma).powi(2);
+                    let mut cost = 0.5 * (distance / sigma).powi(2)
+                        + graph.segment(*edge).street.activity_cost(cycling);
                     // A spatial baseline avoids overweighting dense samples and tiny jitter.
                     if let Some((_, tangent)) = graph.segment(*edge).project(p.pos) {
                         for previous in points[..i].iter().rev().take(60) {
@@ -143,11 +147,17 @@ fn solve(
         })
         .collect();
     let mut forward = emission.clone();
+    let mut previous: Vec<Vec<usize>> = candidates.iter().map(|c| vec![0; c.len()]).collect();
     for i in 1..points.len() {
         for b in 0..candidates[i].len() {
-            forward[i][b] += (0..candidates[i - 1].len())
-                .map(|a| forward[i - 1][a] + transitions[i - 1][a][b])
-                .fold(f64::INFINITY, f64::min);
+            let a = (0..candidates[i - 1].len())
+                .min_by(|&a, &b_prev| {
+                    (forward[i - 1][a] + transitions[i - 1][a][b])
+                        .total_cmp(&(forward[i - 1][b_prev] + transitions[i - 1][b_prev][b]))
+                })
+                .unwrap();
+            previous[i][b] = a;
+            forward[i][b] += forward[i - 1][a] + transitions[i - 1][a][b];
         }
     }
     let mut backward: Vec<Vec<f64>> = candidates.iter().map(|c| vec![0.0; c.len()]).collect();
@@ -158,13 +168,21 @@ fn solve(
                 .fold(f64::INFINITY, f64::min);
         }
     }
+    // Decode one coherent path. Independent marginal minima can alternate
+    // between parallel carriageways even when no transition connects them.
+    let mut chosen = vec![0; points.len()];
+    let last = points.len() - 1;
+    chosen[last] = (0..forward[last].len())
+        .min_by(|&a, &b| forward[last][a].total_cmp(&forward[last][b]))
+        .unwrap();
+    for i in (1..points.len()).rev() {
+        chosen[i - 1] = previous[i][chosen[i]];
+    }
     for i in 0..points.len() {
         let costs: Vec<_> = (0..candidates[i].len())
             .map(|c| forward[i][c] + backward[i][c])
             .collect();
-        let best = (0..costs.len())
-            .min_by(|&a, &b| costs[a].total_cmp(&costs[b]))
-            .unwrap();
+        let best = chosen[i];
         let Some((edge, _)) = candidates[i][best] else {
             continue;
         };
@@ -172,7 +190,7 @@ fn solve(
             c != best
                 && costs[c] - costs[best] < std::f64::consts::LN_2
                 && match candidates[i][c] {
-                    Some((other, _)) => !graph.same_coverage_parent(edge, other),
+                    Some((other, _)) => !graph.same_corridor(edge, other, points[i].pos),
                     None => true,
                 }
         });

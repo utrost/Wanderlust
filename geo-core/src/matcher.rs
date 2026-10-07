@@ -19,6 +19,8 @@ pub struct MatchConfig {
     pub snap_radius_m: f64,
     /// Activity-specific plausibility ceiling (m/s), never a target speed.
     pub max_speed_mps: f64,
+    /// Activity affects candidate evidence independently of the speed ceiling.
+    pub cycling: bool,
     /// Opt-in interpolation across short unconfirmed runs between strong anchors.
     pub fill_small_gaps: bool,
     /// Refuse to fill a gap whose shortest connecting path exceeds this multiple
@@ -34,6 +36,7 @@ impl Default for MatchConfig {
         Self {
             snap_radius_m: 25.0,
             max_speed_mps: 3.0,
+            cycling: false,
             fill_small_gaps: false,
             max_fill_detour_ratio: 2.5,
             max_fill_len_m: 300.0,
@@ -143,9 +146,16 @@ pub fn match_gpx_tracks(
 ) -> MatchResult {
     let mut total = MatchResult::default();
     let mut direct = HashSet::new();
+    let mut supported_pairs = HashSet::new();
+    let mut track_offset = 0;
     for track in tracks {
-        let snapped =
-            crate::sequence::match_sequence(graph, track, cfg.snap_radius_m, cfg.max_speed_mps);
+        let snapped = crate::sequence::match_sequence(
+            graph,
+            track,
+            cfg.snap_radius_m,
+            cfg.max_speed_mps,
+            cfg.cycling,
+        );
         let mut confirmed = vec![false; track.len()];
         let mut start = 0;
         while start < track.len() {
@@ -155,8 +165,9 @@ pub fn match_gpx_tracks(
             };
             let mut end = start + 1;
             while end < track.len()
-                && snapped[end]
-                    .is_some_and(|(e, _)| e == edge || graph.same_coverage_parent(e, edge))
+                && snapped[end].is_some_and(|(e, _)| {
+                    graph.same_street_run(snapped[end - 1].unwrap().0, e, track[end].pos)
+                })
                 && continuous(&track[end - 1], &track[end], cfg.max_speed_mps)
             {
                 end += 1;
@@ -185,7 +196,11 @@ pub fn match_gpx_tracks(
                     if i > start
                         && (high - low >= required_progress
                             || (edge != snapped[i].unwrap().0
-                                && graph.same_coverage_parent(edge, snapped[i].unwrap().0)
+                                && graph.same_street_run(
+                                    snapped[i - 1].unwrap().0,
+                                    snapped[i].unwrap().0,
+                                    track[i].pos,
+                                )
                                 && haversine_m(track[start].pos, track[i].pos) >= 4.0))
                         && direction_supports(
                             track,
@@ -203,7 +218,42 @@ pub fn match_gpx_tracks(
                 }
             }
             if supported {
-                confirmed[start..end].fill(true);
+                // Street-level continuity supports short pieces, but must not
+                // credit a continuation touched only by endpoint jitter. Each
+                // credited piece still needs projected progress in its own
+                // geometry; neighbouring fixes can bracket a single sample.
+                for i in start..end {
+                    let current = graph.segment(snapped[i].unwrap().0);
+                    let local_start = i.saturating_sub(2).max(start);
+                    let local_end = (i + 3).min(end);
+                    let local_uncertainty = track[local_start..local_end]
+                        .iter()
+                        .filter_map(|p| p.accuracy_m)
+                        .fold(0.0_f64, f64::max);
+                    let along: Vec<_> = track[local_start..local_end]
+                        .iter()
+                        .filter_map(|p| current.project(p.pos).map(|v| v.0))
+                        .collect();
+                    let progress = along.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+                        - along.iter().copied().fold(f64::INFINITY, f64::min);
+                    let required = (current.length_m() * 0.2).clamp(2.0, 4.0).max(
+                        if local_uncertainty > 25.0 {
+                            local_uncertainty * 0.5
+                        } else {
+                            0.0
+                        },
+                    );
+                    confirmed[i] = progress >= required
+                        && current.project(track[i].pos).is_some_and(|(_, t)| {
+                            direction_supports(
+                                track,
+                                cfg.max_speed_mps,
+                                (i + 1).min(end - 1),
+                                current,
+                                t,
+                            )
+                        });
+                }
             }
             start = end;
         }
@@ -216,6 +266,24 @@ pub fn match_gpx_tracks(
             }
         }
         interpolate_gaps(graph, track, &snapped, &confirmed, cfg, &mut total);
+        for i in 1..track.len() {
+            if !confirmed[i - 1]
+                || !confirmed[i]
+                || !continuous(&track[i - 1], &track[i], cfg.max_speed_mps)
+            {
+                continue;
+            }
+            let (a, b) = (snapped[i - 1].unwrap().0, snapped[i].unwrap().0);
+            let budget = (haversine_m(track[i - 1].pos, track[i].pos) * 1.8 + 10.0).min(150.0);
+            if a == b
+                || graph
+                    .unique_connection(a, b, track[i - 1].pos, track[i].pos, budget)
+                    .is_some_and(|path| path.iter().all(|edge| total.walked.contains(edge)))
+            {
+                supported_pairs.insert(track_offset + i);
+            }
+        }
+        track_offset += track.len();
     }
     let mut offset = 0;
     for track in tracks {
@@ -238,7 +306,7 @@ pub fn match_gpx_tracks(
                     .nearest_segment(point, 12.0)
                     .is_some_and(|(edge, _)| total.walked.contains(&edge))
             });
-            if !covered {
+            if !covered && !supported_pairs.contains(&(offset + i)) {
                 total.unmatched.push(offset + i);
             }
         }

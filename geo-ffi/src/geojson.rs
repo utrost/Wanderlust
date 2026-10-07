@@ -1,7 +1,7 @@
 //! Strict street-network loader. Counts require explicit, unique, JSON-safe
 //! edge ids; OSM networks also carry endpoint node ids to preserve topology.
 use geo_core::geometry::LngLat;
-use geo_core::graph::Segment;
+use geo_core::graph::{Segment, StreetInfo};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -66,6 +66,30 @@ pub fn segments_from_geojson(src: &str) -> Result<Vec<Segment>, String> {
             return Err(format!("degenerate edge {id}"));
         }
         let props = &f["properties"];
+        let tag = |key: &str| {
+            props
+                .get(key)
+                .and_then(Value::as_str)
+                .filter(|s| s.len() <= 256)
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        };
+        segment.street = StreetInfo {
+            way_id: props
+                .get("osm_way_id")
+                .and_then(Value::as_u64)
+                .filter(|&n| n > 0 && n <= MAX_SAFE_INTEGER),
+            name: tag("name"),
+            highway: tag("highway"),
+            bicycle: tag("bicycle"),
+            foot: tag("foot"),
+            access: tag("access"),
+            footway: tag("footway"),
+            layer: tag("layer"),
+            bridge: tag("bridge"),
+            tunnel: tag("tunnel"),
+        };
         if props.get("coverage_parent").is_some() {
             segment.coverage_parent =
                 Some(integer(props.get("coverage_parent"), "coverage_parent")?);

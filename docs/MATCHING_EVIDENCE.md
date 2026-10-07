@@ -204,3 +204,45 @@ not proof of every inferred section. Synthetic tests cover 2/5/10/20-second ride
 implausible jumps, outages, off-network fallback and per-call profile isolation.
 Storage/controller tests cover mode recovery, backup/GPX round-trips, live mode
 capture, changed fingerprints and idempotent replacement of heatmap membership.
+
+### Street corridors and visible estimates — 7 October 2026
+
+Revision `street-corridor-v10` rebuilds saved coverage from unchanged GPS traces.
+It adds four improvements:
+
+1. The native loader retains OSM way identity, names, road type, access and
+   bridge/tunnel/layer information. Closely parallel carriageways or explicitly
+   identified roadside paths can support the same street identity. Grouping
+   requires compatible geometry, identity, type and level; a shared name alone
+   is insufficient. One coherent representative route receives credit, rather
+   than painting both carriageways. This is street evidence, not lane certainty.
+2. Viterbi backtracking selects one connected sequence. Connected, aligned pieces
+   of the same street support each other across short subdivisions, with a
+   bounded 60 m connection search. Each credited piece still needs projected
+   movement and compatible direction, so endpoint jitter cannot extend a walk.
+   Supported pairs no longer produce duplicate fallback trails just because a
+   side-street endpoint is closer than the matched route.
+3. Walking/cycling use explicit access and path-type evidence as soft candidate
+   preferences. Shared paths remain valid; uncertain tags do not overwrite clear
+   GPS evidence. New downloads retain `bicycle` and `footway` tags through coverage
+   subdivision. Existing maps use the information they already contain; refresh
+   maps to obtain the added tags. The conservative download inclusion policy is
+   unchanged, so missing cycle-only geometry still cannot be matched.
+4. Main-map heat counts now use supported or manually confirmed visits only.
+   Native short-gap inference and automatic outage estimates appear as purple
+   dashes, separately from grey-green unmatched GPS trails. Direct evidence wins
+   over estimates across overlapping maps and activities. Estimated memberships
+   remain derived data, rebuilt on restart; backups and GPS samples are unchanged.
+
+Time/accuracy/speed boundaries remain in force. Street grouping does not create
+routing links, bridge long recording outages, or merge different map levels.
+Regression cases cover parallel carriageways, unrelated roads, roadside cycle
+paths, access preference, sparse section sampling, endpoint jitter and outages.
+The four synthetic Bremen evaluation configurations retain zero false-positive
+edges, with clean-route length recall between 98% and 100% on the development
+host. These checks are not a claim of that accuracy on arbitrary GPS recordings.
+
+A private replay of the reported area reduced native unmatched samples from
+21 to 3 of 35 nearby fixes against the larger downloaded map. The route and
+backup are not committed. Some ambiguity remains; road credit and recovered
+section counts do not prove the exact carriageway travelled.

@@ -220,6 +220,8 @@ class OsmNetwork {
               'tunnel',
               'layer',
               'foot',
+              'bicycle',
+              'footway',
               'access',
             ])
               if (tags.containsKey(k)) k: tags[k],

@@ -14,10 +14,11 @@ import '../recording/saved_walk.dart';
 import '../review/gap_routes.dart';
 import '../transfer/walk_codec.dart';
 import 'coverage_store.dart';
+import 'coverage_evidence.dart';
 import 'unmatched_trails.dart';
 
 // Bump when matching rules change: old saved traces are then reprocessed once.
-const matchingRevision = 'activity-model-v9';
+const matchingRevision = 'street-corridor-v10';
 typedef MatchBatch = Future<List<MatchResult>> Function(String, List<String>);
 
 typedef CoverageFailure = MatchingFailure;
@@ -57,6 +58,8 @@ class CoverageController extends ChangeNotifier {
   final Future<List<String>> Function()? loadSavedNetworks;
   SavedWalk? _liveWalk;
   Set<int> _liveEdges = {};
+  Set<int> _liveEstimated = {};
+  final _evidence = CoverageEvidence();
   final _trails = UnmatchedTrails();
   Set<int> _liveUnmatched = {};
   List<List<Offset>> _savedTrailLines = const [];
@@ -71,10 +74,17 @@ class CoverageController extends ChangeNotifier {
   int _liveEpoch = 0;
   String? liveError;
   Map<int, int>? _displayCounts;
-  Map<int, int> get displayCounts => _displayCounts ??= Map.unmodifiable({
-    ...counts,
-    for (final id in _liveEdges) id: (counts[id] ?? 0) + 1,
-  });
+  Map<int, int> get displayCounts => _displayCounts ??= (() {
+    final direct = _evidence.counts(networks.map((n) => n.version));
+    return Map<int, int>.unmodifiable({
+      ...direct,
+      for (final id in _liveEdges) id: (direct[id] ?? 0) + 1,
+    });
+  })();
+  Set<int> get estimatedEdges => {
+    ..._evidence.estimates(networks.map((n) => n.version)),
+    ..._liveEstimated,
+  }.difference(displayCounts.keys.toSet());
 
   /// Coalesce fixes; previews never write coverage or mark an unfinished walk saved.
   void updateLive(SavedWalk walk) {
@@ -86,6 +96,7 @@ class CoverageController extends ChangeNotifier {
     if (_liveWalk?.id != walk.id) {
       _liveEpoch++;
       _liveEdges = {};
+      _liveEstimated = {};
       _liveUnmatched = {};
       _liveTrailLines = const [];
     }
@@ -122,6 +133,7 @@ class CoverageController extends ChangeNotifier {
           // Replace the preview rather than accumulating provisional mistakes.
           final gpx = WalkCodec.exportGpx(walk);
           final edges = <int>{};
+          final estimated = <int>{};
           final unmatchedByArea = <Set<int>>[];
           for (final area in networks) {
             final result = await _runMatch(area.geojson, [gpx]);
@@ -129,7 +141,12 @@ class CoverageController extends ChangeNotifier {
                 !area.edgeIds.containsAll(result.single.walked)) {
               throw StateError('Invalid live coverage result');
             }
-            edges.addAll(result.single.walked);
+            edges.addAll(
+              result.single.walked.toSet().difference(
+                result.single.inferred.toSet(),
+              ),
+            );
+            estimated.addAll(result.single.inferred);
             if (result.single.unmatched.any(
               (i) => i <= 0 || i >= walk.points.length,
             )) {
@@ -139,6 +156,7 @@ class CoverageController extends ChangeNotifier {
           }
           if (!_disposed && epoch == _liveEpoch && _liveWalk?.id == walk.id) {
             _liveEdges = edges;
+            _liveEstimated = estimated.difference(edges);
             _liveUnmatched.clear();
             _liveUnmatched.addAll(UnmatchedTrails.common(unmatchedByArea));
             _liveTrailLines = UnmatchedTrails.fromIndices(walk, _liveUnmatched);
@@ -161,12 +179,14 @@ class CoverageController extends ChangeNotifier {
 
   void _resetLiveMaps() {
     _trails.clear();
+    _evidence.clear();
     _savedTrailLines = const [];
     _liveUnmatched = {};
     _liveTrailLines = const [];
     _liveEpoch++;
     final visible = {for (final map in networks) ...map.edgeIds};
     _liveEdges = _liveEdges.intersection(visible);
+    _liveEstimated = _liveEstimated.intersection(visible);
     _scheduleLive();
   }
 
@@ -238,6 +258,7 @@ class CoverageController extends ChangeNotifier {
       _liveUnmatched = {};
       _liveTrailLines = const [];
       _liveEdges = {};
+      _liveEstimated = {};
       await _synchronize(snapshot);
       _scheduleLive();
     });
@@ -425,10 +446,23 @@ class CoverageController extends ChangeNotifier {
             nonempty[i].$1.confirmedSections.where(area.edgeIds.contains),
           );
           matched[nonempty[i].$1.id] = edges;
+          final supported = edges.difference(results[i].inferred.toSet())
+            ..addAll(
+              nonempty[i].$1.confirmedSections.where(area.edgeIds.contains),
+            );
+          _evidence.put(
+            nonempty[i].$1.id,
+            area.version,
+            supported,
+            results[i].inferred.toSet(),
+          );
           _trails.put(nonempty[i].$1, area.version, results[i].unmatched);
         }
         for (final p in pending) {
-          if (p.$1.points.isEmpty) _trails.put(p.$1, area.version, const []);
+          if (p.$1.points.isEmpty) {
+            _trails.put(p.$1, area.version, const []);
+            _evidence.put(p.$1.id, area.version, {}, {});
+          }
           await _store.replaceWalkMatch(
             p.$1.id,
             area.coverageVersion,
@@ -438,6 +472,7 @@ class CoverageController extends ChangeNotifier {
         }
       }
       _trails.retain(walks.map((w) => w.id).toSet());
+      _evidence.retain(walks.map((w) => w.id).toSet());
       _savedTrailLines = _trails.lines(networks.map((n) => n.version).toList());
       counts = Map<int, int>.unmodifiable(
         await _store.readCombinedCounts(
@@ -449,6 +484,7 @@ class CoverageController extends ChangeNotifier {
         _liveEpoch++;
         _liveWalk = null;
         _liveEdges = {};
+        _liveEstimated = {};
         _liveUnmatched = {};
         _liveTrailLines = const [];
         liveError = null;

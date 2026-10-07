@@ -14,6 +14,12 @@ XML = b'''<osm><node id="1" lon="8.1" lat="53"/><node id="2" lon="8.2" lat="53"/
 <way id="11"><nd ref="2"/><nd ref="4"/><tag k="highway" v="footway"/></way></osm>'''
 
 class NetworkTests(unittest.TestCase):
+    def test_activity_and_roadside_metadata_are_preserved(self):
+        raw = XML.replace(b'<tag k="highway" v="footway"/>', b'<tag k="highway" v="footway"/><tag k="bicycle" v="designated"/><tag k="footway" v="sidewalk"/>')
+        network, _ = normalize(raw, BBOX)
+        path = next(f['properties'] for f in network['features'] if f['properties']['highway']=='footway')
+        self.assertEqual(path['bicycle'], 'designated')
+        self.assertEqual(path['footway'], 'sidewalk')
     def test_junctions_are_split_and_ids_stable_on_reorder_and_reverse(self):
         original, report = normalize(XML, BBOX)
         self.assertEqual(report['edges'], 3)
