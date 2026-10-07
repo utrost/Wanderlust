@@ -77,7 +77,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
     await _loadMemories();
   }
 
-  bool gps = true, matched = true, inferred = true, busy = true;
+  bool gps = false, matched = true, busy = true;
   late bool fill = widget.fillSmallGaps;
   late final trace = reviewTrace(walk);
   late final coordinates = trace.expand((s) => s).toList();
@@ -222,16 +222,10 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
                 (v) => setState(() => gps = v),
               ),
               layer(
-                'Matched streets',
+                'Route',
                 matched,
                 const Color(0xFFC4A080),
                 (v) => setState(() => matched = v),
-              ),
-              layer(
-                'Inferred gaps',
-                inferred,
-                reviewInferredColor,
-                (v) => setState(() => inferred = v),
               ),
             ],
           ),
@@ -314,22 +308,24 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
                   networks: maps,
                   counts: matched
                       ? {
-                          for (final id in {...result.direct, ...confirmed})
+                          for (final id in {
+                            ...result.direct,
+                            ...result.inferred,
+                            ...confirmed,
+                          })
                             id: 1,
                         }
                       : {},
+                  unmatchedTrails: matched && maps.isEmpty ? trace : const [],
                   trace: gps ? trace : const [],
-                  inferred: {
-                    ...(inferred ? result.inferred : <int>{}),
-                    ...?proposal?.edges,
-                  },
+                  inferred: {...?proposal?.edges},
                   fitCoordinates: proposal?.coordinates ?? coordinates,
                 ),
         ),
         const Padding(
           padding: EdgeInsets.all(10),
           child: Text(
-            'Blue: recorded GPS · Brown: matched streets\nPurple dashes: inferred connections\n© OpenStreetMap contributors · ODbL',
+            'Brown: your route · Blue: optional GPS trace\n© OpenStreetMap contributors · ODbL',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12),
           ),

@@ -78,13 +78,10 @@ class CoverageController extends ChangeNotifier {
     final direct = _evidence.counts(networks.map((n) => n.version));
     return Map<int, int>.unmodifiable({
       ...direct,
-      for (final id in _liveEdges) id: (direct[id] ?? 0) + 1,
+      for (final id in {..._liveEdges, ..._liveEstimated})
+        id: (direct[id] ?? 0) + 1,
     });
   })();
-  Set<int> get estimatedEdges => {
-    ..._evidence.estimates(networks.map((n) => n.version)),
-    ..._liveEstimated,
-  }.difference(displayCounts.keys.toSet());
 
   /// Coalesce fixes; previews never write coverage or mark an unfinished walk saved.
   void updateLive(SavedWalk walk) {

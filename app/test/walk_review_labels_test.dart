@@ -27,7 +27,8 @@ void main() {
       final map = tester.widget<AreaMap>(find.byType(AreaMap));
       expect(map.network.edges, isEmpty);
       expect(map.networks, isEmpty);
-      expect(map.trace, isNotEmpty);
+      expect(map.unmatchedTrails, isNotEmpty);
+      expect(map.trace, isEmpty);
       expect(
         find.text('Part of this trace is outside your saved street maps.'),
         findsOneWidget,
@@ -103,21 +104,18 @@ void main() {
     await tester.pumpAndSettle();
     AreaMap map() => tester.widget<AreaMap>(find.byType(AreaMap));
     expect(map().counts.keys, {1, 3});
-    expect(map().trace, isNotEmpty);
+    expect(map().trace, isEmpty);
     expect(map().inferred, isEmpty);
     await tester.tap(find.text('Preview gap filling'));
     await tester.pumpAndSettle();
     expect(requests, [false, true]);
-    expect(map().inferred, {2});
+    expect(map().counts.keys, {1, 2, 3});
     await tester.tap(find.text('GPS trace'));
     await tester.pumpAndSettle();
-    expect(map().trace, isEmpty);
-    await tester.tap(find.text('Matched streets'));
+    expect(map().trace, isNotEmpty);
+    await tester.tap(find.text('Route'));
     await tester.pumpAndSettle();
     expect(map().counts, isEmpty);
-    expect(map().inferred, {2});
-    await tester.tap(find.text('Inferred gaps'));
-    await tester.pumpAndSettle();
     expect(map().inferred, isEmpty);
     fail = true;
     await tester.tap(find.text('Preview gap filling'));

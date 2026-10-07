@@ -74,19 +74,16 @@ void main() {
         controller.updateLive(await store.loadWalk(id));
         await Future<void>.delayed(const Duration(milliseconds: 30));
         await controller.settled;
-        expect(controller.displayCounts, isEmpty);
-        expect(controller.estimatedEdges, {1, 2});
+        expect(controller.displayCounts, {1: 1, 2: 1});
         await store.finish(id, w.points.last.timestamp, 'completed');
         var saved = await store.listSummaries();
         await controller.synchronize(saved);
         expect(controller.counts, {1: 1, 2: 1});
-        expect(controller.displayCounts, isEmpty);
-        expect(controller.estimatedEdges, {1, 2});
+        expect(controller.displayCounts, {1: 1, 2: 1});
         await controller.synchronize(saved);
         expect(controller.counts, {1: 1, 2: 1});
         await controller.setFillSmallGaps(false, saved, autoFillGaps: false);
         expect(controller.counts, isEmpty);
-        expect(controller.estimatedEdges, isEmpty);
         await store.saveConfirmedSections(saved.single.uid, [1]);
         saved = await store.listSummaries();
         await controller.synchronize(saved);
@@ -94,8 +91,7 @@ void main() {
         expect(controller.displayCounts, {1: 1});
         await controller.setFillSmallGaps(false, saved, autoFillGaps: true);
         expect(controller.counts, {1: 1, 2: 1});
-        expect(controller.displayCounts, {1: 1});
-        expect(controller.estimatedEdges, {2});
+        expect(controller.displayCounts, {1: 1, 2: 1});
       } finally {
         controller.dispose();
         await controller.settled;

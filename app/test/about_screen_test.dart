@@ -39,6 +39,9 @@ void main() {
         ),
       );
       await tester.scrollUntilVisible(find.text('About Wanderlust'), 400);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('About Wanderlust'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('About Wanderlust'));
       await tester.pumpAndSettle();
       expect(find.text('Uwe Trostheide'), findsOneWidget);
