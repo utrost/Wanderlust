@@ -7,6 +7,60 @@ import 'recording_test.dart' show fix;
 
 void main() {
   test(
+    'native recovery retains stream, retries failures, and waits on stop',
+    () async {
+      var now = fix(0).timestamp;
+      var opens = 0, recoveries = 0;
+      var stale = false;
+      final stream = StreamController<Position>.broadcast();
+      final pending = Completer<void>();
+      final received = <Position>[];
+      final watcher = LocationWatchdog(
+        open: () {
+          opens++;
+          return stream.stream;
+        },
+        recover: () async {
+          recoveries++;
+          if (recoveries == 1) throw StateError('provider unavailable');
+          if (recoveries == 3) await pending.future;
+        },
+        onPoint: received.add,
+        onStale: (value) => stale = value,
+        now: () => now,
+      )..start();
+      now = now.add(const Duration(minutes: 1));
+      watcher.check();
+      await Future<void>.delayed(Duration.zero);
+      expect(stale, isTrue);
+      expect(stream.hasListener, isTrue);
+      watcher.check();
+      expect(recoveries, 1);
+      now = now.add(const Duration(minutes: 1));
+      watcher.check();
+      await Future<void>.delayed(Duration.zero);
+      expect(recoveries, 2);
+      expect(stale, isTrue); // A successful request is not a fresh GPS fix.
+      stream.add(positionAt(fix(1), now));
+      await Future<void>.delayed(Duration.zero);
+      expect(stale, isFalse);
+      expect(received, hasLength(1));
+      expect(opens, 1);
+      now = now.add(const Duration(minutes: 1));
+      watcher.check();
+      final closing = watcher.close();
+      pending.complete();
+      await closing;
+      expect(stream.hasListener, isFalse);
+      now = now.add(const Duration(minutes: 1));
+      watcher.check();
+      expect(recoveries, 3);
+      expect(opens, 1);
+      await stream.close();
+    },
+  );
+
+  test(
     'stale stream retries once per minute, recovers, and stops on close',
     () async {
       var now = fix(0).timestamp;

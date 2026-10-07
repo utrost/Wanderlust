@@ -30,11 +30,29 @@ abstract interface class DiagnosticLocationSource {
   Future<Map<String, Object?>> diagnosticMetadata();
 }
 
-class DeviceLocationSource implements LocationSource, DiagnosticLocationSource {
+abstract interface class RecoverableLocationSource {
+  Future<void> recover();
+}
+
+class DeviceLocationSource
+    implements
+        LocationSource,
+        DiagnosticLocationSource,
+        RecoverableLocationSource {
   DeviceLocationSource({this.forRecording = true, this.gpsIntervalSeconds});
   final bool forRecording;
   final int Function()? gpsIntervalSeconds;
   static const _notificationChannel = MethodChannel('wanderlust/walking');
+  static const _androidLocationChannel = MethodChannel(
+    'flutter.baseflow.com/geolocator_android',
+  );
+
+  @override
+  Future<void> recover() async {
+    await _androidLocationChannel.invokeMethod<void>(
+      'restartRecordingLocation',
+    );
+  }
 
   /// A user-started location service keeps this stream alive with the screen
   /// off. Cancellation releases both GPS and the service's partial wake lock.
@@ -88,9 +106,8 @@ class DeviceLocationSource implements LocationSource, DiagnosticLocationSource {
       result['permissionAccuracy'] =
           (await Geolocator.getLocationAccuracy()).name;
       if (defaultTargetPlatform == TargetPlatform.android) {
-        result['lastReportedProvider'] = await const MethodChannel(
-          'flutter.baseflow.com/geolocator',
-        ).invokeMethod<String>('getLastReportedProvider');
+        result['lastReportedProvider'] = await _androidLocationChannel
+            .invokeMethod<String>('getLastReportedProvider');
       }
     } catch (_) {
       /* Diagnostics must never prevent recording. */
@@ -265,6 +282,11 @@ class WalkRecorder extends ChangeNotifier {
       gpsStale = false;
       _watchdog = LocationWatchdog(
         open: _location.positions,
+        recover:
+            defaultTargetPlatform == TargetPlatform.android &&
+                _location is RecoverableLocationSource
+            ? (_location as RecoverableLocationSource).recover
+            : null,
         onRestart: () {
           _diagnostics?.restarts++;
         },

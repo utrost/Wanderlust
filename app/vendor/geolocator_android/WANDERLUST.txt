@@ -11,6 +11,14 @@ Modifications, 2026-09-30:
   foreground service, wake lock, notification and independent subscriptions.
 - Return after reporting an absent context in isLocationServiceEnabled.
 
+Modifications, 2026-10-07:
+- Renew recording location requests through restartRecordingLocation without
+  cancelling the event stream or dropping foreground status and wake locks.
+- Retain session options; invalidate callbacks from replaced/stopped requests.
+- Promote the foreground service before starting the initial location request.
+- Wire recovery through the Android method channel and clear disconnected service
+  references. Add native recovery regression tests, run by the app CI job.
+
 Runtime sources, upstream Android tests, build configuration, licence and
 changelog are vendored; trailing whitespace is normalised.
 No upstream binaries or Gradle wrapper are included. The app's pinned toolchain
@@ -18,7 +26,7 @@ builds this plugin. Android's platform fused provider may itself be implemented
 by the device vendor; this app does not bundle or require Google Play Services.
 
 On upstream updates: review permission and service changes, reapply the small
-GeolocationManager change, keep FusedLocationClient absent, and run the dependency
+GeolocationManager and recording recovery changes, keep FusedLocationClient absent, and run the dependency
 scan plus screen-off/location/memory regression tests on a Google-free device.
 
 Upstream pub archive SHA-256: fcb1760a50d7500deca37c9a666785c047139b5f9ee15aa5469fae7dbbe3170d

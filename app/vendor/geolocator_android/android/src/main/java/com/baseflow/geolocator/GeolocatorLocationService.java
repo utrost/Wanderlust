@@ -40,6 +40,10 @@ public class GeolocatorLocationService extends Service {
   @Nullable private Activity activity = null;
   @Nullable private GeolocationManager geolocationManager = null;
   @Nullable private LocationClient locationClient;
+  @Nullable private LocationOptions recordingOptions;
+  @Nullable private EventChannel.EventSink recordingEvents;
+  private boolean recordingForceLocationManager;
+  private int requestGeneration = 0;
 
   @Nullable private PowerManager.WakeLock wakeLock = null;
   @Nullable private WifiManager.WifiLock wifiLock = null;
@@ -108,27 +112,62 @@ public class GeolocatorLocationService extends Service {
       EventChannel.EventSink events) {
 
     listenerCount++;
-    if (geolocationManager != null) {
+    recordingOptions = locationOptions;
+    recordingEvents = events;
+    recordingForceLocationManager = forceLocationManager;
+    startLocationUpdates();
+  }
+
+  private void startLocationUpdates() {
+    final int generation = ++requestGeneration;
+    final EventChannel.EventSink events = recordingEvents;
+    if (geolocationManager != null && events != null) {
       locationClient =
           geolocationManager.createLocationClient(
               this.getApplicationContext(),
-              Boolean.TRUE.equals(forceLocationManager),
-              locationOptions);
+              recordingForceLocationManager,
+              recordingOptions);
 
       geolocationManager.startPositionUpdates(
           locationClient,
           activity,
-          (Location location) -> events.success(LocationMapper.toHashMap(location)),
-          (ErrorCodes errorCodes) ->
-              events.error(errorCodes.toString(), errorCodes.toDescription(), null));
+          (Location location) -> {
+            if (generation == requestGeneration) {
+              events.success(LocationMapper.toHashMap(location));
+            }
+          },
+          (ErrorCodes errorCodes) -> {
+            if (generation == requestGeneration) {
+              events.error(errorCodes.toString(), errorCodes.toDescription(), null);
+            }
+          });
     }
   }
 
+  /** Recovery must retain foreground status and wake locks while the screen is off. */
+  public boolean restartLocationUpdates() {
+    if (!isForeground || listenerCount != 1 || recordingEvents == null
+        || geolocationManager == null) {
+      return false;
+    }
+    ++requestGeneration;
+    if (locationClient != null) {
+      geolocationManager.stopPositionUpdates(locationClient);
+      locationClient = null;
+    }
+    startLocationUpdates();
+    return true;
+  }
+
   public void stopLocationService() {
-    listenerCount--;
+    listenerCount = Math.max(0, listenerCount - 1);
+    ++requestGeneration;
+    recordingEvents = null;
+    recordingOptions = null;
     Log.d(TAG, "Stopping location service.");
     if (locationClient != null && geolocationManager != null) {
       geolocationManager.stopPositionUpdates(locationClient);
+      locationClient = null;
     }
   }
 

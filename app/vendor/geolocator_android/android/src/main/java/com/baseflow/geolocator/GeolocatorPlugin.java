@@ -45,6 +45,8 @@ public class GeolocatorPlugin implements FlutterPlugin, ActivityAware {
         @Override
         public void onServiceDisconnected(ComponentName name) {
           Log.d(TAG, "Geolocator foreground service disconnected");
+          if (methodCallHandler != null) methodCallHandler.setForegroundLocationService(null);
+          if (streamHandler != null) streamHandler.setForegroundLocationService(null);
           if (foregroundLocationService != null) {
             foregroundLocationService.setActivity(null);
             foregroundLocationService = null;
@@ -163,6 +165,9 @@ public class GeolocatorPlugin implements FlutterPlugin, ActivityAware {
     foregroundLocationService = service;
     foregroundLocationService.setGeolocationManager(geolocationManager);
     foregroundLocationService.flutterEngineConnected();
+    if (methodCallHandler != null) {
+      methodCallHandler.setForegroundLocationService(service);
+    }
 
     if (streamHandler != null) {
       streamHandler.setForegroundLocationService(service);
@@ -174,6 +179,7 @@ public class GeolocatorPlugin implements FlutterPlugin, ActivityAware {
     if (methodCallHandler != null) {
       methodCallHandler.stopListening();
       methodCallHandler.setActivity(null);
+      methodCallHandler.setForegroundLocationService(null);
       methodCallHandler = null;
     }
     if (streamHandler != null) {

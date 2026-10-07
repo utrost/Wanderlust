@@ -45,6 +45,11 @@ class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
   @Nullable private Context context;
 
   @Nullable private Activity activity;
+  @Nullable private GeolocatorLocationService foregroundLocationService;
+
+  void setForegroundLocationService(@Nullable GeolocatorLocationService service) {
+    foregroundLocationService = service;
+  }
 
   MethodCallHandlerImpl(
       PermissionManager permissionManager,
@@ -61,6 +66,17 @@ class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
   @Override
   public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
     switch (call.method) {
+      case "restartRecordingLocation":
+        try {
+          if (foregroundLocationService == null || !foregroundLocationService.restartLocationUpdates()) {
+            result.error("recording_inactive", "No active foreground recording to recover.", null);
+          } else {
+            result.success(null);
+          }
+        } catch (RuntimeException error) {
+          result.error("recording_recovery_failed", "Could not renew the location request.", null);
+        }
+        break;
       case "getLastReportedProvider":
         result.success(geolocationManager.getLastReportedProvider());
         break;
