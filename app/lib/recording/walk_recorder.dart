@@ -573,7 +573,7 @@ class WalkRecorder extends ChangeNotifier {
       _nativeSegments = (snapshot['segments'] as List? ?? const []).cast<int>();
       _nativeMeters = (snapshot['meters'] as num).toDouble();
       _nativeDiagnostics = readGpsDiagnostics(snapshot['diagnostics']);
-      _nativeHasFix = _points.isNotEmpty;
+      _nativeHasFix = snapshot['hasFreshFix'] as bool? ?? _points.isNotEmpty;
       requestedGpsInterval = (snapshot['intervalSeconds'] as num? ?? 3).toInt();
       _recoverable = snapshot['active'] == true && snapshot['running'] != true;
       gpsStale = snapshot['stale'] == true;

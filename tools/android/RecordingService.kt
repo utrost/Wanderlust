@@ -24,6 +24,7 @@ class RecordingService : Service() {
     private var lock: PowerManager.WakeLock? = null
     private lateinit var callbacks: HandlerThread
     private var lastReceived = 0L
+    private var hasFreshFix = false
     private var lastAttempt = 0L
     private var cadence = 0L
     private var generation = 0
@@ -155,7 +156,8 @@ class RecordingService : Service() {
             if (!location.latitude.isFinite() || !location.longitude.isFinite() ||
                 location.latitude !in -90.0..90.0 || location.longitude !in -180.0..180.0 ||
                 !location.hasAccuracy() || !location.accuracy.isFinite() || location.accuracy < 0 ||
-                age !in -5000..30000 || location.time < sessionStarted) return
+                age < -5000 || location.time < sessionStarted) return
+            val fresh = age <= 30000
             val s = j.state() ?: return
             if (location.time <= s["lastFix"] as Long) return
             // Prefer a recent precise GPS fix over a much poorer network callback.
@@ -169,19 +171,23 @@ class RecordingService : Service() {
             val count = metrics.optInt("receivedFixes") + 1
             val priorTime = s["lastFix"] as Long
             metrics.put("version", 1).put("receivedFixes", count)
+                .put("staleFixes", metrics.optInt("staleFixes") + if (fresh) 0 else 1)
                 .put("requestedIntervalSeconds", cadence / 1000)
                 .put("streamRestarts", s["restarts"])
                 .put("lastReportedProvider", location.provider)
                 .put("meanAccuracyM", (metrics.optDouble("meanAccuracyM", 0.0) * (count-1) + location.accuracy) / count)
                 .put("maxAccuracyM", maxOf(metrics.optDouble("maxAccuracyM", 0.0), location.accuracy.toDouble()))
                 .put("maxFixAgeMs", maxOf(metrics.optLong("maxFixAgeMs"), age.coerceAtLeast(0)))
-            if (!metrics.has("firstFreshFixMs")) metrics.put("firstFreshFixMs", (now-sessionStarted).coerceAtLeast(0))
+            if (fresh && !metrics.has("firstFreshFixMs")) metrics.put("firstFreshFixMs", (now-sessionStarted).coerceAtLeast(0))
             if (priorTime > 0) metrics.put("maxFixIntervalMs", maxOf(metrics.optLong("maxFixIntervalMs"), location.time-priorTime))
             // Commit before changing the externally visible latest-fix/notification state.
             if (!j.append(id, location, p.meters, metrics)) return
             provider = location.provider ?: ""
-            lastReceived = elapsed
-            notifications.cancel(ALERT_ID)
+            if (fresh) {
+                lastReceived = elapsed
+                hasFreshFix = true
+                notifications.cancel(ALERT_ID)
+            }
             if (p.interval(elapsed) != cadence) requestUpdates()
             updateNotification()
         } catch (_: Exception) { storageFailure() }
@@ -221,7 +227,7 @@ class RecordingService : Service() {
     }
     private fun updateNotification() {
         val s = journal?.state() ?: return
-        val text = if (SystemClock.elapsedRealtime()-lastReceived >= 45000) "GPS paused · reconnecting" else if ((s["pointCount"] as Long) == 0L) "Finding your location…" else String.format(Locale.getDefault(), "%.2f km · %s", (s["meters"] as Double)/1000, if (s["activity"] == "cycle") "Ride in progress" else "Walk in progress")
+        val text = if (SystemClock.elapsedRealtime()-lastReceived >= 45000) "GPS paused · reconnecting" else if (!hasFreshFix) "Finding your location…" else String.format(Locale.getDefault(), "%.2f km · %s", (s["meters"] as Double)/1000, if (s["activity"] == "cycle") "Ride in progress" else "Walk in progress")
         notifications.notify(NOTIFICATION_ID, notification(text, sessionStarted, activeId))
     }
     private fun builder(channel: String): Notification.Builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channel) else Notification.Builder(this)
@@ -325,6 +331,7 @@ class RecordingService : Service() {
                                 val id = s["walkId"] as Long
                                 val running = service?.activeId == id
                                 s["running"] = running
+                                s["hasFreshFix"] = running && service!!.hasFreshFix
                                 s["stale"] = running && SystemClock.elapsedRealtime() - service!!.lastReceived >= 45000
                                 s["intervalSeconds"] = if (running) service!!.cadence / 1000 else 0
                                 val after = if (call.argument<Number>("walkId")?.toLong() == id) call.argument<Number>("after")?.toInt() ?: -1 else -1

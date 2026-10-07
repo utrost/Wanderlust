@@ -5,8 +5,9 @@ native `RecordingService` owns GPS, the recovery watchdog, notification and
 SQLite writes. Flutter is a reader of that journal; hiding or disposing its
 screen does not stop capture. Maps are optional for recording.
 
-Each fresh valid fix is committed atomically with its sequence and diagnostics
-before it appears in the interface. Existing walk IDs, raw points, GPX and backup
+Each valid ordered fix from the session is committed atomically with its sequence and diagnostics
+before it appears in the interface. Late-delivered fixes are retained, but only
+a fresh fix clears the stalled-GPS warning. Existing walk IDs, raw points, GPX and backup
 formats remain compatible. A small `native_recording` table holds durable session
 state. Legacy interruption recovery excludes its active session. GPS callbacks,
 commands and watchdog work share one native worker; SQLite writes are off the

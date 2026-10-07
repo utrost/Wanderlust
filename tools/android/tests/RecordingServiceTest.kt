@@ -86,6 +86,27 @@ class RecordingServiceTest {
         assertEquals(2L, state()["pointCount"])
         assertEquals(listOf(1), state()["segments"])
     }
+    @Test fun `late fixes are saved but do not masquerade as healthy live GPS`() {
+        val started = System.currentTimeMillis() - 120000
+        RecordingJournal(file.path).use { it.db.execSQL("UPDATE recorded_walk SET started_at=?", arrayOf(RecordingJournal.iso(started))) }
+        val service = controller.get()
+        RecordingService::class.java.getDeclaredField("sessionStarted").apply { isAccessible=true }.setLong(service, started)
+        val lastReceived = RecordingService::class.java.getDeclaredField("lastReceived").apply { isAccessible=true }
+        val before = lastReceived.getLong(service)
+        val location = Location("gps").apply {
+            latitude=53.0; longitude=8.8; accuracy=5f; time=System.currentTimeMillis()-60000
+        }
+        val accept = RecordingService::class.java.getDeclaredMethod("accept", Location::class.java).apply { isAccessible=true }
+        RecordingService.worker.submit { accept.invoke(service, location) }.get(10, TimeUnit.SECONDS)
+        assertEquals(1L, state()["pointCount"])
+        assertEquals(before, lastReceived.getLong(service))
+        val diagnostics = state()["diagnostics"] as Map<*, *>
+        assertEquals(1, diagnostics["staleFixes"])
+        assertNull(diagnostics["firstFreshFixMs"])
+        accept()
+        assertEquals(2L, state()["pointCount"])
+        assertNotNull((state()["diagnostics"] as Map<*, *>)["firstFreshFixMs"])
+    }
     @Test fun `native watchdog restarts stalled GPS and alerts only once per walk`() {
         val tick = RecordingService::class.java.getDeclaredMethod("tick").apply { isAccessible=true }
         ShadowSystemClock.advanceBy(Duration.ofSeconds(130))
