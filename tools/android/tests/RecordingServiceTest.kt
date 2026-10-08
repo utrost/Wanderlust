@@ -84,6 +84,8 @@ class RecordingServiceTest {
         assertTrue(entry.has("importance"))
         assertTrue(entry.has("serviceReported"))
         assertTrue(entry.has("foregroundServiceType"))
+        assertTrue(entry.has("lowPowerStandbyEnabled"))
+        assertTrue(entry.has("lowPowerStandbyExempt"))
         assertTrue(entry.getBoolean("fineLocation"))
         assertTrue(entry.getBoolean("wakeLockHeld"))
         // No framework state callback in this shadow: held must not imply enabled.

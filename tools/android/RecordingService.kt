@@ -90,6 +90,11 @@ class RecordingService : Service() {
             val power = getSystemService(POWER_SERVICE) as PowerManager
             if (Build.VERSION.SDK_INT >= 28) data.put("locationPowerSaveMode", power.locationPowerSaveMode)
         }
+        collect("standby") {
+            val power = getSystemService(POWER_SERVICE) as PowerManager
+            if (Build.VERSION.SDK_INT >= 33) data.put("lowPowerStandbyEnabled", power.isLowPowerStandbyEnabled)
+            if (Build.VERSION.SDK_INT >= 34) data.put("lowPowerStandbyExempt", power.isExemptFromLowPowerStandby)
+        }
         collect("permissions") {
             data.put("fineLocation", checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
                 .put("coarseLocation", checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)

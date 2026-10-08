@@ -10,7 +10,7 @@ For a field test, install over the previous APK, start a recording, lock the scr
 
 ## Android service-state audit
 
-Schema 2 adds Android's process importance, own-service foreground/started state and service PID, foreground service type, background restriction status, location power-save mode, permission/provider state and APK build number. A main-thread heartbeat is recorded alongside the recording-worker and GPS-callback timestamps. Diagnostic API failures are reported per group and do not abort the evidence event.
+Schema 2 adds Android's process importance, own-service foreground/started state and service PID, foreground service type, background restriction status, location power-save mode, Low Power Standby enabled/exempt state, permission/provider state and APK build number. A main-thread heartbeat is recorded alongside the recording-worker and GPS-callback timestamps. Diagnostic API failures are reported per group and do not abort the evidence event.
 
 On Android 13+, `WakeLock.setStateListener` records framework enabled/disabled callbacks independently of `isHeld()`. Until a callback arrives, enabled state is unknown (JSON null); older Android versions also report unknown. Callback delivery can itself be delayed while the process is suspended, so event timestamps are receipt times, not proof of when the system disabled a lock. Power/service fields are sampled when the event is written; `writeElapsed` distinguishes that from enqueue time.
 
