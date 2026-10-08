@@ -73,6 +73,43 @@ class RecordingServiceTest {
             assertEquals(0L, state()["pointCount"])
         } finally { release.countDown(); drain() }
     }
+    @Test fun `system evidence includes Android classification and unknown lock state`() {
+        val method = RecordingService::class.java.getDeclaredMethod("evidence", String::class.java).apply { isAccessible=true }
+        method.invoke(controller.get(), "classification_test")
+        val field = RecordingService::class.java.getDeclaredField("evidenceWorker").apply { isAccessible=true }
+        (field.get(controller.get()) as java.util.concurrent.ScheduledExecutorService).submit {}.get(5, TimeUnit.SECONDS)
+        val log = org.json.JSONArray((state()["diagnostics"] as Map<*, *>)["evidenceLog"] as String)
+        val entry = (0 until log.length()).map { log.getJSONObject(it) }.last { it.getString("event") == "classification_test" }
+        assertEquals(2, entry.getInt("schema"))
+        assertTrue(entry.has("importance"))
+        assertTrue(entry.has("serviceReported"))
+        assertTrue(entry.has("foregroundServiceType"))
+        assertTrue(entry.getBoolean("fineLocation"))
+        assertTrue(entry.getBoolean("wakeLockHeld"))
+        // No framework state callback in this shadow: held must not imply enabled.
+        assertTrue(entry.isNull("wakeLockEnabled"))
+    }
+    @Test fun `framework disabled lock is recorded even while locally held`() {
+        val lock = RecordingService::class.java.getDeclaredField("lock").apply { isAccessible=true }
+            .get(controller.get()) as android.os.PowerManager.WakeLock
+        val listener = android.os.PowerManager.WakeLock::class.java.getDeclaredField("mListener").apply { isAccessible=true }
+            .get(lock) as android.os.PowerManager.WakeLockStateListener
+        listener.onStateChanged(false)
+        val field = RecordingService::class.java.getDeclaredField("evidenceWorker").apply { isAccessible=true }
+        (field.get(controller.get()) as java.util.concurrent.ScheduledExecutorService).submit {}.get(5, TimeUnit.SECONDS)
+        val log = org.json.JSONArray((state()["diagnostics"] as Map<*, *>)["evidenceLog"] as String)
+        val entry = (0 until log.length()).map { log.getJSONObject(it) }.last { it.getString("event") == "wake_lock_disabled" }
+        assertTrue(entry.getBoolean("wakeLockHeld"))
+        assertFalse(entry.getBoolean("wakeLockEnabled"))
+        assertEquals(true, state()["active"])
+    }
+    @Test @Config(sdk=[28]) fun `older Android records evidence without wake state listener`() {
+        val method = RecordingService::class.java.getDeclaredMethod("evidence", String::class.java).apply { isAccessible=true }
+        method.invoke(controller.get(), "legacy_test")
+        val field = RecordingService::class.java.getDeclaredField("evidenceWorker").apply { isAccessible=true }
+        (field.get(controller.get()) as java.util.concurrent.ScheduledExecutorService).submit {}.get(5, TimeUnit.SECONDS)
+        assertTrue(((state()["diagnostics"] as Map<*, *>)["evidenceLog"] as String).contains("legacy_test"))
+    }
     @Test fun `capture and notification Stop need no Flutter engine`() {
         accept()
         assertEquals(1L, state()["pointCount"])

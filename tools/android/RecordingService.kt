@@ -3,6 +3,8 @@ package com.simiono.wanderlust
 import android.app.*
 import android.content.*
 import android.content.pm.ServiceInfo
+import android.content.pm.PackageManager
+import android.Manifest
 import android.hardware.*
 import android.location.*
 import android.os.*
@@ -20,6 +22,14 @@ class RecordingService : Service() {
     private var evidenceWatch: ScheduledFuture<*>? = null
     @Volatile private var workerBeat = 0L
     @Volatile private var callbackBeat = 0L
+    @Volatile private var mainBeat = 0L
+    @Volatile private var wakeLockEnabled: Boolean? = null
+    private val mainPulse = object : Runnable {
+        override fun run() {
+            mainBeat = SystemClock.elapsedRealtime()
+            if (activeId != null) main.postDelayed(this, 30000)
+        }
+    }
     private var receiverRegistered = false
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) { evidence(intent?.action ?: "broadcast") }
@@ -31,21 +41,80 @@ class RecordingService : Service() {
         val uptime = SystemClock.uptimeMillis()
         val workerAt = workerBeat
         val callbackAt = callbackBeat
+        val mainAt = mainBeat
+        val enabled = wakeLockEnabled
         try { evidenceWorker.execute {
             try {
                 val power = getSystemService(POWER_SERVICE) as PowerManager
                 val data = JSONObject().put("event", event).put("wall", wall)
                     .put("elapsed", elapsed).put("uptime", uptime).put("pid", android.os.Process.myPid())
-                    .put("writeElapsed", SystemClock.elapsedRealtime()).put("workerAt", workerAt).put("callbackAt", callbackAt)
+                    .put("writeElapsed", SystemClock.elapsedRealtime()).put("workerAt", workerAt).put("callbackAt", callbackAt).put("mainAt", mainAt)
                     .put("interactive", power.isInteractive).put("idle", power.isDeviceIdleMode)
                     .put("powerSave", power.isPowerSaveMode).put("batteryExempt", power.isIgnoringBatteryOptimizations(packageName))
                     .put("wakeLockHeld", lock?.isHeld == true)
-                    .put("schema", 1).put("sdk", Build.VERSION.SDK_INT).put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
+                    .put("wakeLockEnabled", enabled ?: JSONObject.NULL)
+                    .put("schema", 2).put("sdk", Build.VERSION.SDK_INT).put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
+                systemEvidence(data)
                 preferences(this).getString("database", null)?.let { path ->
                     RecordingJournal(path).use { it.evidence(id, data) }
                 }
             } catch (e: Exception) { android.util.Log.w("WanderlustEvidence", "Evidence write failed", e) }
         } } catch (_: RejectedExecutionException) { /* Service already destroyed. */ }
+    }
+    /** These are Android's observations, not our own service-state flags. */
+    @Suppress("DEPRECATION")
+    private fun systemEvidence(data: JSONObject) {
+        fun collect(name: String, read: () -> Unit) {
+            try { read() } catch (e: Exception) { data.put(name + "Error", e.javaClass.simpleName) }
+        }
+        collect("process") {
+            val process = ActivityManager.RunningAppProcessInfo()
+            ActivityManager.getMyMemoryState(process)
+            data.put("importance", process.importance).put("lastTrimLevel", process.lastTrimLevel)
+        }
+        collect("service") {
+            val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+            // Since API 26 this returns only our own application's services.
+            val service = manager.getRunningServices(100).firstOrNull {
+                it.service.className == RecordingService::class.java.name
+            }
+            data.put("serviceReported", service != null)
+            if (service != null) {
+                data.put("serviceForeground", service.foreground).put("serviceStarted", service.started)
+                    .put("servicePid", service.pid).put("serviceActiveSince", service.activeSince)
+            }
+            if (Build.VERSION.SDK_INT >= 28) data.put("backgroundRestricted", manager.isBackgroundRestricted)
+            if (Build.VERSION.SDK_INT >= 29) data.put("foregroundServiceType", foregroundServiceType)
+        }
+        collect("power") {
+            val power = getSystemService(POWER_SERVICE) as PowerManager
+            if (Build.VERSION.SDK_INT >= 28) data.put("locationPowerSaveMode", power.locationPowerSaveMode)
+        }
+        collect("permissions") {
+            data.put("fineLocation", checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                .put("coarseLocation", checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                .put("notificationsEnabled", notifications.areNotificationsEnabled())
+                .put("gpsEnabled", locations.isProviderEnabled(LocationManager.GPS_PROVIDER))
+        }
+        collect("version") {
+            val info = packageManager.getPackageInfo(packageName, 0)
+            data.put("build", if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong())
+        }
+    }
+    private fun acquireRecordingLock() {
+        val acquired = (getSystemService(POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Wanderlust:recording")
+        acquired.setReferenceCounted(false)
+        lock = acquired
+        if (Build.VERSION.SDK_INT >= 33) {
+            // isHeld() remains true even when Android disables the lock's effect.
+            acquired.setStateListener(evidenceWorker) { enabled ->
+                wakeLockEnabled = enabled
+                evidence(if (enabled) "wake_lock_enabled" else "wake_lock_disabled")
+            }
+        }
+        acquired.acquire()
+        evidence("wake_lock_acquired")
     }
     private var journal: RecordingJournal? = null
     @Volatile private var activeId: Long? = null
@@ -131,7 +200,8 @@ class RecordingService : Service() {
                     policy = RecordingPolicy(state["activity"] == "cycle", SystemClock.elapsedRealtime(), (state["meters"] as Double), (state["manualInterval"] as Long).takeIf { it > 0 })
                     metrics = JSONObject(state["diagnostics"] as Map<*, *>)
                     lastReceived = SystemClock.elapsedRealtime()
-                    lock = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Wanderlust:recording").apply { setReferenceCounted(false); acquire() }
+                    acquireRecordingLock()
+                    main.post(mainPulse)
                     workerBeat = SystemClock.elapsedRealtime()
                     evidence(if (intent == null) "sticky_start" else if (resume != null) "resume" else "start")
                     val filter = IntentFilter().apply {
@@ -152,6 +222,7 @@ class RecordingService : Service() {
                 reply(request, mapOf("walkId" to activeId), null)
             } catch (e: Exception) {
                 reply(request, null, e)
+                evidence("startup_failure:" + e.javaClass.simpleName)
                 // Keep durable session resumable, even when provider setup failed.
                 shutdown()
             }
@@ -233,7 +304,7 @@ class RecordingService : Service() {
             }
             if (p.interval(elapsed) != cadence) requestUpdates()
             updateNotification()
-        } catch (_: Exception) { storageFailure() }
+        } catch (e: Exception) { storageFailure(e) }
     }
 
     private fun tick() {
@@ -253,12 +324,13 @@ class RecordingService : Service() {
             }
             updateNotification()
         } catch (_: SecurityException) {
+            evidence("permission_failure")
             notifyAttention("Location permission changed", "Open Wanderlust to continue your walk.")
             shutdown()
-        } catch (_: Exception) { storageFailure() }
+        } catch (e: Exception) { storageFailure(e) }
     }
-    private fun storageFailure() {
-        evidence("recording_failure")
+    private fun storageFailure(error: Exception) {
+        evidence("recording_failure:" + error.javaClass.simpleName)
         notifyAttention("Recording paused", "Your saved route is safe. Open Wanderlust to check recording.")
         shutdown()
     }
@@ -296,11 +368,15 @@ class RecordingService : Service() {
             journal?.finish(id, System.currentTimeMillis(), interrupted)
             notifications.cancel(ALERT_ID)
             shutdown()
-        } catch (_: Exception) { storageFailure() }
+        } catch (e: Exception) { storageFailure(e) }
     }
     private fun releaseResources() {
         evidenceWatch?.cancel(false); evidenceWatch = null
         if (receiverRegistered) { unregisterReceiver(screenReceiver); receiverRegistered = false }
+        main.removeCallbacks(mainPulse)
+        evidence("wake_lock_releasing")
+        // Remove the listener before shutting down its executor.
+        if (Build.VERSION.SDK_INT >= 33) lock?.setStateListener(evidenceWorker, null)
         activeId = null; generation++
         watch?.cancel(false); watch = null
         listener?.let { try { locations.removeUpdates(it) } catch (_: Exception) {} }; listener = null
@@ -313,6 +389,14 @@ class RecordingService : Service() {
         closing = true
         releaseResources()
         main.post { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
+    }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        evidence("task_removed")
+        super.onTaskRemoved(rootIntent)
+    }
+    override fun onTrimMemory(level: Int) {
+        evidence("trim_memory:$level")
+        super.onTrimMemory(level)
     }
     override fun onDestroy() {
         evidence("service_destroy")
