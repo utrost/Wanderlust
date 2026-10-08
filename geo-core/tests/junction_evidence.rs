@@ -159,3 +159,62 @@ fn dense_sampling_does_not_make_a_false_branch_confirm_faster() {
     }
     assert_eq!(matched_interval(&dense, 1), vec![1, 2]);
 }
+
+#[test]
+fn short_refined_branch_needs_sustained_departure_from_previous_street() {
+    let mut branch = Segment::new(3, vec![pos(0., 0.), pos(0., 15.)]);
+    branch.coverage_parent = Some(10);
+    let mut continuation = Segment::new(4, vec![pos(0., 15.), pos(0., 60.)]);
+    continuation.coverage_parent = Some(10);
+    let graph = Graph::build(vec![
+        Segment::new(1, vec![pos(-60., 0.), pos(0., 0.)]),
+        Segment::new(2, vec![pos(0., 0.), pos(60., 0.)]),
+        branch,
+        continuation,
+    ]);
+    let origin = chrono::DateTime::parse_from_rfc3339("2026-10-08T10:00:00Z").unwrap();
+    let make = |coords: &[(f64, f64)]| -> Vec<TrackPoint> {
+        coords
+            .iter()
+            .enumerate()
+            .map(|(i, &(x, y))| TrackPoint {
+                pos: pos(x, y),
+                time: Some(origin + chrono::Duration::seconds(i as i64 * 5)),
+                accuracy_m: Some(8.),
+            })
+            .collect()
+    };
+    let jitter = make(&[
+        (-40., 0.),
+        (-30., 0.),
+        (-20., 0.),
+        (-10., 0.),
+        (-3.6, 0.3),
+        (-1., 11.7),
+        (-2.3, 5.9),
+        (-1.4, 9.),
+        (10., 0.),
+        (20., 0.),
+        (30., 0.),
+    ]);
+    for end in 2..=jitter.len() {
+        let r = match_gpx_tracks(&graph, &[jitter[..end].to_vec()], MatchConfig::default());
+        assert!(
+            !walked_ids(&graph, &r).contains(&3),
+            "false branch at {end}"
+        );
+    }
+    let real_turn = make(&[
+        (-40., 0.),
+        (-30., 0.),
+        (-20., 0.),
+        (-10., 0.),
+        (0., 3.),
+        (0., 9.),
+        (0., 14.),
+        (0., 22.),
+        (0., 32.),
+    ]);
+    let r = match_gpx_tracks(&graph, &[real_turn], MatchConfig::default());
+    assert_eq!(walked_ids(&graph, &r), vec![1, 3, 4]);
+}

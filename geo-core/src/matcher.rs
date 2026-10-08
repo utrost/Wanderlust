@@ -217,6 +217,36 @@ pub fn match_gpx_tracks(
                     }
                 }
             }
+            // A turn into another street needs movement away from the previous
+            // street beyond ordinary GPS wobble. In particular, a short refined
+            // branch must not be confirmed just because a few fixes drift up it.
+            if supported
+                && start > 0
+                && continuous(&track[start - 1], &track[start], cfg.max_speed_mps)
+            {
+                if let Some((previous, _)) = snapped[start - 1] {
+                    let prior = graph.segment(previous);
+                    let turning = prior
+                        .project(track[start].pos)
+                        .zip(segment.project(track[start].pos))
+                        .is_some_and(|((_, a), (_, b))| (a.0 * b.0 + a.1 * b.1).abs() < 0.94);
+                    if turning {
+                        let reference = track[start].pos.lat.to_radians();
+                        let distance = |p| {
+                            prior
+                                .polyline
+                                .windows(2)
+                                .map(|pair| point_to_segment_m(p, pair[0], pair[1], reference))
+                                .fold(f64::INFINITY, f64::min)
+                        };
+                        let required = (uncertainty * 0.75).clamp(6.0, 15.0);
+                        let initial = distance(track[start].pos);
+                        supported = track[start..end]
+                            .iter()
+                            .any(|p| distance(p.pos) >= required.max(initial + 4.0));
+                    }
+                }
+            }
             if supported {
                 // Street-level continuity supports short pieces, but must not
                 // credit a continuation touched only by endpoint jitter. Each

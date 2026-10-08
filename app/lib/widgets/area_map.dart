@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../data/area_network.dart';
+import '../coverage/street_display.dart';
 import '../theme/heat_ramp.dart';
 import '../theme/wanderlust_theme.dart';
 import 'map_labels.dart';
@@ -332,12 +333,16 @@ class MapGeometryCache {
   Size? _size;
   List<AreaNetwork>? _networks;
   final _paths = <Object, Path>{};
+  StreetDisplay? _streetDisplay;
+  StreetDisplay streets(Iterable<AreaEdge> edges) =>
+      _streetDisplay ??= StreetDisplay(edges);
   void prepare(AreaNetwork network, Size size, List<AreaNetwork> networks) {
     if (_network != network || _size != size || _networks != networks) {
       _network = network;
       _networks = networks;
       _size = size;
       _paths.clear();
+      _streetDisplay = null;
     }
   }
 
@@ -518,8 +523,12 @@ class AreaMapPainter extends CustomPainter {
     canvas.save();
     if (transform != null) canvas.transform(transform!.storage);
     canvas.translate(12, 80);
+    final consolidate = mapSpanKm(network) / zoom >= 0.6;
+    final streets = consolidate ? cache.streets(edges.values) : null;
     for (final edge in painted) {
-      draw(edge, counts[edge.id]!);
+      for (final display in streets?.geometry(edge) ?? [edge]) {
+        draw(display, counts[edge.id]!);
+      }
     }
     canvas.restore();
     paintWalkOverlay(canvas, maps.toList(), inferred, trace, project);
