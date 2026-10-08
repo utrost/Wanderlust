@@ -7,3 +7,11 @@ The latest 1,024 events per recording are retained. Diagnostics remain on the de
 Interpretation: continued heartbeats with a stale worker tick indicate a recording-worker stall; advancing ticks without callbacks indicate missing location delivery. Gaps in all evidence with an unchanged process ID suggest process suspension, although this alone cannot prove an OEM cause. A new process ID or sticky-start event indicates service recreation. Elapsed realtime versus uptime helps identify device sleep. Missing evidence can also result from storage failure; logcat records diagnostic-write errors when available.
 
 For a field test, install over the previous APK, start a recording, lock the screen for at least ten minutes while moving, reopen once, then stop and export a full backup. Keep the same power settings as the failing test so the comparison is meaningful.
+
+## Android service-state audit
+
+Schema 2 adds Android's process importance, own-service foreground/started state and service PID, foreground service type, background restriction status, location power-save mode, Low Power Standby enabled/exempt state, permission/provider state and APK build number. A main-thread heartbeat is recorded alongside the recording-worker and GPS-callback timestamps. Diagnostic API failures are reported per group and do not abort the evidence event.
+
+On Android 13+, `WakeLock.setStateListener` records framework enabled/disabled callbacks independently of `isHeld()`. Until a callback arrives, enabled state is unknown (JSON null); older Android versions also report unknown. Callback delivery can itself be delayed while the process is suspended, so event timestamps are receipt times, not proof of when the system disabled a lock. Power/service fields are sampled when the event is written; `writeElapsed` distinguishes that from enqueue time.
+
+The lifecycle audit found distinct notification IDs and wake locks for the Geolocator preview and native recorder. Hiding the UI cancels preview/polling, without calling native Stop; native lock release occurs during recording teardown. No confirmed explanation for Honor's suspension has yet been found. This update adds targeted evidence rather than speculative retries or extra permissions.
