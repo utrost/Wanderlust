@@ -12,7 +12,7 @@ class WalkPreferences {
     this.automaticGpsSampling = true,
     this.autoDownloadMaps = true,
     this.fillSmallGaps = false,
-    this.autoFillGaps = true,
+    this.autoFillGaps = false,
     this.walkedLineWidth = 3,
     this.mapSizeKm = 4,
   });
@@ -80,6 +80,7 @@ class WalkPreferences {
     'autoDownloadMaps': autoDownloadMaps,
     'fillSmallGaps': fillSmallGaps,
     'autoFillGaps': autoFillGaps,
+    'journeyPolicy': 1,
     'walkedLineWidth': walkedLineWidth,
     'mapSizeKm': mapSizeKm,
   };
@@ -103,7 +104,7 @@ class WalkPreferences {
           : (json['detailedGps'] == true ? 2 : 5),
       autoDownloadMaps: json['autoDownloadMaps'] != false,
       fillSmallGaps: json['fillSmallGaps'] == true,
-      autoFillGaps: json['autoFillGaps'] != false,
+      autoFillGaps: json['journeyPolicy'] == 1 && json['autoFillGaps'] == true,
       walkedLineWidth:
           width is num && width.isFinite && width >= 1 && width <= 6
           ? width.toDouble()

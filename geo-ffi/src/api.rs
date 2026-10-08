@@ -23,6 +23,13 @@ impl Matcher {
     /// Match a GPX track, returning traversed segments (once each).
     pub fn match_gpx(&self, gpx_xml: &str, cfg: MatchConfig) -> Result<MatchResult, String> {
         let tracks = gpx::parse_tracks(gpx_xml)?;
+        if gpx::is_automatic(gpx_xml)? {
+            return Ok(geo_core::automatic::match_automatic_tracks(
+                &self.graph,
+                &tracks,
+                cfg,
+            ));
+        }
         let cycling = gpx::is_cycling(gpx_xml)?;
         let cfg = if cycling {
             MatchConfig {

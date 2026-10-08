@@ -223,7 +223,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     canPop: !_busy,
     child: Scaffold(
       appBar: AppBar(
-        title: const Text('Walk history'),
+        title: const Text('Recording history'),
         actions: [
           if (_busy && _archiveProgress != null)
             TextButton(onPressed: _cancelArchive, child: const Text('Cancel')),
@@ -244,7 +244,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                         const SizedBox(height: 8),
                       ],
                       const Text(
-                        'Every recorded walk counts towards your heatmap. Favourites simply help you find special walks. GPX files are created only when you export.',
+                        'Every recording contributes to the same map. Favourites help you find special journeys. GPX files are created only when you export.',
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -271,7 +271,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                         ],
                       ),
                       const Text(
-                        'Backups include walks, photos, maps and settings. Keep a copy somewhere safe. GPX contains only the walk.',
+                        'Backups include recordings, photos, maps and settings. Keep a copy somewhere safe. GPX contains one journey.',
                         style: TextStyle(fontSize: 12),
                       ),
                       if (_busy)
@@ -290,7 +290,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                       if (!_busy && !_loaded)
                         TextButton(
                           onPressed: () => _run(_load),
-                          child: const Text('Retry loading walks'),
+                          child: const Text('Retry loading recordings'),
                         ),
                     ],
                   ),
@@ -304,7 +304,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                     spacing: 8,
                     children: [
                       ChoiceChip(
-                        label: const Text('All walks'),
+                        label: const Text('All recordings'),
                         selected: !_favouritesOnly,
                         onSelected: _busy
                             ? null
@@ -331,7 +331,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                     child: Text(
                       _favouritesOnly
                           ? 'Star a walk to find it here.'
-                          : 'No walks yet',
+                          : 'No recordings yet',
                     ),
                   ),
                 )

@@ -1,3 +1,4 @@
+import '../coverage/unmatched_trails.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class WalkReviewScreen extends StatefulWidget {
     required this.walk,
     this.networks = const [],
     this.fillSmallGaps = false,
-    this.autoFillGaps = true,
+    this.autoFillGaps = false,
     this.showStreetNames = true,
     this.memoryStore,
     this.showMemories = true,
@@ -139,7 +140,7 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
           () => result = WalkReviewResult(value.direct, {
             ...value.inferred,
             ...automatic.difference(value.direct),
-          }),
+          }, unmatched: value.unmatched),
         );
       }
     } catch (_) {
@@ -199,16 +200,20 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
             ),
           ),
       ],
-      title: Text(
-        walk.activity == WalkActivity.cycle ? 'Review ride' : 'Review walk',
-      ),
+      title: const Text('Review journey'),
     ),
     body: Column(
       children: [
         if (widget.saveActivity != null)
-          ActivitySelector(
-            value: walk.activity,
-            onChanged: busy || changingActivity ? null : _changeActivity,
+          ExpansionTile(
+            title: const Text('Optional activity label'),
+            subtitle: const Text('Recording and matching adapt automatically'),
+            children: [
+              ActivitySelector(
+                value: walk.activity,
+                onChanged: busy || changingActivity ? null : _changeActivity,
+              ),
+            ],
           ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -316,7 +321,14 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
                             id: 1,
                         }
                       : {},
-                  unmatchedTrails: matched && maps.isEmpty ? trace : const [],
+                  unmatchedTrails: matched
+                      ? (maps.isEmpty
+                            ? reliableJourneyTrace(walk)
+                            : UnmatchedTrails.fromIndices(
+                                walk,
+                                result.unmatched,
+                              ))
+                      : const [],
                   trace: gps ? trace : const [],
                   inferred: {...?proposal?.edges},
                   fitCoordinates: proposal?.coordinates ?? coordinates,

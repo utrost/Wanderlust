@@ -69,6 +69,7 @@ class NearbyArea {
     ].join();
     return '[out:xml][timeout:45][maxsize:33554432];('
         'way["highway"]($bounds);'
+        'way["railway"~"^(rail|tram|light_rail|subway|narrow_gauge)\$"]($bounds);'
         'node["place"~"^(city|town|village|hamlet|suburb|quarter|neighbourhood)\$"]($bounds);'
         'way["waterway"~"^(river|stream|canal|drain|riverbank)\$"]($bounds);'
         '$scenery);(._;>>;);out body;';
@@ -76,7 +77,13 @@ class NearbyArea {
 }
 
 String _normalize((String, List<double>, String, String) input) =>
-    OsmNetwork.normalize(input.$1, input.$2, areaId: input.$3, name: input.$4);
+    OsmNetwork.normalize(
+      input.$1,
+      input.$2,
+      areaId: input.$3,
+      name: input.$4,
+      includeTransport: true,
+    );
 
 typedef FetchMap = Future<String> Function(NearbyArea area);
 

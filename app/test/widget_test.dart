@@ -120,7 +120,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Set up my map'), findsOneWidget);
       expect(find.text('Bremen center'), findsNothing);
-      expect(find.text('Start walk'), findsOneWidget);
+      expect(find.text('Start recording'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );
@@ -163,7 +163,7 @@ void main() {
       expect(downloads, 1);
       expect(store.selected, store.maps.keys.single);
       expect(find.text('Example area'), findsOneWidget);
-      expect(find.text('Start walk'), findsOneWidget);
+      expect(find.text('Start recording'), findsOneWidget);
       await tester.tap(find.byTooltip('Offline maps'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
@@ -193,7 +193,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Start walk'));
+    await tester.tap(find.text('Start recording'));
     await tester.pumpAndSettle();
     expect(store.recording, isTrue);
     await tester.tap(find.byTooltip('Offline maps'));
@@ -281,7 +281,7 @@ void main() {
     expect(requests, 2);
     expect(find.byTooltip('Location ready · Location details'), findsOneWidget);
     expect(find.text('53.07591, 8.80733'), findsNothing);
-    expect(find.text('Start walk'), findsOneWidget);
+    expect(find.text('Start recording'), findsOneWidget);
     expect(find.text('Stop'), findsNothing);
     expect(find.byTooltip('Show map area'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -370,7 +370,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(requests, 2);
       expect(map().centerRequest, first + 1);
-      expect(find.text('Start walk'), findsOneWidget);
+      expect(find.text('Start recording'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );
@@ -456,9 +456,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip('Add memory'), findsOneWidget);
       expect(find.byTooltip('Memories'), findsOneWidget);
-      expect(find.byTooltip('Walk history (0)'), findsOneWidget);
+      expect(find.byTooltip('Recording history (0)'), findsOneWidget);
       expect(find.textContaining('street sections explored'), findsNothing);
-      expect(find.text('Start walk'), findsOneWidget);
+      expect(find.text('Start recording'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
@@ -474,7 +474,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Start walk'));
+      await tester.tap(find.text('Start recording'));
       await tester.pumpAndSettle();
       location.stream.add(fix(1)); // Deliberately stale.
       await tester.pump();

@@ -102,6 +102,22 @@ pub fn is_cycling(xml: &str) -> Result<bool, String> {
     Ok(cycling)
 }
 
+/// App requests automatic matching independently of an optional activity label.
+pub fn is_automatic(xml: &str) -> Result<bool, String> {
+    let doc = roxmltree::Document::parse(xml).map_err(|e| e.to_string())?;
+    Ok(doc
+        .root_element()
+        .children()
+        .filter(|n| n.is_element() && n.tag_name().name() == "extensions")
+        .flat_map(|n| n.children())
+        .any(|n| {
+            n.is_element()
+                && n.tag_name().name() == "matching"
+                && n.tag_name().namespace() == Some("https://wanderlust.local/gpx/1")
+                && n.text().is_some_and(|s| s.trim() == "auto")
+        }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

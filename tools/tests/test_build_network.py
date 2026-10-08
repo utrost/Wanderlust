@@ -14,6 +14,15 @@ XML = b'''<osm><node id="1" lon="8.1" lat="53"/><node id="2" lon="8.2" lat="53"/
 <way id="11"><nd ref="2"/><nd ref="4"/><tag k="highway" v="footway"/></way></osm>'''
 
 class NetworkTests(unittest.TestCase):
+    def test_transport_import_preserves_rail_and_cycle_geometry_without_changing_legacy_policy(self):
+        raw = XML.replace(b'</osm>', b'<way id="12"><nd ref="1"/><nd ref="4"/><tag k="railway" v="tram"/></way><way id="13"><nd ref="3"/><nd ref="4"/><tag k="highway" v="cycleway"/></way></osm>')
+        old, _ = normalize(raw, BBOX)
+        new, _ = normalize(raw, BBOX, include_transport=True)
+        self.assertFalse(any(f['properties']['osm_way_id']==12 for f in old['features']))
+        self.assertTrue(any(f['properties'].get('railway')=='tram' and f['properties']['highway']=='railway' for f in new['features']))
+        self.assertTrue(any(f['properties']['osm_way_id']==13 for f in new['features']))
+        self.assertEqual(new['wanderlust_network']['policy'], 'journey-transport-v1')
+
     def test_activity_and_roadside_metadata_are_preserved(self):
         raw = XML.replace(b'<tag k="highway" v="footway"/>', b'<tag k="highway" v="footway"/><tag k="bicycle" v="designated"/><tag k="footway" v="sidewalk"/>')
         network, _ = normalize(raw, BBOX)

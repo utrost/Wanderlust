@@ -130,7 +130,8 @@ void main() {
         'automaticGpsSampling': true,
         'autoDownloadMaps': true,
         'fillSmallGaps': false,
-        'autoFillGaps': true,
+        'autoFillGaps': false,
+        'journeyPolicy': 1,
         'walkedLineWidth': 3.0,
         'mapSizeKm': 4,
       });

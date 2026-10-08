@@ -3,28 +3,47 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 
 import '../geo/matching_session.dart';
+import '../geo/coverage_resolution.dart';
+import '../coverage/unmatched_trails.dart';
+import '../recording/journey_motion.dart';
 import '../recording/saved_walk.dart';
 import '../transfer/walk_codec.dart';
 
 class WalkReviewResult {
-  const WalkReviewResult(this.direct, this.inferred);
+  const WalkReviewResult(
+    this.direct,
+    this.inferred, {
+    this.unmatched = const {},
+  });
+  final Set<int> unmatched;
   final Set<int> direct;
   final Set<int> inferred;
 }
 
-WalkReviewResult _matchReview((List<String>, String, bool) input) {
+Future<WalkReviewResult> _matchReview(
+  (List<String>, String, bool) input,
+) async {
   final session = MatchingSession();
   final direct = <int>{}, inferred = <int>{};
+  final unmatched = <Set<int>>[];
   try {
     for (final network in input.$1) {
-      final result = session.match(network, [
+      final results = session.match(network, [
         input.$2,
-      ], fillSmallGaps: input.$3).single;
+      ], fillSmallGaps: input.$3);
+      final result = (await resolveCoverageDisplay(network, [
+        input.$2,
+      ], results)).single;
+      unmatched.add(result.unmatched.toSet());
       final estimates = result.inferred.toSet();
       direct.addAll(result.walked.where((id) => !estimates.contains(id)));
       inferred.addAll(estimates);
     }
-    return WalkReviewResult(direct, inferred.difference(direct));
+    return WalkReviewResult(
+      direct,
+      inferred.difference(direct),
+      unmatched: UnmatchedTrails.common(unmatched),
+    );
   } finally {
     session.dispose();
   }
@@ -54,3 +73,7 @@ List<List<Offset>> reviewTrace(SavedWalk walk) {
   }
   return result;
 }
+
+/// Safe route fallback when no street map is installed.
+List<List<Offset>> reliableJourneyTrace(SavedWalk walk) =>
+    UnmatchedTrails.fromIndices(walk, reliableJourneyPairs(walk));

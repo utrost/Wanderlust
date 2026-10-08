@@ -107,12 +107,15 @@ void main() {
       expect(await suggestGapRoutes([routes()], walk(seconds: 301)), isEmpty);
     },
   );
-  test('rejects routes impossible in elapsed time and missing maps', () async {
-    final w = SavedWalk(1, DateTime.utc(2026), null, 'completed', [
-      point(0, 0),
-      point(.002, 31),
-    ]);
-    expect((await suggestGapRoutes([routes()], w)).single.routes, isEmpty);
-    expect((await suggestGapRoutes([], walk())).single.routes, isEmpty);
-  });
+  test(
+    'manual repair allows faster travel but still rejects missing maps',
+    () async {
+      final w = SavedWalk(1, DateTime.utc(2026), null, 'completed', [
+        point(0, 0),
+        point(.002, 31),
+      ]);
+      expect((await suggestGapRoutes([routes()], w)).single.routes, isNotEmpty);
+      expect((await suggestGapRoutes([], walk())).single.routes, isEmpty);
+    },
+  );
 }

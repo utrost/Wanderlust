@@ -11,14 +11,12 @@ import '../geo/live_match.dart';
 import '../maps/map_download.dart';
 import '../memories/memory.dart';
 import '../memories/memory_location.dart';
-import '../recording/activity_type.dart';
 import '../recording/walk_recorder.dart';
 import '../recording/walk_store.dart';
 import '../settings/walk_preferences.dart';
 import '../theme/wanderlust_theme.dart';
 import '../transfer/walk_files.dart';
 import '../transfer/walk_transfer.dart';
-import '../widgets/activity_selector.dart';
 import '../widgets/area_map.dart';
 import '../widgets/coverage_status.dart';
 import '../widgets/gps_hud.dart';
@@ -353,24 +351,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   _mapDock(),
-                                  if (!_recorder.isRecording &&
-                                      !_recorder.isBusy &&
-                                      !_recorder.hasRecoverableWalk)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 8),
-                                      child: Material(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.surface,
-                                        borderRadius: BorderRadius.circular(24),
-                                        child: ActivitySelector(
-                                          value: _preferences.activity,
-                                          onChanged: _recorder.needsSaveRetry
-                                              ? null
-                                              : _selectActivity,
-                                        ),
-                                      ),
-                                    ),
                                   const SizedBox(height: 8),
                                   Center(
                                     child: _recorder.isBusy
@@ -381,21 +361,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                             onPressed: _recorder.needsSaveRetry
                                                 ? _recorder.retrySave
                                                 : _onStartWalk,
-                                            icon: Icon(
-                                              _preferences.activity ==
-                                                      WalkActivity.cycle
-                                                  ? Icons.directions_bike
-                                                  : Icons.directions_walk,
-                                            ),
+                                            icon: const Icon(Icons.route),
                                             label: Text(
                                               _recorder.needsSaveRetry
-                                                  ? 'Retry saving walk'
+                                                  ? 'Retry saving recording'
                                                   : _recorder.hasRecoverableWalk
-                                                  ? 'Continue your walk'
-                                                  : _preferences.activity ==
-                                                        WalkActivity.cycle
-                                                  ? 'Start ride'
-                                                  : 'Start walk',
+                                                  ? 'Continue recording'
+                                                  : 'Start recording',
                                             ),
                                           ),
                                   ),
@@ -403,7 +375,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                       !_recorder.isBusy)
                                     TextButton(
                                       onPressed: _recorder.stop,
-                                      child: const Text('Finish this walk'),
+                                      child: const Text('Finish recording'),
                                     ),
                                   _attribution(),
                                 ],
@@ -449,25 +421,25 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         else if (_recorder.needsSaveRetry)
           TextButton(
             onPressed: _recorder.retrySave,
-            child: const Text('Retry saving walk'),
+            child: const Text('Retry saving recording'),
           )
         else if (_recorder.hasRecoverableWalk) ...[
           FilledButton(
             onPressed: _onStartWalk,
-            child: const Text('Continue your walk'),
+            child: const Text('Continue recording'),
           ),
           TextButton(
             onPressed: _recorder.stop,
-            child: const Text('Finish this walk'),
+            child: const Text('Finish recording'),
           ),
         ] else ...[
           FilledButton(
             onPressed: _onStartWalk,
-            child: const Text('Start walk'),
+            child: const Text('Start recording'),
           ),
           TextButton(
             onPressed: _showSavedWalks,
-            child: const Text('Walk history and import'),
+            child: const Text('Recording history and import'),
           ),
         ],
       ],
@@ -611,20 +583,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     recording: _recorder.isRecording,
     onRetry: () => unawaited(_coverage.synchronize(_recorder.savedWalks)),
   );
-
-  Future<void> _selectActivity(WalkActivity activity) async {
-    try {
-      await _session.savePreferences(_preferences.copyWith(activity: activity));
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not save activity choice. Please retry.'),
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _onStartWalk() async {
     await _mapLocation.prepareRecording();

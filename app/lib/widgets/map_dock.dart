@@ -54,7 +54,7 @@ class MapDock extends StatelessWidget {
                 ),
               ),
               IconButton(
-                tooltip: 'Walk history ($historyCount)',
+                tooltip: 'Recording history ($historyCount)',
                 onPressed: historyEnabled ? onHistory : null,
                 icon: const Icon(Icons.history),
               ),

@@ -100,7 +100,7 @@ def synthetic_gpx(path, noise_m=0, step_m=3):
     return '\n'.join(xml),len(points)
 
 
-def evaluate(network_text, library, output_dir, step_m=3, fill_small_gaps=False):
+def evaluate(network_text, library, output_dir, step_m=3, fill_small_gaps=False, automatic=False):
     network = json.loads(network_text)
     matcher = NativeMatcher(library,network_text,fill_small_gaps)
     lengths = {f['id']:f['properties']['length_m'] for f in network['features']}
@@ -117,6 +117,8 @@ def evaluate(network_text, library, output_dir, step_m=3, fill_small_gaps=False)
             expected = {p[0] for p in path}
             for noise in (0,2,6):
                 gpx,points = synthetic_gpx(path,noise,step_m)
+                if automatic:
+                    gpx = gpx.replace('<gpx ', '<gpx xmlns:wl="https://wanderlust.local/gpx/1" ', 1).replace('</gpx>', '<extensions><wl:matching>auto</wl:matching></extensions></gpx>')
                 began = time.perf_counter(); result = matcher.match(gpx); duration = time.perf_counter()-began
                 actual = set(result['walked']); correct = actual & expected
                 rows.append({'route':name,'synthetic_noise_m':noise,'points':points,
@@ -146,10 +148,11 @@ def main():
     p.add_argument('--output',type=Path,default=Path('tools/out/evaluation'))
     p.add_argument('--step-m',type=float,default=3)
     p.add_argument('--fill-small-gaps',action='store_true')
+    p.add_argument('--automatic',action='store_true')
     p.add_argument('--check',action='store_true',help='Fail on false positives or clean length recall below 80 percent')
     args = p.parse_args()
     if args.step_m <= 0: p.error('--step-m must be positive')
-    report = evaluate(args.network.read_text(),args.library,args.output,args.step_m,args.fill_small_gaps)
+    report = evaluate(args.network.read_text(),args.library,args.output,args.step_m,args.fill_small_gaps,args.automatic)
     print(json.dumps(report,indent=2))
     if args.check and any(row['false_positive_edges'] or (row['synthetic_noise_m'] == 0 and row['length_recall'] < .8) for row in report['results']):
         raise SystemExit('Matching regression: inspect report')

@@ -47,3 +47,23 @@ fn road_tags_reach_matching_and_activity_does_not_leak_between_calls() {
         assert_eq!(matcher.walked_ids(&r), expected);
     }
 }
+
+#[test]
+fn automatic_matching_overrides_legacy_labels_without_mutating_them() {
+    let network = r#"{"type":"FeatureCollection","features":[{"type":"Feature","id":1,"properties":{},"geometry":{"type":"LineString","coordinates":[[0,0],[0.01,0]]}}]}"#;
+    let matcher = Matcher::from_geojson(network).unwrap();
+    for label in ["walk", "cycle", "auto"] {
+        let xml = format!(
+            r#"<gpx xmlns:wl="https://wanderlust.local/gpx/1"><extensions><wl:activity>{label}</wl:activity><wl:matching>auto</wl:matching></extensions><trk><trkseg>
+        <trkpt lon="0.001" lat="0"><time>2026-10-08T10:00:00Z</time></trkpt>
+        <trkpt lon="0.0015" lat="0"><time>2026-10-08T10:00:03Z</time></trkpt>
+        <trkpt lon="0.002" lat="0"><time>2026-10-08T10:00:06Z</time></trkpt>
+        <trkpt lon="0.0025" lat="0"><time>2026-10-08T10:00:09Z</time></trkpt>
+        </trkseg></trk></gpx>"#
+        );
+        assert_eq!(
+            matcher.walked_ids(&matcher.match_gpx(&xml, MatchConfig::default()).unwrap()),
+            vec![1]
+        );
+    }
+}

@@ -89,7 +89,10 @@ fn solve(
                     };
                     let sigma = p.accuracy_m.unwrap_or(8.0).clamp(4.0, 50.0);
                     let mut cost = 0.5 * (distance / sigma).powi(2)
-                        + graph.segment(*edge).street.activity_cost(cycling);
+                        + graph
+                            .segment(*edge)
+                            .street
+                            .movement_cost(cycling, max_speed > 15.0);
                     // A spatial baseline avoids overweighting dense samples and tiny jitter.
                     if let Some((_, tangent)) = graph.segment(*edge).project(p.pos) {
                         for previous in points[..i].iter().rev().take(60) {

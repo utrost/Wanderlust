@@ -1,3 +1,4 @@
+import '../recording/activity_type.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -41,7 +42,7 @@ class WalkingSession extends ChangeNotifier {
           ),
       gpsInterval: () => preferences.effectiveGpsInterval,
       automaticGps: () => preferences.automaticGpsSampling,
-      activityType: () => preferences.activity,
+      activityType: () => WalkActivity.auto,
       showElapsed: () => preferences.showTime,
       loadHistory: () => history.listSummaries(recover: true),
     );

@@ -68,4 +68,20 @@ class RecordingPolicyTest {
         policy.add(fix(96, 2004.0), 96000)
         assertEquals(100.0, policy.meters, 0.01)
     }
+    @Test fun `automatic journeys adapt sampling and distance during vehicle travel`() {
+        val policy = RecordingPolicy(false, 0, automatic = true)
+        for (s in 0..30 step 3) policy.add(fix(s, s*10.0, 10.0), s*1000L)
+        assertEquals(300.0, policy.meters, 1.0)
+        assertEquals(2000L, policy.interval(30000))
+    }
+    @Test fun `automatic mode rejects an isolated fast jump and outage`() {
+        val policy = RecordingPolicy(false, 0, automatic = true)
+        policy.add(fix(0), 0)
+        policy.add(fix(5, 5.0, 1.0), 5000)
+        policy.add(fix(6, 1000.0), 6000)
+        policy.add(fix(7, 5.0), 7000)
+        policy.add(fix(12, 10.0, 1.0), 12000)
+        policy.add(fix(90, 2000.0), 90000)
+        assertTrue(policy.meters <= 11)
+    }
 }

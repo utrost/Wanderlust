@@ -9,6 +9,11 @@ class ActivitySelector extends StatelessWidget {
   Widget build(BuildContext context) => SegmentedButton<WalkActivity>(
     segments: const [
       ButtonSegment(
+        value: WalkActivity.auto,
+        icon: Icon(Icons.route),
+        label: Text('Journey'),
+      ),
+      ButtonSegment(
         value: WalkActivity.walk,
         icon: Icon(Icons.directions_walk),
         label: Text('Walk'),

@@ -66,6 +66,28 @@ impl StreetInfo {
         0.0
     }
 
+    pub(crate) fn movement_cost(&self, cycling: bool, motorized: bool) -> f64 {
+        if motorized {
+            return if matches!(
+                self.highway.as_str(),
+                "footway" | "path" | "steps" | "pedestrian" | "cycleway" | "bridleway"
+            ) {
+                3.0
+            } else {
+                0.0
+            };
+        }
+        if self.highway == "railway"
+            || matches!(
+                self.highway.as_str(),
+                "motorway" | "motorway_link" | "trunk" | "trunk_link"
+            )
+        {
+            return 3.0;
+        }
+        self.activity_cost(cycling)
+    }
+
     fn same_level(&self, other: &Self) -> bool {
         let a_layer = if self.layer.is_empty() {
             "0"

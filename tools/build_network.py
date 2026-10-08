@@ -13,6 +13,9 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 POLICY = 'pedestrian-conservative-v2'
+TRANSPORT_POLICY = 'journey-transport-v1'
+RAILWAYS = {'rail', 'tram', 'light_rail', 'subway', 'narrow_gauge'}
+TRANSPORT_ROADS = {'cycleway', 'bridleway', 'motorway', 'motorway_link', 'trunk', 'trunk_link'}
 SAFE_INTEGER = (1 << 53) - 1
 DEFAULT_HIGHWAYS = {
     'residential', 'living_street', 'footway', 'path', 'pedestrian', 'steps',
@@ -43,6 +46,16 @@ def exclusion(t):
     if highway in {'cycleway', 'bridleway'}:
         return 'foot_unspecified'
     if t.get('access', 'yes') not in ACCESS_ALLOWED:
+        return 'access'
+    return None
+
+
+def transport_exclusion(t):
+    if t.get('highway') not in DEFAULT_HIGHWAYS | TRANSPORT_ROADS and t.get('railway') not in RAILWAYS:
+        return 'geometry'
+    if t.get('area') == 'yes' or t.get('indoor') == 'yes' or 'level' in t:
+        return 'area_or_indoor'
+    if t.get('access') in {'no', 'private'}:
         return 'access'
     return None
 
@@ -79,7 +92,8 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
 
 
-def normalize(raw, bbox, area_id='bremen-center', name='Bremen center'):
+def normalize(raw, bbox, area_id='bremen-center', name='Bremen center', include_transport=False):
+    policy = TRANSPORT_POLICY if include_transport else POLICY
     if len(bbox) != 4 or not all(math.isfinite(n) for n in bbox):
         raise ValueError('bbox must contain four finite coordinates')
     west, south, east, north = bbox
@@ -99,7 +113,7 @@ def normalize(raw, bbox, area_id='bremen-center', name='Bremen center'):
         if nid in nodes:
             raise ValueError(f'duplicate node {nid}')
         nodes[nid] = pos
-        if blocked_node(tags(node)):
+        if (tags(node).get('barrier') in {'wall', 'fence', 'hedge', 'block'} if include_transport else blocked_node(tags(node))):
             blocked.add(nid)
     def inside(p):
         return west <= p[0] <= east and south <= p[1] <= north
@@ -114,7 +128,7 @@ def normalize(raw, bbox, area_id='bremen-center', name='Bremen center'):
             raise ValueError(f'invalid/duplicate way {wid}')
         seen_ways.add(wid)
         t = tags(way)
-        reason = exclusion(t)
+        reason = transport_exclusion(t) if include_transport else exclusion(t)
         if reason:
             skipped[reason] += 1
             continue
@@ -153,8 +167,8 @@ def normalize(raw, bbox, area_id='bremen-center', name='Bremen center'):
                 continue
             eid = edge_id(wid, a, b, chain[1:-1])
             properties = {'osm_way_id': wid, 'from_node': a, 'to_node': b,
-                          'highway': t['highway'], 'length_m': round(length, 3)}
-            for key in ('name', 'bridge', 'tunnel', 'layer', 'foot', 'bicycle', 'footway', 'access'):
+                          'highway': t.get('highway', 'railway'), 'length_m': round(length, 3)}
+            for key in ('railway', 'name', 'bridge', 'tunnel', 'layer', 'foot', 'bicycle', 'footway', 'access'):
                 if key in t:
                     properties[key] = t[key]
             feature = {'type': 'Feature', 'id': eid, 'properties': properties,
@@ -165,11 +179,11 @@ def normalize(raw, bbox, area_id='bremen-center', name='Bremen center'):
     if not features:
         raise ValueError('no walkable edges in the area')
     ordered = [features[k] for k in sorted(features)]
-    version_payload = {'area_id': area_id, 'bbox': bbox, 'policy': POLICY, 'features': ordered}
+    version_payload = {'area_id': area_id, 'bbox': bbox, 'policy': policy, 'features': ordered}
     version = hashlib.sha256(canonical(version_payload).encode()).hexdigest()
     metadata = {
         'version': 1, 'area_id': area_id, 'name': name, 'network_version': version,
-        'policy': POLICY, 'edge_id_scheme': 'sha256-osm-way-node-chain-52bit-v2',
+        'policy': policy, 'edge_id_scheme': 'sha256-osm-way-node-chain-52bit-v2',
         'source_sha256': hashlib.sha256(raw).hexdigest(),
         'attribution': '© OpenStreetMap contributors',
         'license': 'ODbL-1.0', 'license_url': 'https://www.openstreetmap.org/copyright',
@@ -220,10 +234,11 @@ def main():
     parser.add_argument('--area-id', default='bremen-center')
     parser.add_argument('--name', default='Bremen center')
     parser.add_argument('--report', type=Path)
+    parser.add_argument('--include-transport', action='store_true')
     args = parser.parse_args()
     raw = args.input.read_bytes()
     if args.input.suffix == '.gz': raw = gzip.decompress(raw)
-    network, report = normalize(raw, list(map(float, args.bbox.split(','))), args.area_id, args.name)
+    network, report = normalize(raw, list(map(float, args.bbox.split(','))), args.area_id, args.name, include_transport=args.include_transport)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(canonical(network)+'\n')
     if args.report:

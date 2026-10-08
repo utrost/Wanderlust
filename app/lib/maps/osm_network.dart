@@ -10,6 +10,22 @@ import 'osm_places.dart';
 /// Raw OSM nodes remain graph junctions; proximity never joins bridges.
 class OsmNetwork {
   static const policy = 'pedestrian-conservative-v2';
+  static const transportPolicy = 'journey-transport-v1';
+  static const railways = {
+    'rail',
+    'tram',
+    'light_rail',
+    'subway',
+    'narrow_gauge',
+  };
+  static const transportRoads = {
+    'cycleway',
+    'bridleway',
+    'motorway',
+    'motorway_link',
+    'trunk',
+    'trunk_link',
+  };
   static const safeInteger = 9007199254740991;
   static const highways = {
     'residential',
@@ -47,6 +63,19 @@ class OsmNetwork {
     if (h == 'cycleway' || h == 'bridleway') return true;
     return !accessAllowed.contains(t['access'] ?? 'yes');
   }
+
+  static bool transportExcluded(Map<String, String> t) {
+    return (!highways.contains(t['highway']) &&
+            !transportRoads.contains(t['highway']) &&
+            !railways.contains(t['railway'])) ||
+        t['area'] == 'yes' ||
+        t['indoor'] == 'yes' ||
+        t.containsKey('level') ||
+        {'no', 'private'}.contains(t['access']);
+  }
+
+  static bool transportBlockedNode(Map<String, String> t) =>
+      {'wall', 'fence', 'hedge', 'block'}.contains(t['barrier']);
 
   static bool blockedNode(Map<String, String> t) {
     if (footAllowed.contains(t['foot'])) return false;
@@ -92,6 +121,7 @@ class OsmNetwork {
     List<double> bbox, {
     required String areaId,
     required String name,
+    bool includeTransport = false,
   }) {
     if (utf8.encode(xml).length > 16 * 1024 * 1024) {
       throw const FormatException(
@@ -148,7 +178,11 @@ class OsmNetwork {
       if (nodes.length > 150000) {
         throw const FormatException('Too many map points. Try a smaller area.');
       }
-      if (blockedNode(tags(n))) blocked.add(nid);
+      if (includeTransport
+          ? transportBlockedNode(tags(n))
+          : blockedNode(tags(n))) {
+        blocked.add(nid);
+      }
     }
     bool inside(List<double> p) =>
         p[0] >= bbox[0] &&
@@ -162,7 +196,7 @@ class OsmNetwork {
       final wid = id(way.getAttribute('id'));
       if (!seen.add(wid)) throw const FormatException('Duplicate OSM way.');
       final t = tags(way);
-      if (excluded(t)) continue;
+      if (includeTransport ? transportExcluded(t) : excluded(t)) continue;
       final refs = canonicalChain(
         way.findElements('nd').map((n) => id(n.getAttribute('ref'))).toList(),
       );
@@ -212,9 +246,10 @@ class OsmNetwork {
             'osm_way_id': wid,
             'from_node': chain.first,
             'to_node': chain.last,
-            'highway': tags['highway'],
+            'highway': tags['highway'] ?? 'railway',
             'length_m': double.parse(length.toStringAsFixed(3)),
             for (final k in [
+              'railway',
               'name',
               'bridge',
               'tunnel',
@@ -255,7 +290,7 @@ class OsmNetwork {
               'builder': 'mobile-osm-v1',
               'area_id': areaId,
               'bbox': bbox,
-              'policy': policy,
+              'policy': includeTransport ? transportPolicy : policy,
               'features': ordered,
             }),
           ),
@@ -271,7 +306,7 @@ class OsmNetwork {
         'area_id': areaId,
         'name': OsmPlaces.areaName(name, bbox, places, ordered),
         'network_version': version,
-        'policy': policy,
+        'policy': includeTransport ? transportPolicy : policy,
         'edge_id_scheme': 'sha256-osm-way-node-chain-52bit-v2',
         'source_sha256': sha256.convert(utf8.encode(xml)).toString(),
         'attribution': '© OpenStreetMap contributors',

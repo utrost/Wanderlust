@@ -319,7 +319,7 @@ class WalkRecorder extends ChangeNotifier {
         return false;
       }
       _points.clear();
-      _distance = WalkDistance(maxSpeed: _activity.maxSpeed);
+      _distance = WalkDistance(automatic: true);
       _startedAt = startedAt;
       _endedAt = null;
       _writes = Future.value();
