@@ -18,7 +18,7 @@ import 'coverage_evidence.dart';
 import 'unmatched_trails.dart';
 
 // Bump when matching rules change: old saved traces are then reprocessed once.
-const matchingRevision = 'street-corridor-v10';
+const matchingRevision = 'street-corridor-v11';
 typedef MatchBatch = Future<List<MatchResult>> Function(String, List<String>);
 
 typedef CoverageFailure = MatchingFailure;

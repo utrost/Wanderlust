@@ -6,10 +6,22 @@ import 'map_place.dart';
 import 'coverage_sections.dart';
 
 class AreaEdge {
-  const AreaEdge(this.id, this.points, this.name);
+  const AreaEdge(
+    this.id,
+    this.points,
+    this.name, {
+    this.wayId,
+    this.highway = '',
+    this.footway = '',
+    this.layer = '',
+    this.bridge = '',
+    this.tunnel = '',
+  });
   final int id;
   final List<Offset> points; // longitude, latitude
   final String? name;
+  final int? wayId;
+  final String highway, footway, layer, bridge, tunnel;
 }
 
 /// The exact same normalized GeoJSON is used by the renderer and Rust matcher.
@@ -90,10 +102,17 @@ class AreaNetwork {
           if (points.length < 2) {
             throw const FormatException('Street has no geometry');
           }
+          final properties = f['properties'] as Map<String, dynamic>;
           return AreaEdge(
             id,
             points,
-            (f['properties'] as Map<String, dynamic>)['name'] as String?,
+            properties['name'] as String?,
+            wayId: (properties['osm_way_id'] as num?)?.toInt(),
+            highway: properties['highway']?.toString() ?? '',
+            footway: properties['footway']?.toString() ?? '',
+            layer: properties['layer']?.toString() ?? '',
+            bridge: properties['bridge']?.toString() ?? '',
+            tunnel: properties['tunnel']?.toString() ?? '',
           );
         })
         .toList(growable: false);

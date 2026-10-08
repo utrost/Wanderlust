@@ -136,7 +136,39 @@ fn solve(
                                     points[i].pos,
                                     budget,
                                 )
-                                .map(|distance| (distance - observed).abs() / 10.0)
+                                .map(|distance| {
+                                    if from == to || graph.same_coverage_parent(*from, *to) {
+                                        return (distance - observed).abs() / 10.0;
+                                    }
+                                    // Discourage noise-driven switches between parallel
+                                    // streets without penalising subdivisions or turns.
+                                    let parallel = graph
+                                        .segment(*from)
+                                        .project(points[i - 1].pos)
+                                        .zip(graph.segment(*to).project(points[i].pos))
+                                        .is_some_and(|((_, a), (_, b))| {
+                                            (a.0 * b.0 + a.1 * b.1).abs() >= 0.94
+                                        });
+                                    let reference = points[i].pos.lat.to_radians();
+                                    let (ax, ay) =
+                                        graph.segment(*from).polyline[0].to_xy(reference);
+                                    let (bx, by) = graph.segment(*to).polyline[0].to_xy(reference);
+                                    let lateral = graph
+                                        .segment(*from)
+                                        .project(points[i].pos)
+                                        .map_or(0.0, |(_, t)| {
+                                            ((bx - ax) * t.1 - (by - ay) * t.0).abs()
+                                        });
+                                    let switching = if parallel
+                                        && lateral >= 3.0
+                                        && !graph.same_street_run(*from, *to, points[i].pos)
+                                    {
+                                        0.75
+                                    } else {
+                                        0.0
+                                    };
+                                    (distance - observed).abs() / 10.0 + switching
+                                })
                                 .unwrap_or(f64::INFINITY),
                             (None, None) => 0.0,
                             _ => 1.0,
