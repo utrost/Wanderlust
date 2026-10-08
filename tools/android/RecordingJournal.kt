@@ -69,7 +69,10 @@ class RecordingJournal(path: String) : AutoCloseable {
             put("walk_id", id); put("seq", s["pointCount"] as Long)
             put("position", position.toString()); put("timestamp", iso(location.time))
         })
-        val meta = metadata(id).put("gpsDiagnostics", metrics)
+        val meta = metadata(id)
+        val evidence = meta.optJSONObject("gpsDiagnostics")?.optString("evidenceLog", "")
+        if (!evidence.isNullOrEmpty()) metrics.put("evidenceLog", evidence)
+        meta.put("gpsDiagnostics", metrics)
         if (s["resumeBoundary"] == true && s["pointCount"] as Long > 0) {
             val segments = meta.optJSONArray("segmentStarts") ?: JSONArray()
             segments.put(s["pointCount"])
@@ -86,6 +89,20 @@ class RecordingJournal(path: String) : AutoCloseable {
         db.execSQL("UPDATE recorded_walk SET status=?,ended_at=?,fingerprint=NULL WHERE id=?", arrayOf<Any?>(if (interrupted) "interrupted" else "completed", end, id))
         db.execSQL("UPDATE native_recording SET active=0 WHERE walk_id=?", arrayOf<Any?>(id))
         true
+    }
+    /** Independent connection: evidence survives even when no GPS fix arrives. */
+    fun evidence(id: Long, event: JSONObject) = transaction {
+        val s = state()
+        if (s == null || s["walkId"] != id) return@transaction
+        val meta = metadata(id)
+        val diagnostics = meta.optJSONObject("gpsDiagnostics") ?: JSONObject()
+        val old = JSONArray(diagnostics.optString("evidenceLog", "[]"))
+        val entries = JSONArray()
+        for (i in maxOf(0, old.length() - 1023) until old.length()) entries.put(old.get(i))
+        entries.put(event)
+        diagnostics.put("evidenceLog", entries.toString())
+        meta.put("gpsDiagnostics", diagnostics)
+        db.execSQL("UPDATE recorded_walk SET trace_metadata=? WHERE id=?", arrayOf<Any?>(meta.toString(), id))
     }
     fun markAlerted() { db.execSQL("UPDATE native_recording SET alerted=1 WHERE id=1") }
     fun restart() { db.execSQL("UPDATE native_recording SET restarts=restarts+1 WHERE id=1") }

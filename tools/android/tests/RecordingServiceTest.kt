@@ -57,6 +57,22 @@ class RecordingServiceTest {
         RecordingService.worker.submit { method.invoke(controller.get(), location) }.get(10, TimeUnit.SECONDS)
         drain()
     }
+    @Test fun `evidence continues while recording worker is blocked without GPS`() {
+        drain()
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        RecordingService.worker.execute { entered.countDown(); release.await(10, TimeUnit.SECONDS) }
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        try {
+            val method = RecordingService::class.java.getDeclaredMethod("evidence", String::class.java).apply { isAccessible=true }
+            method.invoke(controller.get(), "heartbeat_test")
+            val field = RecordingService::class.java.getDeclaredField("evidenceWorker").apply { isAccessible=true }
+            (field.get(controller.get()) as java.util.concurrent.ScheduledExecutorService).submit {}.get(5, TimeUnit.SECONDS)
+            val diagnostics = state()["diagnostics"] as Map<*, *>
+            assertTrue((diagnostics["evidenceLog"] as String).contains("heartbeat_test"))
+            assertEquals(0L, state()["pointCount"])
+        } finally { release.countDown(); drain() }
+    }
     @Test fun `capture and notification Stop need no Flutter engine`() {
         accept()
         assertEquals(1L, state()["pointCount"])
