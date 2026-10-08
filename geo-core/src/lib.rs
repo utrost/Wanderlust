@@ -34,3 +34,5 @@ mod sequence;
 pub use geometry::LngLat;
 pub use graph::{Graph, Segment};
 pub use matcher::{match_track, walked_ids, MatchConfig, MatchResult};
+
+pub mod automatic;

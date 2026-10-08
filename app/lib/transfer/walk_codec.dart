@@ -240,7 +240,7 @@ class WalkCodec {
       b.writeln('</trkpt>');
     }
     return (b..writeln(
-          '</trkseg></trk><extensions><wl:activity>${walk.activity.name}</wl:activity></extensions></gpx>',
+          '</trkseg></trk><extensions><wl:activity>${walk.activity.name}</wl:activity><wl:matching>auto</wl:matching></extensions></gpx>',
         ))
         .toString();
   }

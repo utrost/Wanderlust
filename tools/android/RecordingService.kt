@@ -202,7 +202,7 @@ class RecordingService : Service() {
                     activeId = id
                     val state = j.state()!!
                     sessionStarted = parseTime(state["startedAt"] as String)
-                    policy = RecordingPolicy(state["activity"] == "cycle", SystemClock.elapsedRealtime(), (state["meters"] as Double), (state["manualInterval"] as Long).takeIf { it > 0 })
+                    policy = RecordingPolicy(state["activity"] == "cycle", SystemClock.elapsedRealtime(), (state["meters"] as Double), (state["manualInterval"] as Long).takeIf { it > 0 }, automatic = true)
                     metrics = JSONObject(state["diagnostics"] as Map<*, *>)
                     lastReceived = SystemClock.elapsedRealtime()
                     acquireRecordingLock()
@@ -350,7 +350,7 @@ class RecordingService : Service() {
     }
     private fun updateNotification() {
         val s = journal?.state() ?: return
-        val text = if (SystemClock.elapsedRealtime()-lastReceived >= 45000) "GPS paused · reconnecting" else if (!hasFreshFix) "Finding your location…" else String.format(Locale.getDefault(), "%.2f km · %s", (s["meters"] as Double)/1000, if (s["activity"] == "cycle") "Ride in progress" else "Walk in progress")
+        val text = if (SystemClock.elapsedRealtime()-lastReceived >= 45000) "GPS paused · reconnecting" else if (!hasFreshFix) "Finding your location…" else String.format(Locale.getDefault(), "%.2f km · %s", (s["meters"] as Double)/1000, "Recording in progress")
         notifications.notify(NOTIFICATION_ID, notification(text, sessionStarted, activeId))
     }
     private fun builder(channel: String): Notification.Builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channel) else Notification.Builder(this)
@@ -441,7 +441,7 @@ class RecordingService : Service() {
                 val key = UUID.randomUUID().toString()
                 replies[key] = result
                 val intent = Intent(activity, RecordingService::class.java).putExtra("request", key)
-                    .putExtra("activity", if (call.argument<String>("activity") == "cycle") "cycle" else "walk")
+                    .putExtra("activity", call.argument<String>("activity").takeIf { it in setOf("auto", "walk", "cycle") } ?: "auto")
                 call.argument<Number>("intervalSeconds")?.toInt()?.takeIf { it in setOf(2, 5, 10, 20) }?.let {
                     intent.putExtra("manualInterval", it * 1000L)
                 }

@@ -13,18 +13,18 @@ import 'coverage_test.dart' show networkJson;
 
 void main() {
   sqfliteFfiInit();
-  test(
-    'automatic default migrates old settings, manual preference round-trips',
-    () {
-      expect(const WalkPreferences().autoFillGaps, isTrue);
-      expect(
-        WalkPreferences.fromJson({'fillSmallGaps': true}).autoFillGaps,
-        isTrue,
-      );
-      final manual = const WalkPreferences().copyWith(autoFillGaps: false);
-      expect(WalkPreferences.fromJson(manual.toJson()).autoFillGaps, isFalse);
-    },
-  );
+  test('journey migration disables automatic outage guesses', () {
+    expect(const WalkPreferences().autoFillGaps, isFalse);
+    expect(
+      WalkPreferences.fromJson({
+        'fillSmallGaps': true,
+        'autoFillGaps': true,
+      }).autoFillGaps,
+      isFalse,
+    );
+    final manual = const WalkPreferences().copyWith(autoFillGaps: false);
+    expect(WalkPreferences.fromJson(manual.toJson()).autoFillGaps, isFalse);
+  });
   test('shortest route is automatic and explicit alternate wins', () async {
     final gpx = WalkCodec.exportGpx(fixture.walk());
     final map = fixture.routes(alternative: true);
@@ -41,7 +41,7 @@ void main() {
     );
   });
   test(
-    'live and saved coverage fill by default, switching to manual reverses estimates',
+    'legacy explicit filling is reversible and manual confirmations survive',
     () async {
       final dir = await Directory.systemTemp.createTemp('auto-gaps-');
       final store = SqliteWalkStore(
@@ -66,6 +66,7 @@ void main() {
         ],
       );
       try {
+        await controller.setFillSmallGaps(false, [], autoFillGaps: true);
         final w = fixture.walk();
         final id = await store.begin(w.startedAt);
         for (var i = 0; i < w.points.length; i++) {

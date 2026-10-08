@@ -32,14 +32,14 @@ List<MatchResult> _resolve(
           }
           final a = Offset(points[i - 1].longitude, points[i - 1].latitude);
           final b = Offset(points[i].longitude, points[i].latitude);
-          // The nearest street at BOTH ends and the middle must be painted.
-          // Merely being close to a painted endpoint must not hide a missing section
-          // or a separate parallel path. Use the matcher's 25 m snap corridor.
-          if (![
-            a,
-            (a + b) / 2,
-            b,
-          ].every((p) => walked.contains(index.nearest(p)))) {
+          // Check every five metres: vehicle samples can skip several short
+          // street pieces between the endpoints and midpoint.
+          final distance = (index._xy(b) - index._xy(a)).distance;
+          final steps = math.max(1, (distance / 5).ceil());
+          if (!List.generate(
+            steps + 1,
+            (j) => a + (b - a) * (j / steps),
+          ).every((p) => walked.contains(index.nearest(p)))) {
             remaining.add(i);
           }
         }

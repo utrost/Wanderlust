@@ -307,11 +307,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Walk history'), findsOneWidget);
+      expect(find.text('Recording history'), findsOneWidget);
       await tester.tap(find.text('Favourites'));
       await tester.pumpAndSettle();
       expect(find.text('Star a walk to find it here.'), findsOneWidget);
-      await tester.tap(find.text('All walks'));
+      await tester.tap(find.text('All recordings'));
       await tester.pumpAndSettle();
       store.failFavourite = true;
       await tester.tap(find.byTooltip('Add to favourites'));

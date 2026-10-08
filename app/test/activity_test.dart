@@ -103,10 +103,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Optional activity label'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Cycle'));
     await tester.pumpAndSettle();
     expect(saved, WalkActivity.cycle);
     expect(modes, [WalkActivity.walk, WalkActivity.cycle]);
-    expect(find.text('Review ride'), findsOneWidget);
+    expect(find.text('Review journey'), findsOneWidget);
   });
 }

@@ -12,52 +12,47 @@ import 'coverage_test.dart' show networkJson;
 
 void main() {
   sqfliteFfiInit();
-  test(
-    'changing saved mode replaces heatmap membership and is idempotent',
-    () async {
-      final dir = await Directory.systemTemp.createTemp('activity-coverage-');
-      final store = SqliteWalkStore(
-        factory: databaseFactoryFfi,
-        databasePath: '${dir.path}/db',
-      );
-      final c = CoverageController(
-        store: store,
-        loadWalk: store.loadWalk,
-        loadNetwork: () async => networkJson(),
-        match: (_, traces) async => [
-          for (final gpx in traces)
-            MatchResult(
-              walked: WalkCodec.importGpx(gpx).activity == WalkActivity.cycle
-                  ? [2]
-                  : [1],
-              gapsFilled: 0,
-              gapsRejected: 0,
-            ),
-        ],
-      );
-      try {
-        final id = await store.begin(fix(0).timestamp);
-        await store.append(id, 0, fix(0));
-        await store.append(id, 1, fix(5));
-        await store.finish(id, fix(5).timestamp, 'completed');
-        await c.synchronize(await store.listSummaries());
-        expect(c.counts, {1: 1});
-        await store.setActivity((await store.walkUid(id))!, WalkActivity.cycle);
-        await c.synchronize(await store.listSummaries());
-        expect(c.counts, {2: 1});
-        await c.synchronize(await store.listSummaries());
-        expect(c.counts, {2: 1});
-        await store.setActivity((await store.walkUid(id))!, WalkActivity.walk);
-        await c.synchronize(await store.listSummaries());
-        expect(c.counts, {1: 1});
-      } finally {
-        c.dispose();
-        await c.settled;
-        await store.close();
-        await dir.delete(recursive: true);
-      }
-    },
-  );
+  test('optional labels keep automatic matching and shared coverage', () async {
+    final dir = await Directory.systemTemp.createTemp('activity-coverage-');
+    final store = SqliteWalkStore(
+      factory: databaseFactoryFfi,
+      databasePath: '${dir.path}/db',
+    );
+    final c = CoverageController(
+      store: store,
+      loadWalk: store.loadWalk,
+      loadNetwork: () async => networkJson(),
+      match: (_, traces) async => [
+        for (final gpx in traces)
+          MatchResult(
+            walked: gpx.contains('<wl:matching>auto</wl:matching>') ? [1] : [],
+            gapsFilled: 0,
+            gapsRejected: 0,
+          ),
+      ],
+    );
+    try {
+      final id = await store.begin(fix(0).timestamp);
+      await store.append(id, 0, fix(0));
+      await store.append(id, 1, fix(5));
+      await store.finish(id, fix(5).timestamp, 'completed');
+      await c.synchronize(await store.listSummaries());
+      expect(c.counts, {1: 1});
+      await store.setActivity((await store.walkUid(id))!, WalkActivity.cycle);
+      await c.synchronize(await store.listSummaries());
+      expect(c.counts, {1: 1});
+      await c.synchronize(await store.listSummaries());
+      expect(c.counts, {1: 1});
+      await store.setActivity((await store.walkUid(id))!, WalkActivity.walk);
+      await c.synchronize(await store.listSummaries());
+      expect(c.counts, {1: 1});
+    } finally {
+      c.dispose();
+      await c.settled;
+      await store.close();
+      await dir.delete(recursive: true);
+    }
+  });
   test(
     'recorder freezes mode at start for live previews and durable journal',
     () async {

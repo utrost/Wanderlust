@@ -35,6 +35,8 @@ jobs:
         run: |
           cargo build --release --locked -p geo-ffi
           python3 tools/evaluate_matching.py --check
+          python3 tools/evaluate_matching.py --automatic --check --output tools/out/automatic-3m
+          python3 tools/evaluate_matching.py --automatic --step-m 5 --check --output tools/out/automatic-5m
           python3 tools/evaluate_matching.py --step-m 5 --check --output tools/out/evaluation-5m
           python3 tools/evaluate_matching.py --fill-small-gaps --check --output tools/out/gaps-3m
           python3 tools/evaluate_matching.py --fill-small-gaps --step-m 5 --check --output tools/out/gaps-5m
