@@ -106,3 +106,39 @@ fn genuine_out_and_back_with_time_to_turn_is_not_a_spike() {
     );
     assert_eq!(r.unmatched, vec![1, 2]);
 }
+
+#[test]
+fn confirmed_offset_street_run_does_not_redraw_parallel_gps() {
+    let g = Graph::build(vec![Segment::new(1, vec![p(0., 0.), p(120., 0.)])]);
+    let mut t = points(&[
+        (10., 16., 0),
+        (20., 16., 5),
+        (30., 16., 10),
+        (40., 16., 15),
+        (50., 16., 20),
+        (60., 16., 25),
+    ]);
+    for fix in &mut t {
+        fix.accuracy_m = Some(20.);
+    }
+    let r = match_automatic_tracks(&g, &[t], MatchConfig::default());
+    assert_eq!(walked_ids(&g, &r), vec![1]);
+    assert!(
+        r.unmatched.is_empty(),
+        "Confirmed route duplicated as GPS: {:?}",
+        r.unmatched
+    );
+}
+
+#[test]
+fn street_confirmation_does_not_hide_later_off_network_trip() {
+    let g = Graph::build(vec![Segment::new(1, vec![p(0., 0.), p(120., 0.)])]);
+    let mut on = points(&[(10., 16., 0), (25., 16., 5), (40., 16., 10)]);
+    for fix in &mut on {
+        fix.accuracy_m = Some(20.);
+    }
+    let off = points(&[(40., 80., 30), (50., 80., 35), (60., 80., 40)]);
+    let r = match_automatic_tracks(&g, &[on, off], MatchConfig::default());
+    assert_eq!(walked_ids(&g, &r), vec![1]);
+    assert_eq!(r.unmatched, vec![4, 5]);
+}

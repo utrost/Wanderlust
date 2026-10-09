@@ -1,7 +1,9 @@
 //! Local movement envelopes for mixed journeys. Labels never gate reliable GPS.
 use crate::{
-    geometry::haversine_m, gpx::TrackPoint, matcher::match_gpx_tracks, Graph, MatchConfig,
-    MatchResult,
+    geometry::haversine_m,
+    gpx::TrackPoint,
+    matcher::{match_gpx_tracks, match_gpx_tracks_supported},
+    Graph, MatchConfig, MatchResult,
 };
 
 fn speed(a: &TrackPoint, b: &TrackPoint) -> Option<f64> {
@@ -22,6 +24,7 @@ pub fn match_automatic_tracks(
     let mut result = MatchResult::default();
     let mut offset = 0;
     let mut reliable_pairs = Vec::new();
+    let mut supported_pairs = std::collections::HashSet::new();
     let mut direct = std::collections::HashSet::new();
     for track in tracks {
         let mut spike = vec![false; track.len()];
@@ -135,7 +138,9 @@ pub fn match_automatic_tracks(
                 cycling: limit == 15,
                 ..cfg
             };
-            let matched = match_gpx_tracks(graph, &[track[start..=end].to_vec()], local);
+            let (matched, supported) =
+                match_gpx_tracks_supported(graph, &[track[start..=end].to_vec()], local);
+            supported_pairs.extend(supported.into_iter().map(|i| offset + start + i));
             direct.extend(matched.walked.difference(&matched.inferred).copied());
             result.walked.extend(matched.walked);
             result.inferred.extend(matched.inferred);
@@ -158,6 +163,11 @@ pub fn match_automatic_tracks(
     // Sparse fast fixes can skip several short coverage sections. Check the
     // entire interval, not only endpoints/midpoint, before hiding recorded GPS.
     for (index, a, b) in reliable_pairs {
+        // A coherent, confirmed street sequence is stronger evidence than the
+        // nearest edge to an individual noisy fix. Do not redraw its raw GPS.
+        if supported_pairs.contains(&index) {
+            continue;
+        }
         let steps = (haversine_m(a, b) / 5.).ceil().max(1.) as usize;
         let covered = (0..=steps).all(|i| {
             let t = i as f64 / steps as f64;

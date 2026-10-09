@@ -54,3 +54,16 @@ recorder. It checks local movement and uses a longer displacement baseline for
 mode hints, so position noise does not turn a walk into vehicle travel. Native
 Android sampling adapts online; completed routes can use later evidence when
 rematching. No-map review uses the same reliable-pair rules for its brown route.
+
+## Continuous street display
+
+Confirmed pair-level sequence evidence survives automatic movement composition.
+A nearest-edge proximity check must not redraw raw GPS beside a street already
+supported by a coherent sequence. Short unique connections retain the same pair
+evidence only after the existing time, accuracy, detour and trace-proximity
+checks pass. Unresolved and off-network pairs remain visible.
+
+At the start of a run, later fixes can establish direction when there is not yet
+a usable backward baseline. This never overrides contradictory backward evidence
+or crosses a discontinuity. Matching revision v13 reprocesses existing recordings
+as well as new journeys; original GPS remains unchanged.
