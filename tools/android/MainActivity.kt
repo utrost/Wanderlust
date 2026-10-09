@@ -6,16 +6,20 @@ import android.content.pm.PackageManager
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 /** Notification permission is requested only when the user starts a walk. */
 class MainActivity : FlutterActivity() {
+    private val compass by lazy { CompassEvents(this) }
     private val backupFiles by lazy { BackupFiles(this) }
     private var recordingVisible = false
     private var pendingNotification: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/compass")
+            .setStreamHandler(compass)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/recorder")
             .setMethodCallHandler { call, result -> RecordingService.handle(this, recordingVisible, call, result) }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/backups")
@@ -55,8 +59,8 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    override fun onResume() { super.onResume(); recordingVisible = true; RecordingService.visibility(true) }
-    override fun onPause() { recordingVisible = false; RecordingService.visibility(false); super.onPause() }
+    override fun onResume() { super.onResume(); compass.resume(); recordingVisible = true; RecordingService.visibility(true) }
+    override fun onPause() { compass.pause(); recordingVisible = false; RecordingService.visibility(false); super.onPause() }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -73,6 +77,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        compass.close()
         backupFiles.close()
         pendingNotification?.success(false)
         pendingNotification = null

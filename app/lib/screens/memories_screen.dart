@@ -1,3 +1,4 @@
+import 'memory_view_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -432,29 +433,34 @@ class _MemoriesScreenState extends State<MemoriesScreen> {
             ),
           )
         : ListView.builder(
+            padding: const EdgeInsets.all(16),
             itemCount: items.length,
             itemBuilder: (context, i) {
               final m = items[i];
-              return ListTile(
-                leading: Icon(
-                  m.hasPhoto ? Icons.photo_outlined : Icons.bookmark_outline,
-                ),
-                title: Text(
-                  m.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  '${m.draft ? 'Draft · Continue · ' : ''}${m.createdAt.toLocal().toString().split('.').first}\n${m.hasLocation ? 'Location attached' : 'Without a map pin'}',
-                ),
+              return MemoryCard(
+                key: ValueKey('${m.id}/${m.draft}'),
+                memory: m,
+                store: widget.store,
                 onTap: () async {
                   await Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) => MemoryEditor(
-                        store: widget.store,
-                        memory: m,
-                        networks: widget.networks,
-                      ),
+                      builder: (_) => m.draft
+                          ? MemoryEditor(
+                              store: widget.store,
+                              memory: m,
+                              networks: widget.networks,
+                            )
+                          : MemoryViewScreen(
+                              items: items
+                                  .where((item) => !item.draft)
+                                  .toList(),
+                              initialIndex: items
+                                  .where((item) => !item.draft)
+                                  .toList()
+                                  .indexOf(m),
+                              store: widget.store,
+                              networks: widget.networks,
+                            ),
                     ),
                   );
                   await _load();

@@ -44,6 +44,7 @@ def configure(directory):
     sources = Path(__file__).parent / 'android'
     for source, relative in (
         ('MainActivity.kt', 'kotlin/com/simiono/wanderlust/MainActivity.kt'),
+        ('CompassEvents.kt', 'kotlin/com/simiono/wanderlust/CompassEvents.kt'),
         ('RecordingService.kt', 'kotlin/com/simiono/wanderlust/RecordingService.kt'),
         ('RecordingJournal.kt', 'kotlin/com/simiono/wanderlust/RecordingJournal.kt'),
         ('RecordingPolicy.kt', 'kotlin/com/simiono/wanderlust/RecordingPolicy.kt'),
