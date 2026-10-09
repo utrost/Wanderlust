@@ -144,6 +144,15 @@ pub fn match_gpx_tracks(
     tracks: &[Vec<crate::gpx::TrackPoint>],
     cfg: MatchConfig,
 ) -> MatchResult {
+    match_gpx_tracks_supported(graph, tracks, cfg).0
+}
+
+/// Preserve pair-level sequence evidence for automatic journey composition.
+pub(crate) fn match_gpx_tracks_supported(
+    graph: &Graph,
+    tracks: &[Vec<crate::gpx::TrackPoint>],
+    cfg: MatchConfig,
+) -> (MatchResult, HashSet<usize>) {
     let mut total = MatchResult::default();
     let mut direct = HashSet::new();
     let mut supported_pairs = HashSet::new();
@@ -295,7 +304,11 @@ pub fn match_gpx_tracks(
                 }
             }
         }
-        interpolate_gaps(graph, track, &snapped, &confirmed, cfg, &mut total);
+        supported_pairs.extend(
+            interpolate_gaps(graph, track, &snapped, &confirmed, cfg, &mut total)
+                .into_iter()
+                .map(|i| track_offset + i),
+        );
         for i in 1..track.len() {
             if !confirmed[i - 1]
                 || !confirmed[i]
@@ -343,7 +356,7 @@ pub fn match_gpx_tracks(
         offset += track.len();
     }
     total.inferred = total.walked.difference(&direct).copied().collect();
-    total
+    (total, supported_pairs)
 }
 
 /// Only infer between consecutive confirmed anchors within this GPX segment.
@@ -355,7 +368,8 @@ fn interpolate_gaps(
     confirmed: &[bool],
     cfg: MatchConfig,
     result: &mut MatchResult,
-) {
+) -> HashSet<usize> {
+    let mut supported_pairs = HashSet::new();
     let mut anchor: Option<usize> = None;
     for i in 0..track.len() {
         if i > 0
@@ -413,6 +427,7 @@ fn interpolate_gaps(
                             })
                         });
                         if follows_trace && stays_near_route {
+                            supported_pairs.extend(j + 1..=i);
                             result.walked.extend(path);
                             result.gaps_filled += 1;
                             anchor = Some(i);
@@ -425,6 +440,7 @@ fn interpolate_gaps(
         }
         anchor = Some(i);
     }
+    supported_pairs
 }
 
 fn reliable(point: &crate::gpx::TrackPoint) -> bool {
@@ -433,7 +449,8 @@ fn reliable(point: &crate::gpx::TrackPoint) -> bool {
 
 /// Estimate direction from spatial separation, not consecutive sample count.
 /// This remains conservative when Detailed GPS produces many nearby readings.
-/// Backward-only context gives the same decision during live and saved matching.
+/// Use later observations when a run starts before a backward baseline exists.
+/// Live matching can refine these endpoints as new fixes arrive.
 fn direction_supports(
     track: &[crate::gpx::TrackPoint],
     max_speed: f64,
@@ -478,6 +495,24 @@ fn direction_supports(
         // Bound untimed imports too; dense recorded traces normally use time.
         if i - j >= 60 {
             break;
+        }
+    }
+    // A completed journey can establish the direction of its first fixes from
+    // what follows. Never override a contradictory backward baseline above.
+    for j in i + 1..track.len().min(i + 61) {
+        if !continuous(&track[j - 1], &track[j], max_speed) {
+            break;
+        }
+        if let (Some(a), Some(b)) = (track[i].time, track[j].time) {
+            if (b - a).num_seconds() > 60 {
+                break;
+            }
+        }
+        let (bx, by) = track[j].pos.to_xy(reference);
+        let (dx, dy) = (bx - x, by - y);
+        let length = dx.hypot(dy);
+        if length + 1e-6 >= baseline {
+            return ((dx * tangent.0 + dy * tangent.1) / length).abs() >= 0.707;
         }
     }
     false
