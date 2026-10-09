@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
@@ -262,4 +263,46 @@ void main() {
     (json['features'] as List).add((json['features'] as List).first);
     expect(() => AreaNetwork.parse(jsonEncode(json)), throwsFormatException);
   });
+  test(
+    'rematching reports real work and completion only after persistence',
+    () async {
+      await walk();
+      final entered = Completer<void>();
+      final finish = Completer<List<MatchResult>>();
+      final controller = CoverageController(
+        store: store,
+        loadNetwork: () async => networkJson(),
+        match: (_, _) {
+          entered.complete();
+          return finish.future;
+        },
+      );
+      final saved = await store.listSaved();
+      final update = controller.synchronize(saved);
+      await entered.future;
+      expect(controller.rematching, isTrue);
+      expect(controller.routeUpdateRevision, 0);
+      finish.complete([
+        const MatchResult(walked: [1], gapsFilled: 0, gapsRejected: 0),
+      ]);
+      await update;
+      expect(controller.rematching, isFalse);
+      expect(controller.routeUpdateRevision, 1);
+      await controller.synchronize(saved);
+      expect(controller.routeUpdateRevision, 1);
+      controller.dispose();
+      await controller.settled;
+      final failed = CoverageController(
+        store: store,
+        loadNetwork: () async => networkJson(),
+        match: (_, _) async => throw StateError('test failure'),
+      );
+      await failed.synchronize(saved);
+      expect(failed.error, isNotNull);
+      expect(failed.rematching, isFalse);
+      expect(failed.routeUpdateRevision, 0);
+      failed.dispose();
+      await failed.settled;
+    },
+  );
 }

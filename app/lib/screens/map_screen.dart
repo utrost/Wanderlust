@@ -1,3 +1,7 @@
+import '../widgets/map_compass.dart';
+import '../widgets/route_update_notice.dart';
+import 'memory_view_screen.dart';
+import '../recording/recording_health.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -78,13 +82,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _editMemory(WalkMemory memory, {bool isNew = false}) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => MemoryEditor(
-          store: _store.memories,
-          memory: memory,
-          isNew: isNew,
-          networks: _coverage.networks,
-          locate: () => locateMemory(current: () => _currentFix),
-        ),
+        builder: (_) => !isNew && !memory.draft
+            ? MemoryViewScreen(
+                items: [memory],
+                initialIndex: 0,
+                store: _store.memories,
+                networks: _coverage.networks,
+              )
+            : MemoryEditor(
+                store: _store.memories,
+                memory: memory,
+                isNew: isNew,
+                networks: _coverage.networks,
+                locate: () => locateMemory(current: () => _currentFix),
+              ),
       ),
     );
     _mapMemories.clearError();
@@ -328,7 +339,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           children: [
                             _mapToolbar(),
                             const SizedBox(height: 8),
-                            _locationControl(),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _locationControl()),
+                                const SizedBox(width: 8),
+                                const MapCompass(),
+                              ],
+                            ),
+                            RouteUpdateNotice(
+                              coverage: _coverage,
+                              onRetry: () => unawaited(
+                                _coverage.synchronize(_recorder.savedWalks),
+                              ),
+                            ),
                             ListenableBuilder(
                               listenable: _session.automaticMaps,
                               builder: (context, _) =>
@@ -647,6 +671,25 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await _loadMemories();
   }
 
+  Future<void> _stopRecording() async {
+    final id = _recorder.recordingSnapshot?.id;
+    await _recorder.stop();
+    if (!mounted || _recorder.needsSaveRetry || id == null) return;
+    try {
+      final walk = await _store.loadWalk(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(RecordingHealth.fromWalk(walk).title),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(label: 'History', onPressed: _showSavedWalks),
+        ),
+      );
+    } catch (_) {
+      // Saving succeeded; history can retry loading the detailed summary.
+    }
+  }
+
   Widget _recordingPanel() => RecordingPanel(
     gpsStale: _recorder.gpsStale,
     locating: _recorder.locating,
@@ -655,6 +698,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     pointCount: _recorder.pointCount,
     showTime: _preferences.showTime,
     showSamples: _preferences.showSamples,
-    onStop: _recorder.stop,
+    onStop: _stopRecording,
   );
 }

@@ -265,6 +265,8 @@ class CoverageController extends ChangeNotifier {
   AreaNetwork? network;
   Map<int, int> counts = const {};
   bool busy = false;
+  bool rematching = false;
+  int routeUpdateRevision = 0;
   bool initialized = false;
   CoverageFailure? error;
   int processedWalks = 0;
@@ -398,6 +400,7 @@ class CoverageController extends ChangeNotifier {
   Future<void> _synchronize(List<SavedWalk> walks) async {
     if (_disposed) return;
     busy = true;
+    var updatedRoutes = false;
     _notify();
     try {
       await initialize();
@@ -420,6 +423,11 @@ class CoverageController extends ChangeNotifier {
             final full = walk.isSummary ? await loadWalk!(walk.id) : walk;
             pending.add((full, _prepare(full).$1, fingerprint));
           }
+        }
+        if (pending.isNotEmpty) {
+          updatedRoutes = true;
+          rematching = true;
+          _notify();
         }
         // Do not send empty GPX to a parser which correctly rejects empty tracks.
         final nonempty = pending.where((p) => p.$1.points.isNotEmpty).toList();
@@ -490,12 +498,14 @@ class CoverageController extends ChangeNotifier {
       }
       processedWalks = walks.where((w) => w.status != 'recording').length;
       error = null;
+      if (updatedRoutes) routeUpdateRevision++;
     } catch (e) {
       error = e is CoverageFailure
           ? e
           : CoverageFailure('Could not update streets', e.toString());
     } finally {
       busy = false;
+      rematching = false;
       _notify();
     }
   }

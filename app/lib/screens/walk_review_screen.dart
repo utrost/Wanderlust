@@ -1,3 +1,5 @@
+import 'memory_view_screen.dart';
+import '../widgets/recording_health_card.dart';
 import '../coverage/unmatched_trails.dart';
 import 'dart:math' as math;
 
@@ -68,11 +70,18 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
   Future<void> _openMemory(WalkMemory m) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => MemoryEditor(
-          store: widget.memoryStore!,
-          memory: m,
-          networks: widget.networks,
-        ),
+        builder: (_) => !m.draft
+            ? MemoryViewScreen(
+                items: [m],
+                initialIndex: 0,
+                store: widget.memoryStore!,
+                networks: widget.networks,
+              )
+            : MemoryEditor(
+                store: widget.memoryStore!,
+                memory: m,
+                networks: widget.networks,
+              ),
       ),
     );
     await _loadMemories();
@@ -202,147 +211,174 @@ class _WalkReviewScreenState extends State<WalkReviewScreen> {
       ],
       title: const Text('Review journey'),
     ),
-    body: Column(
-      children: [
-        if (widget.saveActivity != null)
-          ExpansionTile(
-            title: const Text('Optional activity label'),
-            subtitle: const Text('Recording and matching adapt automatically'),
-            children: [
-              ActivitySelector(
-                value: walk.activity,
-                onChanged: busy || changingActivity ? null : _changeActivity,
-              ),
-            ],
-          ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Wrap(
-            spacing: 6,
-            children: [
-              layer(
-                'GPS trace',
-                gps,
-                reviewTraceColor,
-                (v) => setState(() => gps = v),
-              ),
-              layer(
-                'Route',
-                matched,
-                const Color(0xFFC4A080),
-                (v) => setState(() => matched = v),
-              ),
-            ],
-          ),
-        ),
-        SwitchListTile(
-          dense: true,
-          title: const Text('Preview gap filling'),
-          subtitle: const Text(
-            'Review only · does not change your saved coverage',
-          ),
-          value: fill,
-          onChanged: busy
-              ? null
-              : (v) {
-                  setState(() => fill = v);
-                  _load();
-                },
-        ),
-        if (widget.saveConfirmed != null)
-          GapReviewPanel(
-            walk: walk,
-            maps: maps.map((m) => m.geojson).toList(),
-            save: widget.saveConfirmed!,
-            onPreview: (route) => setState(() => proposal = route),
-            onConfirmed: (edges) {
-              setState(() => confirmed = edges);
-              _load();
-            },
-          ),
-        if (widget.memoryStore != null)
-          TextButton.icon(
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => MemoriesScreen(
-                    networks: widget.networks,
-                    store: widget.memoryStore!,
-                    walkUid: walk.uid,
+    body: LayoutBuilder(
+      builder: (context, constraints) => Column(
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: constraints.maxHeight * .55),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  RecordingHealthCard(walk: walk),
+                  if (widget.saveActivity != null)
+                    ExpansionTile(
+                      title: const Text('Optional activity label'),
+                      subtitle: const Text(
+                        'Recording and matching adapt automatically',
+                      ),
+                      children: [
+                        ActivitySelector(
+                          value: walk.activity,
+                          onChanged: busy || changingActivity
+                              ? null
+                              : _changeActivity,
+                        ),
+                      ],
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Wrap(
+                      spacing: 6,
+                      children: [
+                        layer(
+                          'GPS trace',
+                          gps,
+                          reviewTraceColor,
+                          (v) => setState(() => gps = v),
+                        ),
+                        layer(
+                          'Route',
+                          matched,
+                          const Color(0xFFC4A080),
+                          (v) => setState(() => matched = v),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-              await _loadMemories();
-            },
-            icon: const Icon(Icons.collections_bookmark_outlined),
-            label: const Text('Memories from this walk'),
-          ),
-        if (busy) const LinearProgressIndicator(),
-        if (error != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Expanded(child: Text(error!)),
-                TextButton(onPressed: _load, child: const Text('Retry')),
-              ],
+                  SwitchListTile(
+                    dense: true,
+                    title: const Text('Preview gap filling'),
+                    subtitle: const Text(
+                      'Review only · does not change your saved coverage',
+                    ),
+                    value: fill,
+                    onChanged: busy
+                        ? null
+                        : (v) {
+                            setState(() => fill = v);
+                            _load();
+                          },
+                  ),
+                  if (widget.saveConfirmed != null)
+                    GapReviewPanel(
+                      walk: walk,
+                      maps: maps.map((m) => m.geojson).toList(),
+                      save: widget.saveConfirmed!,
+                      onPreview: (route) => setState(() => proposal = route),
+                      onConfirmed: (edges) {
+                        setState(() => confirmed = edges);
+                        _load();
+                      },
+                    ),
+                  if (widget.memoryStore != null)
+                    TextButton.icon(
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => MemoriesScreen(
+                              networks: widget.networks,
+                              store: widget.memoryStore!,
+                              walkUid: walk.uid,
+                            ),
+                          ),
+                        );
+                        await _loadMemories();
+                      },
+                      icon: const Icon(Icons.collections_bookmark_outlined),
+                      label: const Text('Memories from this walk'),
+                    ),
+                  if (busy) const LinearProgressIndicator(),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(error!)),
+                          TextButton(
+                            onPressed: _load,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (walk.points.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('This walk has no GPS readings.'),
+                    ),
+                  if (!busy &&
+                      coordinates.any((p) => !maps.any((m) => m.contains(p))))
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'Part of this trace is outside your saved street maps.',
+                      ),
+                    ),
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text(
+                      'Brown: your route · Blue: optional GPS trace',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        if (walk.points.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('This walk has no GPS readings.'),
+          Expanded(
+            child: viewport == null
+                ? const Center(child: Text('Loading map…'))
+                : AreaMap(
+                    key: ValueKey(proposal),
+                    showStreetNames: widget.showStreetNames,
+                    memories: widget.showMemories ? memories : const [],
+                    onMemory: widget.memoryStore == null ? null : _openMemory,
+                    network: viewport!,
+                    coverageScreenWidth: 4,
+                    networks: maps,
+                    counts: matched
+                        ? {
+                            for (final id in {
+                              ...result.direct,
+                              ...result.inferred,
+                              ...confirmed,
+                            })
+                              id: 1,
+                          }
+                        : {},
+                    unmatchedTrails: matched
+                        ? (maps.isEmpty
+                              ? reliableJourneyTrace(walk)
+                              : UnmatchedTrails.fromIndices(
+                                  walk,
+                                  result.unmatched,
+                                ))
+                        : const [],
+                    trace: gps ? trace : const [],
+                    inferred: {...?proposal?.edges},
+                    fitCoordinates: proposal?.coordinates ?? coordinates,
+                  ),
           ),
-        if (!busy && coordinates.any((p) => !maps.any((m) => m.contains(p))))
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
+            padding: EdgeInsets.all(10),
             child: Text(
-              'Part of this trace is outside your saved street maps.',
+              '© OpenStreetMap contributors · ODbL',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12),
             ),
           ),
-        Expanded(
-          child: viewport == null
-              ? const Center(child: Text('Loading map…'))
-              : AreaMap(
-                  key: ValueKey(proposal),
-                  showStreetNames: widget.showStreetNames,
-                  memories: widget.showMemories ? memories : const [],
-                  onMemory: widget.memoryStore == null ? null : _openMemory,
-                  network: viewport!,
-                  coverageScreenWidth: 4,
-                  networks: maps,
-                  counts: matched
-                      ? {
-                          for (final id in {
-                            ...result.direct,
-                            ...result.inferred,
-                            ...confirmed,
-                          })
-                            id: 1,
-                        }
-                      : {},
-                  unmatchedTrails: matched
-                      ? (maps.isEmpty
-                            ? reliableJourneyTrace(walk)
-                            : UnmatchedTrails.fromIndices(
-                                walk,
-                                result.unmatched,
-                              ))
-                      : const [],
-                  trace: gps ? trace : const [],
-                  inferred: {...?proposal?.edges},
-                  fitCoordinates: proposal?.coordinates ?? coordinates,
-                ),
-        ),
-        const Padding(
-          padding: EdgeInsets.all(10),
-          child: Text(
-            'Brown: your route · Blue: optional GPS trace\n© OpenStreetMap contributors · ODbL',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12),
-          ),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
