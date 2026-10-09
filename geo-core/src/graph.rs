@@ -429,6 +429,79 @@ impl Graph {
 
     /// Bounded nearby candidates, ordered deterministically for sequence matching.
     pub fn nearby_segments(&self, point: LngLat, radius: f64) -> Vec<(usize, f64)> {
+        let mut found = self.nearby_candidates(point, radius);
+        found.truncate(8);
+        found
+    }
+
+    /// Apply the same proximity and movement evidence as the sequence solver
+    /// before limiting candidates. Dense rail geometry must not evict a nearby
+    /// walking path, nor should footpaths evict a plausible rail journey.
+    pub(crate) fn movement_candidates(
+        &self,
+        point: LngLat,
+        radius: f64,
+        accuracy: f64,
+        cycling: bool,
+        motorized: bool,
+    ) -> Vec<(usize, f64)> {
+        let mut found = self.nearby_candidates(point, radius);
+        let sigma = accuracy.clamp(4.0, 50.0);
+        let cost = |&(edge, distance): &(usize, f64)| {
+            0.5 * (distance / sigma).powi(2)
+                + self.segments[edge].street.movement_cost(cycling, motorized)
+        };
+        found.sort_by(|a, b| {
+            cost(a)
+                .total_cmp(&cost(b))
+                .then(a.1.total_cmp(&b.1))
+                .then(self.segments[a.0].id.cmp(&self.segments[b.0].id))
+        });
+        found.truncate(8);
+        found
+    }
+
+    /// Closest geometry eligible for the current movement, for deciding whether
+    /// recorded GPS still needs a fallback line beside the matched route.
+    pub(crate) fn nearest_movement_segment(
+        &self,
+        point: LngLat,
+        radius: f64,
+        cycling: bool,
+        motorized: bool,
+    ) -> Option<(usize, f64)> {
+        self.nearby_candidates(point, radius)
+            .into_iter()
+            .find(|&(edge, _)| self.segments[edge].street.movement_cost(cycling, motorized) < 3.0)
+    }
+
+    /// A local anchor must be unambiguous among geometry suitable for this
+    /// movement. Rails/motorways cannot veto a walking anchor solely by being
+    /// closer. Vehicle travel still compares roads and rails with each other.
+    pub(crate) fn movement_anchor(
+        &self,
+        point: LngLat,
+        radius: f64,
+        cycling: bool,
+        motorized: bool,
+    ) -> Option<(usize, f64)> {
+        let eligible: Vec<_> = self
+            .nearby_candidates(point, radius + 3.0)
+            .into_iter()
+            .filter(|&(edge, _)| self.segments[edge].street.movement_cost(cycling, motorized) < 3.0)
+            .collect();
+        let best = *eligible.first()?;
+        if best.1 > radius
+            || eligible.iter().skip(1).any(|&(edge, distance)| {
+                distance <= best.1 + 3.0 && !self.same_coverage_parent(edge, best.0)
+            })
+        {
+            return None;
+        }
+        Some(best)
+    }
+
+    fn nearby_candidates(&self, point: LngLat, radius: f64) -> Vec<(usize, f64)> {
         let mut found: Vec<_> = self
             .candidates(point, radius)
             .into_iter()
@@ -445,7 +518,6 @@ impl Graph {
             a.1.total_cmp(&b.1)
                 .then(self.segments[a.0].id.cmp(&self.segments[b.0].id))
         });
-        found.truncate(8);
         found
     }
 

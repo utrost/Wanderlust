@@ -69,7 +69,13 @@ fn solve(
         .iter()
         .map(|p| {
             let mut c: Vec<_> = graph
-                .nearby_segments(p.pos, radius.max(p.accuracy_m.unwrap_or(0.0)).min(50.0))
+                .movement_candidates(
+                    p.pos,
+                    radius.max(p.accuracy_m.unwrap_or(0.0)).min(50.0),
+                    p.accuracy_m.unwrap_or(8.0),
+                    cycling,
+                    max_speed > 15.0,
+                )
                 .into_iter()
                 .map(Some)
                 .collect();
@@ -232,7 +238,7 @@ fn solve(
         // Clear local evidence can anchor a short sequence. Otherwise require
         // the sequence to prefer this street by at least a factor of two.
         let local_anchor = graph
-            .nearest_unambiguous_segment(points[i].pos, radius)
+            .movement_anchor(points[i].pos, radius, cycling, max_speed > 15.0)
             .is_some_and(|(local, _)| local == edge || graph.same_coverage_parent(local, edge));
         if !ambiguous || local_anchor {
             output[i] = candidates[i][best];
