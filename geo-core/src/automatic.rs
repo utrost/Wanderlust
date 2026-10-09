@@ -120,7 +120,12 @@ pub fn match_automatic_tracks(
                 && track[i + 1].accuracy_m.is_none_or(|a| a <= 25.)
                 && haversine_m(track[i].pos, track[i + 1].pos) >= 2.
             {
-                reliable_pairs.push((offset + i + 1, track[i].pos, track[i + 1].pos));
+                reliable_pairs.push((
+                    offset + i + 1,
+                    track[i].pos,
+                    track[i + 1].pos,
+                    profile.unwrap(),
+                ));
             }
         }
         let mut start = 0;
@@ -144,9 +149,8 @@ pub fn match_automatic_tracks(
             direct.extend(matched.walked.difference(&matched.inferred).copied());
             result.walked.extend(matched.walked);
             result.inferred.extend(matched.inferred);
-            result
-                .unmatched
-                .extend(matched.unmatched.into_iter().map(|i| offset + start + i));
+            // Recompute fallback from the accepted pair profiles below. The
+            // generic matcher has no movement-aware nearest-edge context.
             result.gaps_filled += matched.gaps_filled;
             result.gaps_rejected += matched.gaps_rejected;
             start = end;
@@ -162,7 +166,7 @@ pub fn match_automatic_tracks(
     }
     // Sparse fast fixes can skip several short coverage sections. Check the
     // entire interval, not only endpoints/midpoint, before hiding recorded GPS.
-    for (index, a, b) in reliable_pairs {
+    for (index, a, b, profile) in reliable_pairs {
         // A coherent, confirmed street sequence is stronger evidence than the
         // nearest edge to an individual noisy fix. Do not redraw its raw GPS.
         if supported_pairs.contains(&index) {
@@ -173,7 +177,7 @@ pub fn match_automatic_tracks(
             let t = i as f64 / steps as f64;
             let p = crate::LngLat::new(a.lng + (b.lng - a.lng) * t, a.lat + (b.lat - a.lat) * t);
             graph
-                .nearest_segment(p, 12.)
+                .nearest_movement_segment(p, 12., profile == 15, profile == 70)
                 .is_some_and(|(edge, _)| result.walked.contains(&edge))
         });
         if !covered {

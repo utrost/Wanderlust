@@ -67,3 +67,17 @@ At the start of a run, later fixes can establish direction when there is not yet
 a usable backward baseline. This never overrides contradictory backward evidence
 or crosses a discontinuity. Matching revision v13 reprocesses existing recordings
 as well as new journeys; original GPS remains unchanged.
+
+## Movement-aware candidate selection
+
+Rank nearby geometry by the sequence solver's proximity and movement costs before
+applying its eight-candidate bound. Dense rail geometry must not evict plausible
+walking paths; fast vehicle sequences can still select rail geometry. Apply the
+same movement suitability to local confidence anchors and fallback proximity
+checks. Distinct suitable parallel routes still compete normally; this change
+does not remove railway geometry or create new graph connections.
+
+Automatic fallback is derived once from accepted, timestamped pairs and their
+local movement profiles, preserving confirmed sequence evidence and checking
+geometry along each interval. An unconfirmed suitable neighbouring path must
+still retain its GPS. Matching revision v14 reprocesses saved journeys.
