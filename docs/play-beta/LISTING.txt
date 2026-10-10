@@ -1,0 +1,25 @@
+Title
+Wanderlust
+
+Short description
+Record your journeys, colour your map and save memories along the way.
+
+Full description
+Explore at your own pace. Wanderlust brings your walks, rides and other journeys together on one personal map. See where you have been and keep the small things worth remembering.
+
+• Tap Start recording and put your phone away. A visible notification accompanies screen-off recording.
+• Download nearby OpenStreetMap maps and use them offline.
+• See recorded routes on your map, with street matching where map data and GPS quality allow it.
+• Save notes and photos with optional map pins. Browse memory cards, swipe between memories and zoom into photos.
+• Review saved journeys and GPS recording summaries.
+• Check your heading with the small live compass on supported devices.
+• Export GPX tracks and make or restore full backups of journeys, memories, maps and settings.
+
+There are no accounts, advertisements, scores or leaderboards. Recorded routes and memories stay in the app's local storage. Map downloads send the requested geographic area to the Overpass map service; this can reveal your location. Automatic map downloads can be disabled in Settings. The app includes no analytics.
+
+This is an early beta. GPS accuracy and screen-off recording behaviour vary by phone. Street matching can leave gaps or make mistakes. Android battery restrictions or force-stopping the app can interrupt recording. Keep a full backup before changing phones or switching app installations.
+
+Map data © OpenStreetMap contributors, ODbL. Licensed under AGPL-3.0-or-later.
+
+Beta release notes
+First Google Play beta: one map for your journeys, screen-off recording, offline maps, memories with photos, a live compass, and GPX/full-backup export. Please test recording with your screen off and review the saved route afterwards.
