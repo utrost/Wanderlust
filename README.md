@@ -17,6 +17,12 @@ cartographer of your own world.
 > real-phone battery and longer-walk validation remain open. See
 > [Roadmap](docs/ROADMAP.md) and [screen-off recording](docs/SCREEN_OFF_RECORDING.md).
 
+<p align="center">
+  <img src="docs/images/wanderlust-bremen-map.jpg" width="320" alt="Wanderlust map of central Bremen showing recorded routes in brown and a memory pin near the river." />
+</p>
+
+*Example from phone testing in Bremen; captured before the compass was added.*
+
 ---
 
 ## Current state

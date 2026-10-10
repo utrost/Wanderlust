@@ -20,6 +20,12 @@ Use the exact toolchain versions in `../tools/toolchain.env`. Production APK/AAB
 builds and remaining submission gates are documented in
 [Android releases](../docs/ANDROID_UPDATES.md#store-candidates-010).
 
+<p align="center">
+  <img src="../docs/images/wanderlust-bremen-map.jpg" width="320" alt="Wanderlust map of central Bremen showing recorded routes in brown and a memory pin near the river." />
+</p>
+
+*Example from phone testing in Bremen; captured before the compass was added.*
+
 ## First-time setup
 
 This repo tracks the Dart source (`lib/`) and config, but not the generated
