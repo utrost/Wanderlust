@@ -34,7 +34,7 @@ Prepared 10 October 2026. This packet is not a submitted or approved release.
   documentation. It predates the compass and remains an unchanged source image.
 - Privacy text: `app/assets/legal/privacy.txt` and `docs/privacy.html`.
   Both now disclose the map-location precision and list info@simiono.com.
-  They still require public hosting. A private GitHub URL is not a public policy.
+  Public policy URL: https://simiono.com/wanderlust/privacy
 
 ## Data Safety review
 
