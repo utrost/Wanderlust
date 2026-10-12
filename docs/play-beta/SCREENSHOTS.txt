@@ -1,0 +1,28 @@
+Wanderlust Google Play phone screenshots — 11 October 2026
+
+Upload in numerical order. All four are 1080 × 1920 PNG captures from the
+actual app at commit 2d78a46, using Android API 35 and a clean sample database.
+The privacy-only preparation branch has the same interface. No app UI was
+painted, composited or retouched. Android demo mode provides the status bar.
+
+1-map.png — unified journey map with live compass and memory pins.
+2-memories.png — photo/note gallery.
+3-photo-memory.png — saved memory reader.
+4-journey-review.png — sample journey and recording continuity summary.
+
+Routes, notes, dates and location fixes are synthetic demonstration data.
+Map data: © OpenStreetMap contributors, ODbL, from the bundled Bremen fixture.
+https://www.openstreetmap.org/copyright
+
+Photo in screenshots 2 and 3: “Weser, Bremen 0008.JPG” by Rami Tarawneh,
+Creative Commons Attribution 2.5 Generic (CC BY 2.5).
+Source: https://commons.wikimedia.org/wiki/File:Weser,_Bremen_0008.JPG
+Licence: https://creativecommons.org/licenses/by/2.5/
+The original photo is rendered/scaled and clipped by the app's normal widgets;
+its pixels were not otherwise edited. Credit is also shown in the memory text.
+No endorsement by the photographer is implied.
+
+For store-listing attribution, retain this credit with the screenshots, e.g.
+in the full description:
+Screenshot photo: Rami Tarawneh / Wikimedia Commons, CC BY 2.5.
+https://commons.wikimedia.org/wiki/File:Weser,_Bremen_0008.JPG
