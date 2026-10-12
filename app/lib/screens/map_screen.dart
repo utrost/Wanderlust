@@ -322,6 +322,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               onMemory: (m) => _editMemory(m),
                               walkedLineWidth: _preferences.walkedLineWidth,
                               showStreetNames: _preferences.showStreetNames,
+                              fogOfWar:
+                                  _preferences.fogOfWar &&
+                                  _session.exploration.error == null,
+                              exploredCells: _session.exploration.cells,
                               position: _currentFix,
                               stale:
                                   _currentFix != null &&

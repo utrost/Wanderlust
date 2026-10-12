@@ -17,7 +17,7 @@ void paintWalkOverlay(
     ..style = PaintingStyle.stroke
     ..strokeWidth = 4
     ..strokeCap = StrokeCap.round;
-  for (final map in maps) {
+  for (final map in inferred.isEmpty ? <AreaNetwork>[] : maps) {
     for (final edge in map.edges) {
       if (!inferred.contains(edge.id) || !seen.add(edge.id)) continue;
       final path = Path();

@@ -39,6 +39,7 @@ void main() {
       );
       const preferences = WalkPreferences(
         mapSizeKm: 12,
+        fogOfWar: true,
         showStreetNames: false,
         fillSmallGaps: true,
       );
