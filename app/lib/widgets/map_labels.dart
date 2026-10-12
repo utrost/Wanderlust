@@ -18,6 +18,8 @@ List<PlacedMapLabel> layoutMapLabels(
   Offset Function(Offset) project, {
   required bool streets,
   double textScale = 1,
+  Iterable<AreaEdge>? visibleEdges,
+  MapLabelCache? cache,
 }) {
   final candidates = <(String, Offset, bool, double, Offset)>[];
   final visibleLengths = <String, double>{};
@@ -27,7 +29,7 @@ List<PlacedMapLabel> layoutMapLabels(
       candidates.add((p.name, project(p.point), true, 0, Offset.zero));
     }
     if (!streets) continue;
-    for (final edge in map.edges) {
+    for (final edge in visibleEdges ?? map.edges) {
       if (!seenEdges.add(edge.id)) continue;
       final name = edge.name?.trim();
       if (name == null || name.isEmpty || name.length > 80) continue;
@@ -58,9 +60,11 @@ List<PlacedMapLabel> layoutMapLabels(
   final viewport = (Offset.zero & size).deflate(8);
   for (final c in candidates) {
     if (names.contains(c.$1)) continue;
-    final painter = mapLabelText(c.$1, c.$3, textScale);
+    final painter =
+        cache?.text(c.$1, c.$3, textScale) ??
+        mapLabelText(c.$1, c.$3, textScale);
     final width = painter.width, height = painter.height;
-    painter.dispose();
+    if (cache == null) painter.dispose();
     if (!c.$3 && (visibleLengths[c.$1] ?? 0) < math.max(60, width * 1.3)) {
       continue;
     }
@@ -99,17 +103,43 @@ TextPainter mapLabelText(String text, bool place, double scale) => TextPainter(
   textScaler: TextScaler.linear(scale),
   maxLines: 1,
 )..layout();
-void paintMapLabels(Canvas canvas, List<PlacedMapLabel> labels, double scale) {
+void paintMapLabels(
+  Canvas canvas,
+  List<PlacedMapLabel> labels,
+  double scale, {
+  MapLabelCache? cache,
+}) {
   for (final label in labels) {
     canvas.drawRRect(
       RRect.fromRectAndRadius(label.bounds, const Radius.circular(3)),
       Paint()..color = WanderlustColors.paperBg.withValues(alpha: 0.85),
     );
-    final text = mapLabelText(label.text, label.place, scale);
+    final text =
+        cache?.text(label.text, label.place, scale) ??
+        mapLabelText(label.text, label.place, scale);
     text.paint(
       canvas,
       label.bounds.center - Offset(text.width / 2, text.height / 2),
     );
-    text.dispose();
+    if (cache == null) text.dispose();
+  }
+}
+
+/// Bounded LRU: text shaping is reused across pan frames, with explicit disposal.
+class MapLabelCache {
+  final _text = <(String, bool, double), TextPainter>{};
+  TextPainter text(String value, bool place, double scale) {
+    final key = (value, place, scale);
+    final painter = _text.remove(key) ?? mapLabelText(value, place, scale);
+    _text[key] = painter;
+    if (_text.length > 256) _text.remove(_text.keys.first)!.dispose();
+    return painter;
+  }
+
+  void dispose() {
+    for (final painter in _text.values) {
+      painter.dispose();
+    }
+    _text.clear();
   }
 }

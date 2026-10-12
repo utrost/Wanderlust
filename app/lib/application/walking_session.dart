@@ -1,4 +1,5 @@
 import '../recording/activity_type.dart';
+import '../exploration/exploration.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -27,6 +28,8 @@ class WalkingSession extends ChangeNotifier {
     required PreferencesStore preferencesStore,
     LocationSource? location,
   }) {
+    exploration = ExplorationController(history.loadWalk);
+    exploration.addListener(notifyListeners);
     recorder = WalkRecorder(
       store: journal,
       nativeRecording:
@@ -72,6 +75,11 @@ class WalkingSession extends ChangeNotifier {
       store: preferencesStore,
       onApplied: (value) async {
         recorder.refreshDisplayClock();
+        exploration.update(
+          value.fogOfWar,
+          recorder.savedWalks,
+          recorder.recordingSnapshot,
+        );
         automaticMaps.setEnabled(value.autoDownloadMaps);
         await coverage.setFillSmallGaps(
           value.fillSmallGaps,
@@ -104,6 +112,11 @@ class WalkingSession extends ChangeNotifier {
       automaticMaps.cancel();
     }
     if (!_foreground) return;
+    exploration.update(
+      preferences.fogOfWar,
+      recorder.savedWalks,
+      recorder.recordingSnapshot,
+    );
     if (recorder.isRecording) {
       final walk = recorder.recordingSnapshot;
       if (walk != null) coverage.updateLive(walk);
@@ -112,6 +125,7 @@ class WalkingSession extends ChangeNotifier {
     }
   }
 
+  late final ExplorationController exploration;
   late final AutomaticMaps automaticMaps;
   late final WalkRecorder recorder;
   late final CoverageController coverage;
@@ -121,6 +135,7 @@ class WalkingSession extends ChangeNotifier {
     if (_closed) return;
     _closed = true;
     recorder.removeListener(_recordingChanged);
+    exploration.dispose();
     _preferences.dispose();
     automaticMaps.dispose();
     coverage.dispose();

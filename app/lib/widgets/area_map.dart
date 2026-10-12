@@ -1,9 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'map_spatial_index.dart';
+import 'exploration_fog.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../data/area_network.dart';
+import '../data/map_scenery.dart';
 import '../coverage/street_display.dart';
 import '../theme/heat_ramp.dart';
 import '../theme/wanderlust_theme.dart';
@@ -52,6 +56,8 @@ class AreaMap extends StatefulWidget {
     this.networks = const [],
     this.walkedLineWidth = 3,
     this.showStreetNames = true,
+    this.fogOfWar = false,
+    this.exploredCells = const {},
     this.memories = const [],
     this.onMemory,
     this.coverageScreenWidth,
@@ -69,6 +75,8 @@ class AreaMap extends StatefulWidget {
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
   final bool showStreetNames;
+  final bool fogOfWar;
+  final Set<(int, int)> exploredCells;
   final List<WalkMemory> memories;
   final void Function(WalkMemory)? onMemory;
   final double? coverageScreenWidth;
@@ -144,6 +152,7 @@ class _AreaMapState extends State<AreaMap> {
   @override
   void dispose() {
     _transform.dispose();
+    _geometry.dispose();
     super.dispose();
   }
 
@@ -221,6 +230,8 @@ class _AreaMapState extends State<AreaMap> {
                   counts: widget.counts,
                   walkedLineWidth: widget.walkedLineWidth,
                   showStreetNames: widget.showStreetNames,
+                  fogOfWar: widget.fogOfWar,
+                  exploredCells: widget.exploredCells,
                   coverageScreenWidth: widget.coverageScreenWidth,
                   transform: _transform.value.clone(),
                   trace: widget.trace,
@@ -334,15 +345,55 @@ class MapGeometryCache {
   List<AreaNetwork>? _networks;
   final _paths = <Object, Path>{};
   StreetDisplay? _streetDisplay;
+  final labels = MapLabelCache();
+  final fog = ExplorationFog();
+  MapSpatialIndex<AreaEdge> edgeIndex = MapSpatialIndex();
+  List<AreaEdge> edges = const [];
+  final sceneryIndex = <AreaNetwork, MapSpatialIndex<MapScenery>>{};
+  void dispose() => labels.dispose();
   StreetDisplay streets(Iterable<AreaEdge> edges) =>
       _streetDisplay ??= StreetDisplay(edges);
   void prepare(AreaNetwork network, Size size, List<AreaNetwork> networks) {
-    if (_network != network || _size != size || _networks != networks) {
+    if (_network != network ||
+        _size != size ||
+        !listEquals(_networks, networks)) {
       _network = network;
       _networks = networks;
       _size = size;
       _paths.clear();
       _streetDisplay = null;
+      labels.dispose();
+      final unique = <int, AreaEdge>{};
+      for (final map in [network, ...networks]) {
+        for (final edge in map.edges) {
+          unique.putIfAbsent(edge.id, () => edge);
+        }
+      }
+      edges = unique.values.toList(growable: false);
+      edgeIndex = MapSpatialIndex();
+      sceneryIndex.clear();
+      for (final map in {network, ...networks}) {
+        final index = MapSpatialIndex<MapScenery>();
+        for (final feature in map.scenery) {
+          Rect? bounds;
+          for (final p in feature.paths.expand((ring) => ring)) {
+            final point = network.project(p, size);
+            final r = Rect.fromLTWH(point.dx, point.dy, 0, 0);
+            bounds = bounds == null ? r : bounds.expandToInclude(r);
+          }
+          if (bounds != null) index.add(feature, bounds.inflate(1));
+        }
+        sceneryIndex[map] = index;
+      }
+      for (final edge in edges) {
+        final points = edge.points.map((p) => network.project(p, size));
+        Rect? bounds;
+        for (final p in points) {
+          final point = Rect.fromLTWH(p.dx, p.dy, 0, 0);
+          bounds = bounds == null ? point : bounds.expandToInclude(point);
+        }
+        edgeIndex.add(edge, bounds!.inflate(1));
+      }
     }
   }
 
@@ -358,6 +409,8 @@ class AreaMapPainter extends CustomPainter {
     this.networks = const [],
     this.walkedLineWidth = 3,
     this.showStreetNames = true,
+    this.fogOfWar = false,
+    this.exploredCells = const {},
     this.coverageScreenWidth,
     this.transform,
     this.trace = const [],
@@ -369,6 +422,8 @@ class AreaMapPainter extends CustomPainter {
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
   final bool showStreetNames;
+  final bool fogOfWar;
+  final Set<(int, int)> exploredCells;
   final double? coverageScreenWidth;
   final Matrix4? transform;
   final AreaNetwork network;
@@ -399,13 +454,21 @@ class AreaMapPainter extends CustomPainter {
     final maps = {
       for (final map in [network, ...networks]) map.version: map,
     }.values;
+    final visibleScenery = {
+      for (final map in maps)
+        map: visible == null
+            ? map.scenery.toSet()
+            : cache.sceneryIndex[map]!.query(visible),
+    };
     for (final kind in ['park', 'water', 'waterway']) {
       for (final map in maps) {
         canvas.save();
         final a = network.project(Offset(map.bbox[0], map.bbox[3]), mapSize);
         final b = network.project(Offset(map.bbox[2], map.bbox[1]), mapSize);
         canvas.clipRect(Rect.fromPoints(a, b));
-        for (final feature in map.scenery.where((s) => s.kind == kind)) {
+        for (final feature in visibleScenery[map]!.where(
+          (s) => s.kind == kind,
+        )) {
           final path = cache.path(feature, () {
             final path = Path()..fillType = PathFillType.evenOdd;
             for (final ring in feature.paths) {
@@ -459,35 +522,26 @@ class AreaMapPainter extends CustomPainter {
                             4.5,
                       )) /
             zoom;
-      final path = cache.path(edge, () {
-        final path = Path();
-        for (var i = 0; i < edge.points.length; i++) {
-          final p = network.project(edge.points[i], mapSize);
-          if (i == 0) {
-            path.moveTo(p.dx, p.dy);
-          } else {
-            path.lineTo(p.dx, p.dy);
-          }
-        }
-        return path;
-      });
+      final path = cache.path(edge, () => _edgePath(edge, network, mapSize));
       if (visible != null && !visible.overlaps(path.getBounds().inflate(1))) {
         return;
       }
       canvas.drawPath(path, stroke);
     }
 
-    final edges = <int, AreaEdge>{};
-    for (final map in [network, ...networks]) {
-      for (final edge in map.edges) {
-        edges.putIfAbsent(edge.id, () => edge);
-      }
-    }
-    for (final edge in edges.values) {
+    final visibleEdges = visible == null
+        ? cache.edges.toSet()
+        : cache.edgeIndex.query(visible.inflate(24 / zoom));
+    for (final edge in visibleEdges) {
+      // Avoid subpixel detail at city-wide zoom; explored streets stay visible.
+      final bounds = cache
+          .path(edge, () => _edgePath(edge, network, mapSize))
+          .getBounds();
+      if (math.max(bounds.width, bounds.height) * zoom < 1.5) continue;
       draw(edge, 0);
     }
     final painted =
-        edges.values.where((edge) => (counts[edge.id] ?? 0) > 0).toList()
+        visibleEdges.where((edge) => (counts[edge.id] ?? 0) > 0).toList()
           ..sort((a, b) => counts[a.id]!.compareTo(counts[b.id]!));
     canvas.restore();
     Offset project(Offset p) => MatrixUtils.transformPoint(
@@ -504,8 +558,11 @@ class AreaMapPainter extends CustomPainter {
         project,
         streets: showStreetNames && mapSpanKm(network) / zoom <= 2,
         textScale: textScale,
+        visibleEdges: visibleEdges,
+        cache: cache.labels,
       ),
       textScale,
+      cache: cache.labels,
     );
     paintUnmatchedTrails(
       canvas,
@@ -524,7 +581,7 @@ class AreaMapPainter extends CustomPainter {
     if (transform != null) canvas.transform(transform!.storage);
     canvas.translate(12, 80);
     final consolidate = mapSpanKm(network) / zoom >= 0.6;
-    final streets = consolidate ? cache.streets(edges.values) : null;
+    final streets = consolidate ? cache.streets(cache.edges) : null;
     for (final edge in painted) {
       for (final display in streets?.geometry(edge) ?? [edge]) {
         draw(display, counts[edge.id]!);
@@ -532,7 +589,16 @@ class AreaMapPainter extends CustomPainter {
     }
     canvas.restore();
     paintWalkOverlay(canvas, maps.toList(), inferred, trace, project);
+    if (fogOfWar && visible != null) {
+      cache.fog.prepare(exploredCells, network, mapSize);
+      canvas.save();
+      if (transform != null) canvas.transform(transform!.storage);
+      canvas.translate(12, 80);
+      cache.fog.paint(canvas, visible);
+      canvas.restore();
+    }
     canvas.restore();
+    if (geometry == null) cache.dispose();
   }
 
   @override
@@ -542,10 +608,25 @@ class AreaMapPainter extends CustomPainter {
       oldDelegate.networks != networks ||
       oldDelegate.walkedLineWidth != walkedLineWidth ||
       oldDelegate.showStreetNames != showStreetNames ||
+      oldDelegate.fogOfWar != fogOfWar ||
+      oldDelegate.exploredCells != exploredCells ||
       oldDelegate.coverageScreenWidth != coverageScreenWidth ||
       oldDelegate.trace != trace ||
       oldDelegate.unmatchedTrails != unmatchedTrails ||
       oldDelegate.inferred != inferred ||
       oldDelegate.textScale != textScale ||
       oldDelegate.transform != transform;
+}
+
+Path _edgePath(AreaEdge edge, AreaNetwork network, Size size) {
+  final path = Path();
+  for (var i = 0; i < edge.points.length; i++) {
+    final p = network.project(edge.points[i], size);
+    if (i == 0) {
+      path.moveTo(p.dx, p.dy);
+    } else {
+      path.lineTo(p.dx, p.dy);
+    }
+  }
+  return path;
 }

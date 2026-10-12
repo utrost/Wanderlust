@@ -203,6 +203,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const Divider(),
         SwitchListTile(
+          title: const Text('Fog of war'),
+          subtitle: const Text(
+            'Gently mute unexplored areas. Saved and new journeys reveal their surroundings, even without a street match. Deleting a journey removes its unique explored area.',
+          ),
+          value: value.fogOfWar,
+          onChanged: busy ? null : (v) => change(value.copyWith(fogOfWar: v)),
+        ),
+        SwitchListTile(
           title: const Text('Show street names'),
           subtitle: const Text(
             'Applies to the main map and saved-walk review. Place and park names remain visible.',
