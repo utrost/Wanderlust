@@ -63,14 +63,14 @@ class ExplorationController extends ChangeNotifier {
   bool _enabled = false, _running = false, _again = false, _closed = false;
   String? error;
   String? _requestKey;
-  String? _liveUid;
+  String? _liveKey;
   int _liveCount = 0;
   final _liveCells = <(int, int)>{};
   Future<void> _pending = Future.value();
   Future<void> get settled => _pending;
   void update(bool enabled, List<SavedWalk> walks, SavedWalk? live) {
     final requestKey =
-        '${walks.map(_key).join('|')}/${live?.uid}/${live?.pointCount}';
+        '${walks.map(_key).join('|')}/${live == null ? '' : _key(live)}';
     final unchanged =
         _enabled == enabled && _requestKey == requestKey && error == null;
     _requestKey = requestKey;
@@ -85,8 +85,11 @@ class ExplorationController extends ChangeNotifier {
     _pending = _refresh();
   }
 
+  String _liveIdentity(SavedWalk walk) =>
+      '${walk.uid}/${walk.id}/${walk.startedAt}';
+
   String _key(SavedWalk walk) =>
-      '${walk.uid}/${walk.id}/${walk.pointCount}/'
+      '${_liveIdentity(walk)}/${walk.pointCount}/'
       '${walk.fingerprint}/${walk.endedAt}/${walk.status}';
   Future<void> _refresh() async {
     _running = true;
@@ -108,11 +111,11 @@ class ExplorationController extends ChangeNotifier {
         }
         final result = {for (final part in _saved.values) ...part};
         if (live == null ||
-            _liveUid != live.uid ||
+            _liveKey != _liveIdentity(live) ||
             live.points.length < _liveCount) {
           _liveCells.clear();
           _liveCount = 0;
-          _liveUid = live?.uid;
+          _liveKey = live == null ? null : _liveIdentity(live);
         }
         if (live != null) {
           if (live.points.length > _liveCount) {

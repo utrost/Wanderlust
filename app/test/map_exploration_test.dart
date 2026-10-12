@@ -167,6 +167,11 @@ void main() {
       controller.update(true, [], b);
       await controller.settled;
       expect(controller.cells, discoveryCells(b));
+      // Native recording snapshots may have an empty UID. A different journey
+      // with the same number of fixes must replace the live reveal cache.
+      controller.update(true, [], a);
+      await controller.settled;
+      expect(controller.cells, discoveryCells(a));
       controller.dispose();
     },
   );
