@@ -45,6 +45,12 @@ jobs:
     name: app (Flutter + native)
     runs-on: ubuntu-latest
     steps:
+      - name: Reserve disk space for Android builds and service tests
+        # These preinstalled SDKs are unused by this Flutter/Rust job. Keeping
+        # them exhausted runner disk during Robolectric dependency extraction.
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          df -h /
       - uses: actions/checkout@v4
       - name: Read pinned toolchain
         run: sed '/^#/d; /^$/d' tools/toolchain.env >> "$GITHUB_ENV"
