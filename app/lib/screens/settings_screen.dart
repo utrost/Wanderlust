@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'about_screen.dart';
+import 'recording_battery_setup.dart';
+import 'package:flutter/foundation.dart';
 import '../widgets/heatmap_legend.dart';
 import '../settings/walk_preferences.dart';
 
@@ -51,6 +53,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'Walk at your own pace. These details are optional and stay on your phone.',
           ),
         ),
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+          ListTile(
+            leading: const Icon(Icons.battery_saver_outlined),
+            title: const Text('Screen-off recording'),
+            subtitle: const Text(
+              'Check battery permission and phone settings.',
+            ),
+            onTap: () =>
+                showRecordingBatterySetup(context, beforeRecording: false),
+          ),
         SwitchListTile(
           title: const Text('Show elapsed time'),
           value: value.showTime,

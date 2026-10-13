@@ -28,6 +28,7 @@ class AndroidSetupTest(unittest.TestCase):
             self.assertEqual(len(permissions), len(set(permissions)))
             self.assertIn('android.permission.FOREGROUND_SERVICE_LOCATION', permissions)
             self.assertIn('android.permission.WAKE_LOCK', permissions)
+            self.assertIn('android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', permissions)
             self.assertNotIn('android.permission.ACCESS_BACKGROUND_LOCATION', permissions)
             self.assertIsNotNone(root.find('application/activity'))
             self.assertTrue((manifest.parent / 'kotlin/com/simiono/wanderlust/MainActivity.kt').exists())
@@ -51,7 +52,7 @@ class AndroidSetupTest(unittest.TestCase):
             self.assertNotIn('signingConfigs.getByName("debug")', gradle)
             self.assertIn('namespace = "com.simiono.wanderlust"', gradle)
             self.assertIn('applicationId = "com.simiono.wanderlust"', gradle)
-            for name in ('MainActivity.kt', 'BackupFiles.kt', 'RecordingService.kt', 'RecordingJournal.kt', 'RecordingPolicy.kt'):
+            for name in ('MainActivity.kt', 'RecordingBattery.kt', 'BackupFiles.kt', 'RecordingService.kt', 'RecordingJournal.kt', 'RecordingPolicy.kt'):
                 self.assertTrue((manifest.parent / 'kotlin/com/simiono/wanderlust' / name).read_text().startswith('package com.simiono.wanderlust'))
 
 

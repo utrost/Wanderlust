@@ -11,6 +11,7 @@ import io.flutter.plugin.common.MethodChannel
 
 /** Notification permission is requested only when the user starts a walk. */
 class MainActivity : FlutterActivity() {
+    private val recordingBattery by lazy { RecordingBattery(this) }
     private val compass by lazy { CompassEvents(this) }
     private val backupFiles by lazy { BackupFiles(this) }
     private var recordingVisible = false
@@ -22,6 +23,8 @@ class MainActivity : FlutterActivity() {
             .setStreamHandler(compass)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/recorder")
             .setMethodCallHandler { call, result -> RecordingService.handle(this, recordingVisible, call, result) }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/battery")
+            .setMethodCallHandler(recordingBattery::handle)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/backups")
             .setMethodCallHandler(backupFiles::handle)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/about")
@@ -71,7 +74,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (!backupFiles.onActivityResult(requestCode, resultCode, data)) {
+        if (!recordingBattery.onActivityResult(requestCode) &&
+            !backupFiles.onActivityResult(requestCode, resultCode, data)) {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
@@ -79,6 +83,7 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         compass.close()
         backupFiles.close()
+        recordingBattery.close()
         pendingNotification?.success(false)
         pendingNotification = null
         super.onDestroy()
