@@ -35,6 +35,7 @@ import 'about_screen.dart';
 import 'memories_screen.dart';
 import 'offline_maps_screen.dart';
 import 'settings_screen.dart';
+import 'recording_battery_setup.dart';
 import 'walk_library_screen.dart';
 
 /// User-selected offline streets painted from persisted per-walk coverage.
@@ -612,7 +613,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     onRetry: () => unawaited(_coverage.synchronize(_recorder.savedWalks)),
   );
 
+  bool _startingWalk = false;
   Future<void> _onStartWalk() async {
+    if (_startingWalk || _recorder.isBusy || _recorder.isRecording) return;
+    _startingWalk = true;
+    try {
+      if (!await showRecordingBatterySetup(context)) return;
+      if (!mounted) return;
+      await _startWalkAfterSetup();
+    } finally {
+      _startingWalk = false;
+    }
+  }
+
+  Future<void> _startWalkAfterSetup() async {
     await _mapLocation.prepareRecording();
     if (!mounted) return;
     final ok = await _recorder.start();

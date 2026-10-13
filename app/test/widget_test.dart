@@ -101,7 +101,18 @@ class BootStore extends SqliteWalkStore {
 
 void main() {
   const geoChannel = MethodChannel('flutter.baseflow.com/geolocator');
+  const batteryChannel = MethodChannel('wanderlust/battery');
   setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          batteryChannel,
+          (call) async => {
+            'supported': true,
+            'exempt': true,
+            'reviewed': true,
+            'manufacturer': 'Google',
+          },
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           geoChannel,
@@ -109,6 +120,8 @@ void main() {
         );
   });
   tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(batteryChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(geoChannel, null);
   });
@@ -180,6 +193,51 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+  testWidgets(
+    'first recording offers battery setup once and Not now still records',
+    (tester) async {
+      var reviewed = false;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        batteryChannel,
+        (call) async {
+          if (call.method == 'markReviewed') reviewed = true;
+          return {
+            'supported': true,
+            'exempt': false,
+            'reviewed': reviewed,
+            'manufacturer': 'Google',
+          };
+        },
+      );
+      final store = BootStore(source: networkJson());
+      final location = FakeLocation();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MapScreen(store: store, location: location),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Start recording'));
+      await tester.tap(find.text('Start recording'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Keep recording when your screen is off'),
+        findsOneWidget,
+      );
+      expect(store.recording, isFalse);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      expect(store.recording, isTrue);
+      expect(reviewed, isTrue);
+      expect(find.text('Stop'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await location.stream.close();
+    },
+  );
+
   testWidgets('removing the last map during recording keeps Stop available', (
     tester,
   ) async {

@@ -9,7 +9,7 @@ ANDROID = 'http://schemas.android.com/apk/res/android'
 PERMISSIONS = (
     'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'INTERNET',
     'FOREGROUND_SERVICE', 'FOREGROUND_SERVICE_LOCATION', 'WAKE_LOCK',
-    'POST_NOTIFICATIONS',
+    'POST_NOTIFICATIONS', 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
 )
 
 
@@ -43,6 +43,7 @@ def configure(directory):
     tree.write(manifest, encoding='unicode')
     sources = Path(__file__).parent / 'android'
     for source, relative in (
+        ('RecordingBattery.kt', 'kotlin/com/simiono/wanderlust/RecordingBattery.kt'),
         ('MainActivity.kt', 'kotlin/com/simiono/wanderlust/MainActivity.kt'),
         ('CompassEvents.kt', 'kotlin/com/simiono/wanderlust/CompassEvents.kt'),
         ('RecordingService.kt', 'kotlin/com/simiono/wanderlust/RecordingService.kt'),
