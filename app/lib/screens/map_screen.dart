@@ -1,3 +1,6 @@
+import '../blocks/block_geometry.dart';
+import '../blocks/block_progress.dart';
+import '../widgets/block_controls.dart';
 import '../widgets/map_compass.dart';
 import '../widgets/route_update_notice.dart';
 import 'memory_view_screen.dart';
@@ -290,6 +293,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  StreetBlock? _selectedBlock;
+
   void _walkChanged() {
     if (!_visible) return;
     _mapLocation.onRecordingChanged();
@@ -313,6 +318,29 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       builder: (context, _) => _coverage.network == null
                           ? const Center(child: Text('Loading saved streets…'))
                           : AreaMap(
+                              blocks: _preferences.completeBlocks
+                                  ? _session.blocks.blocks
+                                  : const [],
+                              completedBlocks: _preferences.completeBlocks
+                                  ? _session.blocks.completedIds
+                                  : const {},
+                              selectedBlock: _preferences.completeBlocks
+                                  ? _selectedBlock?.id
+                                  : null,
+                              missingBlockLines:
+                                  _preferences.completeBlocks &&
+                                      _selectedBlock != null &&
+                                      _session.blocks.blocks.contains(
+                                        _selectedBlock,
+                                      )
+                                  ? missingLines(
+                                      _selectedBlock!,
+                                      _session.blocks.previewSections,
+                                    )
+                                  : const [],
+                              onMapTap: _preferences.completeBlocks
+                                  ? _openBlockAt
+                                  : null,
                               unmatchedTrails: _coverage.unmatchedTrails,
                               network: _coverage.network!,
                               networks: _coverage.networks,
@@ -352,6 +380,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                 const MapCompass(),
                               ],
                             ),
+                            if (_preferences.completeBlocks)
+                              BlockCountChip(
+                                controller: _session.blocks,
+                                onPressed: () =>
+                                    showBlockDetails(context, _session.blocks),
+                              ),
                             RouteUpdateNotice(
                               coverage: _coverage,
                               onRetry: () => unawaited(
@@ -689,16 +723,51 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await _loadMemories();
   }
 
+  Future<void> _openBlockAt(Offset point) async {
+    final block = _session.blocks.hit(point);
+    if (block == null) {
+      setState(() => _selectedBlock = null);
+      return;
+    }
+    setState(() => _selectedBlock = block);
+    await showBlockDetails(
+      context,
+      _session.blocks,
+      block: block,
+      recording: _recorder.isRecording,
+    );
+    // Keep the remaining streets visible after dismissing the sheet; tap empty
+    // space or switch the feature off to clear the selection.
+  }
+
   Future<void> _stopRecording() async {
+    final completedBefore = _session.blocks.completedIds;
+    final topologyBefore = _session.blocks.topologyRevision;
+    final canCelebrate =
+        _preferences.completeBlocks &&
+        !_session.blocks.busy &&
+        !_coverage.busy &&
+        _coverage.error == null &&
+        _session.blocks.error == null;
     final id = _recorder.recordingSnapshot?.id;
     await _recorder.stop();
     if (!mounted || _recorder.needsSaveRetry || id == null) return;
     try {
       final walk = await _store.loadWalk(id);
+      await _coverage.synchronize(_recorder.savedWalks);
+      await _session.blocks.settled;
       if (!mounted) return;
+      final newBlocks =
+          canCelebrate && topologyBefore == _session.blocks.topologyRevision
+          ? _session.blocks.completedIds.difference(completedBefore).length
+          : 0;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(RecordingHealth.fromWalk(walk).title),
+          content: Text(
+            newBlocks > 0
+                ? '${RecordingHealth.fromWalk(walk).title} · $newBlocks more ${newBlocks == 1 ? "block" : "blocks"} completed'
+                : RecordingHealth.fromWalk(walk).title,
+          ),
           duration: const Duration(seconds: 6),
           action: SnackBarAction(label: 'History', onPressed: _showSavedWalks),
         ),

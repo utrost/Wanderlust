@@ -3,6 +3,22 @@ import 'dart:ui';
 
 import '../data/area_network.dart';
 
+/// A source interval and its equivalent displayed street interval.
+class StreetProjection {
+  const StreetProjection(
+    this.source,
+    this.target,
+    this.sourceFrom,
+    this.sourceTo,
+    this.points,
+  );
+  final int source, target;
+
+  /// Fractions along the source segment, before presentation projection.
+  final double sourceFrom, sourceTo;
+  final List<Offset> points;
+}
+
 /// A presentation-only projection onto equivalent road geometry. Coverage IDs,
 /// counts and saved GPS remain untouched. A grid bounds work to nearby pieces.
 class StreetDisplay {
@@ -35,12 +51,22 @@ class StreetDisplay {
 
   late final double _cos;
   final _grid = <(int, int), List<_Part>>{};
-  final _cache = <AreaEdge, List<AreaEdge>>{};
+  final _cache = <AreaEdge, List<StreetProjection>>{};
+  final _geometry = <AreaEdge, List<AreaEdge>>{};
   Offset _xy(Offset p) => Offset(p.dx * 111195 * _cos, p.dy * 111195);
   Offset _lngLat(Offset p) => Offset(p.dx / (111195 * _cos), p.dy / 111195);
 
-  List<AreaEdge> geometry(AreaEdge edge) => _cache.putIfAbsent(edge, () {
-    final result = <AreaEdge>[];
+  List<AreaEdge> geometry(AreaEdge edge) => _geometry.putIfAbsent(
+    edge,
+    () => [
+      for (final p in projections(edge)) AreaEdge(edge.id, p.points, edge.name),
+    ],
+  );
+
+  List<StreetProjection> projections(
+    AreaEdge edge,
+  ) => _cache.putIfAbsent(edge, () {
+    final result = <StreetProjection>[];
     for (var i = 1; i < edge.points.length; i++) {
       final source = _Part(edge, _xy(edge.points[i - 1]), _xy(edge.points[i]));
       if (source.length < 0.01) continue;
@@ -67,7 +93,7 @@ class StreetDisplay {
               .where(
                 (target) =>
                     _rank(target.edge, edge) < 0 &&
-                    _compatible(edge, target.edge) &&
+                    equivalentStreetGeometry(edge, target.edge) &&
                     _dot(source.unit, target.unit).abs() >= 0.97 &&
                     (middle - target.project(middle)).distance <=
                         18 + source.length / 2,
@@ -96,10 +122,16 @@ class StreetDisplay {
           }
         }
         result.add(
-          AreaEdge(edge.id, [
-            _lngLat(selected?.project(a) ?? a),
-            _lngLat(selected?.project(b) ?? b),
-          ], edge.name),
+          StreetProjection(
+            edge.id,
+            selected?.edge.id ?? edge.id,
+            ordered[j - 1],
+            ordered[j],
+            [
+              _lngLat(selected?.project(a) ?? a),
+              _lngLat(selected?.project(b) ?? b),
+            ],
+          ),
         );
       }
     }
@@ -119,7 +151,8 @@ bool _roadside(AreaEdge e) =>
     e.highway == 'cycleway' ||
     (e.highway == 'footway' && e.footway == 'sidewalk');
 
-bool _compatible(AreaEdge a, AreaEdge b) {
+/// Whether two mapped sections represent the same street corridor.
+bool equivalentStreetGeometry(AreaEdge a, AreaEdge b) {
   // Edge IDs are hashes of short pieces, so cannot choose a consistent side
   // of a street. Legacy maps without way identity keep their original lines.
   if (a.wayId == null || b.wayId == null) return false;

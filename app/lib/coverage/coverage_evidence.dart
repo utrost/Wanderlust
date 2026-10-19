@@ -15,6 +15,16 @@ class CoverageEvidence {
   void retain(Set<int> walks) =>
       _walks.removeWhere((id, _) => !walks.contains(id));
 
+  Set<int> supported(Iterable<String> areas) => {
+    for (final maps in _walks.values)
+      for (final area in areas) ...?maps[area]?.$1,
+  };
+
+  Set<int> estimated(Iterable<String> areas) => {
+    for (final maps in _walks.values)
+      for (final area in areas) ...?maps[area]?.$2,
+  }.difference(supported(areas));
+
   Map<int, int> counts(Iterable<String> areas) {
     final result = <int, int>{};
     for (final maps in _walks.values) {

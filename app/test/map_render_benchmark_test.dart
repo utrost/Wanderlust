@@ -1,3 +1,4 @@
+import 'package:wanderlust/blocks/block_geometry.dart';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -50,7 +51,25 @@ void main() {
     final counts = {
       for (final e in map.edges.where((e) => e.id % 30 == 0)) e.id: 1,
     };
-    int run() {
+    final blocks = <StreetBlock>[
+      for (var x = 0; x < 99; x++)
+        for (var y = 0; y < 99; y++)
+          StreetBlock('$x-$y', [
+            BlockBoundary(
+              [
+                Offset(8.7 + x * .0015, 53 + y * .0009),
+                Offset(8.7 + (x + 1) * .0015, 53 + y * .0009),
+                Offset(8.7 + (x + 1) * .0015, 53 + (y + 1) * .0009),
+                Offset(8.7 + x * .0015, 53 + (y + 1) * .0009),
+                Offset(8.7 + x * .0015, 53 + y * .0009),
+              ],
+              400,
+              {},
+            ),
+          ]),
+    ];
+    final completed = {for (final b in blocks) b.id};
+    int run({bool withBlocks = false}) {
       final watch = Stopwatch()..start();
       for (var i = 0; i < 25; i++) {
         final r = ui.PictureRecorder();
@@ -59,6 +78,8 @@ void main() {
         final t = Matrix4.diagonal3Values(12, 12, 1)
           ..setTranslationRaw(-1800 + i * 3, -3300 + i * 2, 0);
         AreaMapPainter(
+          blocks: withBlocks ? blocks : const [],
+          completedBlocks: withBlocks ? completed : const {},
           network: map,
           counts: counts,
           geometry: cache,
@@ -71,7 +92,19 @@ void main() {
     }
 
     run();
-    final after = run();
+    run(withBlocks: true);
+    final baseline = <int>[], enabled = <int>[];
+    for (var i = 0; i < 7; i++) {
+      baseline.add(run());
+      enabled.add(run(withBlocks: true));
+    }
+    baseline.sort();
+    enabled.sort();
+    final after = baseline[3], blocksTime = enabled[3];
+    debugPrint(
+      'BLOCK_PAN_BENCHMARK baseline_ms=$after blocks_ms=$blocksTime polygons=${blocks.length}',
+    );
+    expect(blocksTime, lessThanOrEqualTo(after * 1.2));
     debugPrint(
       'PAN_BENCHMARK edges=${map.edges.length} frames=25 indexed_ms=$after',
     );

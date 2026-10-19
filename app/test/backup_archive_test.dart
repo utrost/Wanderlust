@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -61,6 +63,49 @@ void main() {
       await target.close();
     }
   });
+  test(
+    'v4 backups before optional map layers restore with both disabled',
+    () async {
+      final file = File('${dir.path}/legacy');
+      await BackupArchive.write(file, store.backupData, BackupProgress());
+      final bytes = await file.readAsBytes();
+      const offset = BackupArchive.magic.length;
+      final headerSize = ByteData.sublistView(
+        bytes,
+        offset,
+        offset + 4,
+      ).getUint32(0);
+      final header =
+          jsonDecode(
+                utf8.decode(bytes.sublist(offset + 4, offset + 4 + headerSize)),
+              )
+              as Map<String, dynamic>;
+      final start = offset + 4 + headerSize,
+          end = start + (header['length'] as int);
+      final settings =
+          jsonDecode(utf8.decode(bytes.sublist(start, end)))
+              as Map<String, dynamic>;
+      (settings['preferences'] as Map)
+        ..remove('completeBlocks')
+        ..remove('fogOfWar');
+      final payload = utf8.encode(jsonEncode(settings));
+      header['length'] = payload.length;
+      header['sha256'] = sha256.convert(payload).toString();
+      final encoded = utf8.encode(jsonEncode(header));
+      final length = ByteData(4)..setUint32(0, encoded.length);
+      await file.writeAsBytes([
+        ...bytes.take(offset),
+        ...length.buffer.asUint8List(),
+        ...encoded,
+        ...payload,
+        ...bytes.skip(end),
+      ]);
+      final restored = await BackupArchive.read(file, dir, BackupProgress());
+      expect(restored.metadata.preferences!.completeBlocks, false);
+      expect(restored.metadata.preferences!.fogOfWar, false);
+      expect(await restored.walks().length, 1);
+    },
+  );
   test('corruption, truncation and trailing bytes are rejected', () async {
     final file = File('${dir.path}/backup');
     await BackupArchive.write(file, store.backupData, BackupProgress());
