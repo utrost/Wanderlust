@@ -11,6 +11,9 @@ class AreaEdge {
     this.points,
     this.name, {
     this.wayId,
+    this.fromNode,
+    this.toNode,
+    this.access = '',
     this.highway = '',
     this.footway = '',
     this.layer = '',
@@ -21,6 +24,8 @@ class AreaEdge {
   final List<Offset> points; // longitude, latitude
   final String? name;
   final int? wayId;
+  final int? fromNode, toNode;
+  final String access;
   final String highway, footway, layer, bridge, tunnel;
 }
 
@@ -108,6 +113,9 @@ class AreaNetwork {
             points,
             properties['name'] as String?,
             wayId: (properties['osm_way_id'] as num?)?.toInt(),
+            fromNode: (properties['from_node'] as num?)?.toInt(),
+            toNode: (properties['to_node'] as num?)?.toInt(),
+            access: properties['access']?.toString() ?? '',
             highway: properties['highway']?.toString() ?? '',
             footway: properties['footway']?.toString() ?? '',
             layer: properties['layer']?.toString() ?? '',

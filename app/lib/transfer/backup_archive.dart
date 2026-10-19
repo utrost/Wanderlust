@@ -234,7 +234,13 @@ class BackupArchive {
           case 'settings':
             if (count != 0) throw const FormatException('Repeated settings.');
             final data = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-            final values = data['preferences'] as Map<String, dynamic>;
+            // Optional display features were added after the v4 format shipped.
+            // Missing keys mean disabled; present values still validate strictly.
+            final values = <String, dynamic>{
+              'fogOfWar': false,
+              'completeBlocks': false,
+              ...data['preferences'] as Map<String, dynamic>,
+            };
             preferences = WalkPreferences.fromJson(values);
             final normalized = preferences.toJson();
             if (values.length != normalized.length ||

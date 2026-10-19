@@ -1,3 +1,5 @@
+import '../blocks/block_geometry.dart';
+import 'block_layer.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -56,6 +58,10 @@ class AreaMap extends StatefulWidget {
     this.networks = const [],
     this.walkedLineWidth = 3,
     this.showStreetNames = true,
+    this.blocks = const [],
+    this.completedBlocks = const {},
+    this.selectedBlock,
+    this.missingBlockLines = const [],
     this.fogOfWar = false,
     this.exploredCells = const {},
     this.memories = const [],
@@ -75,6 +81,10 @@ class AreaMap extends StatefulWidget {
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
   final bool showStreetNames;
+  final List<StreetBlock> blocks;
+  final Set<String> completedBlocks;
+  final String? selectedBlock;
+  final List<List<Offset>> missingBlockLines;
   final bool fogOfWar;
   final Set<(int, int)> exploredCells;
   final List<WalkMemory> memories;
@@ -97,7 +107,13 @@ class AreaMap extends StatefulWidget {
   State<AreaMap> createState() => _AreaMapState();
 }
 
-class _AreaMapState extends State<AreaMap> {
+class _AreaMapState extends State<AreaMap> with SingleTickerProviderStateMixin {
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: 1,
+  );
+  Set<String> _fading = {};
   final _transform = TransformationController();
   final _geometry = MapGeometryCache();
   Size? _size;
@@ -113,6 +129,12 @@ class _AreaMapState extends State<AreaMap> {
   @override
   void didUpdateWidget(AreaMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _fading = identical(widget.blocks, oldWidget.blocks)
+        ? widget.completedBlocks.difference(oldWidget.completedBlocks)
+        : {};
+    if (_fading.isNotEmpty && !MediaQuery.disableAnimationsOf(context)) {
+      _fade.forward(from: 0);
+    }
     if (widget.areaRequest != oldWidget.areaRequest ||
         widget.network.version != oldWidget.network.version) {
       _pendingCenter = false;
@@ -151,6 +173,7 @@ class _AreaMapState extends State<AreaMap> {
 
   @override
   void dispose() {
+    _fade.dispose();
     _transform.dispose();
     _geometry.dispose();
     super.dispose();
@@ -221,10 +244,16 @@ class _AreaMapState extends State<AreaMap> {
           ),
           IgnorePointer(
             child: AnimatedBuilder(
-              animation: _transform,
+              animation: Listenable.merge([_transform, _fade]),
               builder: (context, _) => CustomPaint(
                 painter: AreaMapPainter(
                   geometry: _geometry,
+                  blocks: widget.blocks,
+                  completedBlocks: widget.completedBlocks,
+                  selectedBlock: widget.selectedBlock,
+                  missingBlockLines: widget.missingBlockLines,
+                  fadingBlocks: _fading,
+                  blockAlpha: _fade.value,
                   network: widget.network,
                   networks: widget.networks,
                   counts: widget.counts,
@@ -347,10 +376,15 @@ class MapGeometryCache {
   StreetDisplay? _streetDisplay;
   final labels = MapLabelCache();
   final fog = ExplorationFog();
+  final blocks = BlockLayer();
   MapSpatialIndex<AreaEdge> edgeIndex = MapSpatialIndex();
   List<AreaEdge> edges = const [];
   final sceneryIndex = <AreaNetwork, MapSpatialIndex<MapScenery>>{};
-  void dispose() => labels.dispose();
+  void dispose() {
+    labels.dispose();
+    blocks.dispose();
+  }
+
   StreetDisplay streets(Iterable<AreaEdge> edges) =>
       _streetDisplay ??= StreetDisplay(edges);
   void prepare(AreaNetwork network, Size size, List<AreaNetwork> networks) {
@@ -409,6 +443,10 @@ class AreaMapPainter extends CustomPainter {
     this.networks = const [],
     this.walkedLineWidth = 3,
     this.showStreetNames = true,
+    this.blocks = const [],
+    this.completedBlocks = const {},
+    this.selectedBlock,
+    this.missingBlockLines = const [],
     this.fogOfWar = false,
     this.exploredCells = const {},
     this.coverageScreenWidth,
@@ -417,11 +455,17 @@ class AreaMapPainter extends CustomPainter {
     this.unmatchedTrails = const [],
     this.inferred = const {},
     this.textScale = 1,
+    this.fadingBlocks = const {},
+    this.blockAlpha = 1,
   });
   final MapGeometryCache? geometry;
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
   final bool showStreetNames;
+  final List<StreetBlock> blocks;
+  final Set<String> completedBlocks;
+  final String? selectedBlock;
+  final List<List<Offset>> missingBlockLines;
   final bool fogOfWar;
   final Set<(int, int)> exploredCells;
   final double? coverageScreenWidth;
@@ -432,6 +476,8 @@ class AreaMapPainter extends CustomPainter {
   final List<List<Offset>> unmatchedTrails;
   final Set<int> inferred;
   final double textScale;
+  final Set<String> fadingBlocks;
+  final double blockAlpha;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -503,6 +549,18 @@ class AreaMapPainter extends CustomPainter {
         }
         canvas.restore();
       }
+    }
+    if (blocks.isNotEmpty) {
+      cache.blocks.prepare(blocks, network, mapSize);
+      cache.blocks.paint(
+        canvas,
+        visible,
+        completedBlocks,
+        selectedBlock,
+        zoom,
+        fadingBlocks,
+        blockAlpha,
+      );
     }
     final stroke = Paint()
       ..style = PaintingStyle.stroke
@@ -589,6 +647,25 @@ class AreaMapPainter extends CustomPainter {
     }
     canvas.restore();
     paintWalkOverlay(canvas, maps.toList(), inferred, trace, project);
+    for (final line in missingBlockLines) {
+      final path = Path();
+      for (var i = 0; i < line.length; i++) {
+        final p = project(line[i]);
+        if (i == 0) {
+          path.moveTo(p.dx, p.dy);
+        } else {
+          path.lineTo(p.dx, p.dy);
+        }
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = const Color(0xff946227)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4
+          ..strokeCap = StrokeCap.round,
+      );
+    }
     if (fogOfWar && visible != null) {
       cache.fog.prepare(exploredCells, network, mapSize);
       canvas.save();
@@ -603,6 +680,11 @@ class AreaMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(AreaMapPainter oldDelegate) =>
+      oldDelegate.blocks != blocks ||
+      oldDelegate.completedBlocks != completedBlocks ||
+      oldDelegate.selectedBlock != selectedBlock ||
+      oldDelegate.missingBlockLines != missingBlockLines ||
+      oldDelegate.blockAlpha != blockAlpha ||
       oldDelegate.network != network ||
       oldDelegate.counts != counts ||
       oldDelegate.networks != networks ||

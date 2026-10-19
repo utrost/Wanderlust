@@ -215,6 +215,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const Divider(),
         SwitchListTile(
+          title: const Text('Complete blocks'),
+          subtitle: const Text(
+            'Colour street blocks you have travelled around.',
+          ),
+          value: value.completeBlocks,
+          onChanged: busy
+              ? null
+              : (v) => change(value.copyWith(completeBlocks: v)),
+        ),
+        SwitchListTile(
           title: const Text('Fog of war'),
           subtitle: const Text(
             'Gently mute unexplored areas. Saved and new journeys reveal their surroundings, even without a street match. Deleting a journey removes its unique explored area.',

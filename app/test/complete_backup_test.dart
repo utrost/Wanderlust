@@ -40,6 +40,7 @@ void main() {
       const preferences = WalkPreferences(
         mapSizeKm: 12,
         fogOfWar: true,
+        completeBlocks: true,
         showStreetNames: false,
         fillSmallGaps: true,
       );
@@ -51,6 +52,7 @@ void main() {
         preferences: preferences,
       );
       final restored = await decodeBackup(await encodeBackup(backup));
+      expect(restored.preferences!.completeBlocks, true);
       await store.mergeWalks(
         restored.walks,
         memories: restored.memories,

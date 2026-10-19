@@ -9,6 +9,7 @@ class WalkPreferences {
     this.showStreetNames = true,
     this.showMemories = true,
     this.fogOfWar = false,
+    this.completeBlocks = false,
     this.gpsIntervalSeconds = 5,
     this.automaticGpsSampling = true,
     this.autoDownloadMaps = true,
@@ -24,6 +25,7 @@ class WalkPreferences {
   final bool showStreetNames;
   final bool showMemories;
   final bool fogOfWar;
+  final bool completeBlocks;
   static const gpsIntervals = [2, 5, 10, 20];
   final int gpsIntervalSeconds;
   final bool automaticGpsSampling;
@@ -46,6 +48,7 @@ class WalkPreferences {
     bool? showStreetNames,
     bool? showMemories,
     bool? fogOfWar,
+    bool? completeBlocks,
     int? gpsIntervalSeconds,
     bool? automaticGpsSampling,
     bool? autoDownloadMaps,
@@ -61,6 +64,7 @@ class WalkPreferences {
     showStreetNames: showStreetNames ?? this.showStreetNames,
     showMemories: showMemories ?? this.showMemories,
     fogOfWar: fogOfWar ?? this.fogOfWar,
+    completeBlocks: completeBlocks ?? this.completeBlocks,
     gpsIntervalSeconds: gpsIntervalSeconds ?? this.gpsIntervalSeconds,
     automaticGpsSampling:
         automaticGpsSampling ??
@@ -80,6 +84,7 @@ class WalkPreferences {
     'showStreetNames': showStreetNames,
     'showMemories': showMemories,
     'fogOfWar': fogOfWar,
+    'completeBlocks': completeBlocks,
     'gpsIntervalSeconds': gpsIntervalSeconds,
     'automaticGpsSampling': automaticGpsSampling,
     'autoDownloadMaps': autoDownloadMaps,
@@ -100,6 +105,7 @@ class WalkPreferences {
       showStreetNames: json['showStreetNames'] != false,
       showMemories: json['showMemories'] != false,
       fogOfWar: json['fogOfWar'] == true,
+      completeBlocks: json['completeBlocks'] == true,
       automaticGpsSampling: json['automaticGpsSampling'] is bool
           ? json['automaticGpsSampling'] as bool
           : (json['detailedGps'] != true &&

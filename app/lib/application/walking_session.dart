@@ -1,3 +1,4 @@
+import '../blocks/block_controller.dart';
 import '../recording/activity_type.dart';
 import '../exploration/exploration.dart';
 import 'dart:async';
@@ -63,6 +64,8 @@ class WalkingSession extends ChangeNotifier {
         return saved.isEmpty ? null : maps.readArea(saved.first.version);
       },
     );
+    blocks = BlockController(coverage);
+    blocks.addListener(notifyListeners);
     automaticMaps = AutomaticMaps(
       store: maps,
       networks: () => coverage.networks,
@@ -75,6 +78,7 @@ class WalkingSession extends ChangeNotifier {
       store: preferencesStore,
       onApplied: (value) async {
         recorder.refreshDisplayClock();
+        blocks.setEnabled(value.completeBlocks);
         exploration.update(
           value.fogOfWar,
           recorder.savedWalks,
@@ -125,6 +129,7 @@ class WalkingSession extends ChangeNotifier {
     }
   }
 
+  late final BlockController blocks;
   late final ExplorationController exploration;
   late final AutomaticMaps automaticMaps;
   late final WalkRecorder recorder;
@@ -136,6 +141,7 @@ class WalkingSession extends ChangeNotifier {
     _closed = true;
     recorder.removeListener(_recordingChanged);
     exploration.dispose();
+    blocks.dispose();
     _preferences.dispose();
     automaticMaps.dispose();
     coverage.dispose();

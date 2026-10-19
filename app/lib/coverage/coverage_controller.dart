@@ -73,6 +73,11 @@ class CoverageController extends ChangeNotifier {
   bool _previewActive = true;
   int _liveEpoch = 0;
   String? liveError;
+  Set<int> get supportedSections =>
+      _evidence.supported(networks.map((n) => n.version));
+  Set<int> get estimatedSections =>
+      _evidence.estimated(networks.map((n) => n.version));
+  Set<int> get liveSupportedSections => _liveEdges.difference(_liveEstimated);
   Map<int, int>? _displayCounts;
   Map<int, int> get displayCounts => _displayCounts ??= (() {
     final direct = _evidence.counts(networks.map((n) => n.version));

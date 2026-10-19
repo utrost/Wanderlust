@@ -127,6 +127,7 @@ void main() {
         'showStreetNames': true,
         'showMemories': true,
         'fogOfWar': false,
+        'completeBlocks': false,
         'gpsIntervalSeconds': 5,
         'automaticGpsSampling': true,
         'autoDownloadMaps': true,
