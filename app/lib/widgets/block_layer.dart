@@ -49,8 +49,8 @@ class BlockLayer {
       _paths[block.id] = path;
       final bounds = path.getBounds(), center = bounds.center;
       final tile = tiles.putIfAbsent((
-        (center.dx / 16).floor(),
-        (center.dy / 16).floor(),
+        (center.dx / 32).floor(),
+        (center.dy / 32).floor(),
       ), () => _BlockTile());
       tile.blocks[block.id] = path;
       _byBlock[block.id] = tile;
