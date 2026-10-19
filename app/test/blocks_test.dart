@@ -217,6 +217,15 @@ void main() {
     expect(result.blocks.length, 1);
     expect(result.blocks.single.perimeter, closeTo(400, .1));
   });
+  test('equivalent carriageways never award a wide road-divider block', () {
+    final f = [
+      edge(1, 1, 2, [p(0, 0), p(200, 0)], name: 'Avenue'),
+      edge(2, 2, 3, [p(200, 0), p(200, 12)], name: 'East crossing'),
+      edge(3, 3, 4, [p(200, 12), p(0, 12)], name: 'Avenue'),
+      edge(4, 4, 1, [p(0, 12), p(0, 0)], name: 'West crossing'),
+    ];
+    expect(buildBlockTopology([network(f)]).blocks, isEmpty);
+  });
   test('95 percent and 20 metre gap boundaries are inclusive', () {
     expect(blockProgress(progressBlock([20, 380]), {1}).complete, true);
     expect(blockProgress(progressBlock([20.1, 379.9]), {1}).complete, false);

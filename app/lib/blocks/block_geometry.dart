@@ -267,6 +267,29 @@ BlockTopology buildBlockTopology(List<AreaNetwork> networks) {
     final area = signedArea / 2;
     final perimeter = ring.fold(0.0, (n, d) => n + lineLength(points(d)));
     if (area < 1000 || 2 * area / perimeter < 10 || !_simple(metric)) continue;
+    // Equivalent carriageways can enclose a median wider than the raw width
+    // cutoff. Collapse their display geometry before accepting the face, so a
+    // road divider cannot become an extra challenge or award.
+    final projected = <Offset>[];
+    for (final d in ring) {
+      final parts = display.geometry(roads[d.$1]!);
+      for (final part in d.$2 ? parts : parts.reversed) {
+        projected.addAll(d.$2 ? part.points : part.points.reversed);
+      }
+    }
+    final projectedMetric = projected.map(xy).toList();
+    var projectedArea = 0.0, projectedLength = 0.0;
+    for (var i = 0; i < projectedMetric.length; i++) {
+      final a = projectedMetric[i],
+          b = projectedMetric[(i + 1) % projectedMetric.length];
+      projectedArea += _cross(a, b);
+      projectedLength += (b - a).distance;
+    }
+    if (projectedArea / 2 < 1000 ||
+        projectedLength == 0 ||
+        projectedArea / projectedLength < 10) {
+      continue;
+    }
     // A 30 m safety neighbourhood must lie inside the union of downloaded boxes.
     if (!_insideUnion(polygon, networks)) continue;
     final ids = ring.map((d) => d.$1).toList()..sort();

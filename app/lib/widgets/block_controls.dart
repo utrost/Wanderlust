@@ -18,7 +18,7 @@ class BlockCountChip extends StatelessWidget {
           ? 'Finding blocks…'
           : controller.error != null
           ? 'Blocks unavailable'
-          : '${controller.completed} blocks completed',
+          : '${controller.completed} ${controller.completed == 1 ? 'block' : 'blocks'} completed',
     ),
     onPressed: onPressed,
   );
@@ -69,7 +69,7 @@ Future<void> showBlockDetails(
                   const SizedBox(height: 12),
                 ],
                 Text(
-                  '${controller.completed} blocks completed · Across downloaded maps',
+                  '${controller.completed} ${controller.completed == 1 ? 'block' : 'blocks'} completed · Across downloaded maps',
                 ),
                 const SizedBox(height: 12),
                 const Text(
