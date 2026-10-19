@@ -6,7 +6,7 @@ import 'map_spatial_index.dart';
 
 class _BlockTile {
   final blocks = <String, Path>{};
-  Path fill = Path();
+  Picture? picture;
   Rect? bounds;
 }
 
@@ -27,6 +27,9 @@ class BlockLayer {
     _blocks = blocks;
     _network = network;
     _size = size;
+    for (final tile in _byBlock.values.toSet()) {
+      tile.picture?.dispose();
+    }
     _index = MapSpatialIndex(cellSize: 32);
     _paths.clear();
     _byBlock.clear();
@@ -77,12 +80,19 @@ class BlockLayer {
           if (_byBlock[id] != null) _byBlock[id]!,
       };
       for (final tile in dirty) {
-        tile.fill = Path();
+        final fillPath = Path();
         for (final entry in tile.blocks.entries) {
           if (fill.contains(entry.key)) {
-            tile.fill.addPath(entry.value, Offset.zero);
+            fillPath.addPath(entry.value, Offset.zero);
           }
         }
+        final recorder = PictureRecorder();
+        Canvas(recorder).drawPath(
+          fillPath,
+          Paint()..color = const Color(0xff6f9874).withValues(alpha: .27),
+        );
+        tile.picture?.dispose();
+        tile.picture = recorder.endRecording();
       }
     }
     _filled = fill;
@@ -92,7 +102,7 @@ class BlockLayer {
         ? _byBlock.values.toSet()
         : _index.query(visible);
     for (final tile in candidates) {
-      canvas.drawPath(tile.fill, paint);
+      if (tile.picture != null) canvas.drawPicture(tile.picture!);
     }
     if (fading.isNotEmpty) {
       paint.color = const Color(0xff6f9874).withValues(alpha: .27 * alpha);
@@ -115,5 +125,12 @@ class BlockLayer {
           ..strokeWidth = 2 / zoom,
       );
     }
+  }
+
+  void dispose() {
+    for (final tile in _byBlock.values.toSet()) {
+      tile.picture?.dispose();
+    }
+    _byBlock.clear();
   }
 }

@@ -380,7 +380,11 @@ class MapGeometryCache {
   MapSpatialIndex<AreaEdge> edgeIndex = MapSpatialIndex();
   List<AreaEdge> edges = const [];
   final sceneryIndex = <AreaNetwork, MapSpatialIndex<MapScenery>>{};
-  void dispose() => labels.dispose();
+  void dispose() {
+    labels.dispose();
+    blocks.dispose();
+  }
+
   StreetDisplay streets(Iterable<AreaEdge> edges) =>
       _streetDisplay ??= StreetDisplay(edges);
   void prepare(AreaNetwork network, Size size, List<AreaNetwork> networks) {
