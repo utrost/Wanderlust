@@ -23,7 +23,7 @@ the existing street display projection rules. Travel is unioned by length, never
 summed twice. Internal paths are not required. Colour indicates perimeter
 completion, not exploration of the interior.
 
-Live detail percentages are provisional; green fills and the count use saved
+Live detail percentages are provisional; light-red fills and the count use saved
 journeys. Saving from the recording panel produces one combined recording-health
 and completion message when new blocks were completed. History loading, imports,
 map refreshes and enabling the feature do not replay celebrations. Deleting a
@@ -34,8 +34,13 @@ journey, removing a map or changing map geometry can reduce the count.
 The block worker uses OSM node identities from all downloaded maps, deduplicating
 sections shared by overlapping maps. Public ground-level residential,
 living-street, unclassified, primary, secondary, tertiary and pedestrian streets
-form boundaries. Service roads, paths, railways, motorway infrastructure and
-restricted streets do not define blocks.
+form boundaries. Ground-level paths and service roads can close otherwise open
+street perimeters. Public and local-access (`access=destination`) connectors are
+eligible; private, prohibited and customer-only access remains excluded. This is
+perimeter recognition, not a navigation recommendation or an access permission.
+Paths inside already recognised street blocks are ignored. Path-only loops,
+sidewalks, crossings, railways and motorway infrastructure do not define challenges.
+Completed blocks use a muted light-red fill to distinguish them from parks.
 
 The worker peels dead ends and traverses ordered directed edges to identify
 bounded faces. It omits self-crossing or ambiguous geometry, crossings without

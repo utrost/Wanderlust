@@ -16,7 +16,7 @@ void main() {
       final layer = BlockLayer();
       const size = Size(300, 300);
       layer.prepare([block], map, size);
-      Future<int> green(Set<String> completed) async {
+      Future<List<int>> pixel(Set<String> completed) async {
         final recorder = ui.PictureRecorder();
         final canvas = Canvas(recorder);
         canvas.drawRect(Offset.zero & size, Paint()..color = Colors.white);
@@ -25,17 +25,23 @@ void main() {
         final image = await tester.runAsync(() => pic.toImage(300, 300));
         final bytes = await tester.runAsync(() => image!.toByteData());
         final center = map.project(p(50, 50), size);
-        final value = bytes!.getUint8(
-          (center.dy.floor() * 300 + center.dx.floor()) * 4,
-        );
+        final offset = (center.dy.floor() * 300 + center.dx.floor()) * 4;
+        final value = [for (var i = 0; i < 3; i++) bytes!.getUint8(offset + i)];
         image!.dispose();
         pic.dispose();
         return value;
       }
 
-      expect(await green({}), 255);
-      expect(await green({block.id}), lessThan(255));
-      expect(await green({}), 255);
+      expect(await pixel({}), [255, 255, 255]);
+      final filled = await pixel({block.id});
+      expect(filled[0], greaterThan(filled[1]));
+      expect(filled[0], greaterThan(filled[2]));
+      expect(
+        filled[1],
+        greaterThan(190),
+      ); // Subtle light red, not an opaque overlay.
+      expect(await pixel({}), [255, 255, 255]);
+      layer.dispose();
     },
   );
   testWidgets(
