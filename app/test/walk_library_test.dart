@@ -80,13 +80,14 @@ class LibraryStore
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,
+    Stream<String>? mapStream,
     List<String> maps = const [],
     WalkPreferences? preferences,
     String? activeMap,
   }) async {
     mergeCalls++;
     restoredPreferences = preferences;
-    restoredMaps = maps;
+    restoredMaps = mapStream == null ? maps : await mapStream.toList();
     var count = 0;
     await for (final walk in walkStream ?? Stream.fromIterable(incoming)) {
       if (walks.any((w) => w.uid == walk.uid)) continue;

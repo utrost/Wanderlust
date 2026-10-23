@@ -12,3 +12,27 @@ abstract class CoverageStore {
   Future<Map<int, int>> readCombinedCounts(List<String> versions);
   Future<Map<int, int>> readCounts(String networkVersion);
 }
+
+class StoredMatch {
+  const StoredMatch(
+    this.fingerprint,
+    this.supported,
+    this.estimated,
+    this.unmatched,
+  );
+  final String fingerprint;
+  final Set<int> supported, estimated;
+  final List<int> unmatched;
+}
+
+abstract class PersistentCoverageStore {
+  Future<void> syncEvidenceFingerprints(Map<int, String> expected);
+  Future<StoredMatch?> readEvidence(int walk, String network);
+  Future<void> writeEvidence(int walk, String network, StoredMatch result);
+  Future<List<double>?> readWalkBounds(int walk, String fingerprint);
+  Future<void> writeWalkBounds(
+    int walk,
+    String fingerprint,
+    List<double> bounds,
+  );
+}

@@ -42,7 +42,14 @@ class AreaNetwork {
     this.scenery,
     this.places, [
     this._coverageRevision,
+    this.sourceVersions = const [],
+    this.footprints = const [],
   ]);
+  final List<String> sourceVersions;
+  final List<Rect> footprints;
+  List<Rect> get coveredFootprints => footprints.isEmpty
+      ? [Rect.fromLTRB(bbox[0], bbox[1], bbox[2], bbox[3])]
+      : footprints;
   final String geojson;
   final String areaId;
   final String name;
@@ -124,7 +131,9 @@ class AreaNetwork {
           );
         })
         .toList(growable: false);
-    if (edges.isEmpty) throw const FormatException('Empty street network');
+    if (edges.isEmpty && meta['view_only'] != true) {
+      throw const FormatException('Empty street network');
+    }
     return AreaNetwork._(
       source,
       meta['area_id'] as String,
@@ -145,6 +154,17 @@ class AreaNetwork {
           if (MapPlace.tryParse(p) case final place?) place,
       ],
       meta['coverage_sections'] as String?,
+      (meta['source_versions'] as List? ?? [meta['network_version']])
+          .cast<String>(),
+      [
+        for (final b in meta['footprints'] as List? ?? [])
+          Rect.fromLTRB(
+            (b[0] as num).toDouble(),
+            (b[1] as num).toDouble(),
+            (b[2] as num).toDouble(),
+            (b[3] as num).toDouble(),
+          ),
+      ],
     );
   }
 
@@ -172,6 +192,8 @@ class AreaNetwork {
     scenery,
     places,
     _coverageRevision,
+    sourceVersions,
+    footprints,
   );
 
   bool contains(Offset coordinate) =>

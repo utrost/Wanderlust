@@ -37,7 +37,7 @@ Future<BackupContents> decodeBackup(Uint8List bytes) async {
     return BackupContents(
       await staged.walks().toList(),
       await staged.memories().toList(),
-      maps: staged.metadata.maps,
+      maps: await staged.maps().toList(),
       preferences: staged.metadata.preferences,
       activeMap: staged.metadata.activeMap,
     );

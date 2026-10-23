@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../recording/walk_recorder.dart';
@@ -292,20 +293,13 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   ),
                   const SizedBox(height: 8),
                   FilledButton.icon(
-                    onPressed:
-                        _busy ||
-                            !_loaded ||
-                            _position == null ||
-                            _areas.length >= 8
+                    onPressed: _busy || !_loaded || _position == null
                         ? null
                         : () => _run(_nearby),
                     icon: const Icon(Icons.download_outlined),
                     label: const Text('Download nearby map'),
                   ),
-                  if (_areas.length >= 8)
-                    const Text(
-                      'Eight maps saved. Remove an unused map to download another.',
-                    ),
+
                   if (_fetching)
                     TextButton(
                       onPressed: () {
@@ -342,11 +336,19 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   'Your first map will appear here. Saved walks are kept even if you remove a map.',
                 ),
               ),
+            ListTile(
+              title: Text(
+                '${_areas.length} saved maps · ${(_areas.fold<int>(0, (n, a) => n + a.bytes + a.cacheBytes) / (1024 * 1024)).toStringAsFixed(1)} MiB',
+              ),
+              subtitle: const Text(
+                'Includes downloaded maps and their rebuildable street index. Nearby maps load automatically; other downloads stay available offline.',
+              ),
+            ),
             for (final area in _areas)
               ListTile(
                 title: Text(area.name),
                 subtitle: Text(
-                  '${(area.bytes / (1024 * 1024)).toStringAsFixed(1)} MiB · saved ${area.downloadedAt.toLocal().toString().split(' ').first}${_active == area.version ? ' · selected' : ''}',
+                  '${area.bounds == null ? '' : '${(area.bounds!.width * area.bounds!.height * 111.32 * 111.32 * math.cos(area.bounds!.center.dy * math.pi / 180)).toStringAsFixed(1)} km² · '}${((area.bytes + area.cacheBytes) / (1024 * 1024)).toStringAsFixed(1)} MiB · saved ${area.downloadedAt.toLocal().toString().split(' ').first}${_active == area.version ? ' · selected' : ''}',
                 ),
                 leading: const Icon(Icons.offline_pin_outlined),
                 trailing: Row(

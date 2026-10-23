@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import '../maps/map_cells.dart';
 
 import 'package:sqflite/sqflite.dart';
 
@@ -6,23 +9,14 @@ import '../data/area_network.dart';
 import '../maps/area_store.dart';
 import 'app_database.dart';
 
-class OfflineMapCapacityException extends StateError {
-  OfflineMapCapacityException()
-    : super(
-        'Eight maps are saved. Remove an unused map before downloading another.',
-      );
-}
-
-class OfflineMapRepository implements AreaStore {
+class OfflineMapRepository implements SpatialAreaStore {
   OfflineMapRepository(this.connection);
   final AppDatabase connection;
   Future<Database> get _db => connection.database;
   @override
   Future<List<OfflineArea>> listAreas() async {
-    final rows = await (await _db).query(
-      'offline_area',
-      columns: ['version', 'name', 'downloaded_at', 'bytes'],
-      orderBy: 'downloaded_at DESC',
+    final rows = await (await _db).rawQuery(
+      'SELECT a.version,a.name,a.downloaded_at,a.bytes,a.bbox,COALESCE((SELECT SUM(c.bytes) FROM map_cell c WHERE c.source=a.version),0) AS cache_bytes FROM offline_area a ORDER BY a.downloaded_at DESC',
     );
     return rows
         .map(
@@ -31,6 +25,15 @@ class OfflineMapRepository implements AreaStore {
             name: r['name'] as String,
             downloadedAt: DateTime.parse(r['downloaded_at'] as String),
             bytes: r['bytes'] as int,
+            cacheBytes: r['cache_bytes'] as int,
+            bounds: r['bbox'] == null
+                ? null
+                : geographicBounds(
+                    (jsonDecode(r['bbox'] as String) as List)
+                        .cast<num>()
+                        .map((n) => n.toDouble())
+                        .toList(),
+                  ),
           ),
         )
         .toList();
@@ -92,14 +95,12 @@ class OfflineMapRepository implements AreaStore {
     final rows = await tx.query('offline_area', columns: ['version']);
     final exists = rows.any((row) => row['version'] == area.version);
     if (keepExisting && exists) return;
-    if (!exists && rows.length >= 8) {
-      throw OfflineMapCapacityException();
-    }
     final values = {
       'name': area.name,
       'geojson': geojson,
       'downloaded_at': DateTime.now().toUtc().toIso8601String(),
       'bytes': bytes,
+      'bbox': jsonEncode(area.bbox),
     };
     // UPDATE preserves the selection foreign key; REPLACE would clear it.
     if (exists) {
@@ -129,4 +130,115 @@ class OfflineMapRepository implements AreaStore {
       whereArgs: [version],
     );
   }
+
+  @override
+  Future<String?> selectedVersion() async {
+    final rows = await (await _db).query(
+      'offline_selection',
+      columns: ['version'],
+      where: 'id = 1',
+    );
+    return rows.isEmpty ? null : rows.single['version'] as String?;
+  }
+
+  @override
+  Future<bool> indexNext(Offset? focus) async {
+    final db = await _db;
+    final rows = (await db.query(
+      'offline_area',
+      columns: ['version', 'bbox'],
+      where: 'indexed = 0',
+    )).toList();
+    if (rows.isEmpty) return false;
+    double distance(Map<String, Object?> row) {
+      if (focus == null || row['bbox'] == null) return double.infinity;
+      final b = geographicBounds(
+        (jsonDecode(row['bbox'] as String) as List)
+            .cast<num>()
+            .map((n) => n.toDouble())
+            .toList(),
+      );
+      return b.contains(focus) ? 0 : (b.center - focus).distanceSquared;
+    }
+
+    rows.sort((a, b) => distance(a).compareTo(distance(b)));
+    final version = rows.first['version'] as String;
+    final source = await readArea(version);
+    if (source == null) return true;
+    // A partial index is invisible and safely replaced after interruption.
+    await db.delete('map_cell', where: 'source = ?', whereArgs: [version]);
+    await for (final chunk in streamMapCells(source)) {
+      final exists = await db.query(
+        'offline_area',
+        columns: ['version'],
+        where: 'version = ?',
+        whereArgs: [version],
+      );
+      if (exists.isEmpty) return true;
+      await db.insert(
+        'map_cell',
+        chunk,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    final bbox = await compute(_sourceBounds, source);
+    await db.update(
+      'offline_area',
+      {'indexed': 1, 'bbox': bbox},
+      where: 'version = ?',
+      whereArgs: [version],
+    );
+    return true;
+  }
+
+  @override
+  Future<List<CellSource>> listCells() async => [
+    for (final r in await (await _db).rawQuery(
+      'SELECT c.cell, c.source, c.bytes, c.sections, c.digest FROM map_cell c JOIN offline_area a ON a.version = c.source WHERE a.indexed = 1',
+    ))
+      CellSource(
+        r['cell'] as String,
+        r['source'] as String,
+        r['bytes'] as int,
+        r['sections'] as int,
+        r['digest'] as String,
+      ),
+  ];
+  @override
+  Future<String?> readCell(String cell) async {
+    final db = await _db;
+    // Cell payloads can exceed CursorWindow on dense maps: chunk text reads.
+    final rows = await db.rawQuery(
+      'SELECT c.source,c.digest,length(c.geojson) AS n FROM map_cell c JOIN offline_area a ON a.version = c.source WHERE c.cell = ? AND a.indexed = 1 ORDER BY c.source',
+      [cell],
+    );
+    final sources = <String>[], versions = <String>[];
+    final digests = <String>{};
+    for (final row in rows) {
+      versions.add(row['source'] as String);
+      if (!digests.add(row['digest'] as String)) continue;
+      final b = StringBuffer();
+      for (
+        var start = 1;
+        start <= (row['n'] as int);
+        start += _mapChunkCharacters
+      ) {
+        final part = await db.rawQuery(
+          'SELECT substr(geojson,?,?) AS chunk FROM map_cell WHERE cell = ? AND source = ?',
+          [start, _mapChunkCharacters, cell, row['source']],
+        );
+        b.write(part.single['chunk']);
+      }
+      sources.add(b.toString());
+    }
+    return sources.isEmpty
+        ? null
+        : compute(_mergeCell, (cell, sources, versions));
+  }
 }
+
+String _mergeCell((String, List<String>, List<String>) value) =>
+    mergeCellSources(value.$1, value.$2, value.$3);
+
+String _sourceBounds(String source) =>
+    jsonEncode((jsonDecode(source) as Map)['bbox']);

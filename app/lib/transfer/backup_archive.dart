@@ -172,7 +172,7 @@ class BackupArchive {
 
     final walks = <SavedWalk>[], memories = <WalkMemory>[], maps = <String>[];
     final photos = <String, File>{};
-    final walkFiles = <File>[];
+    final walkFiles = <File>[], mapFiles = <File>[];
     final uids = <String>{}, memoryIds = <String>{}, versions = <String>{};
     WalkPreferences? preferences;
     String? activeMap;
@@ -228,6 +228,7 @@ class BackupArchive {
             ),
             photos,
             walkFiles,
+            mapFiles,
           );
         }
         switch (kind) {
@@ -249,15 +250,17 @@ class BackupArchive {
             }
             activeMap = data['activeMap'] as String?;
           case 'map':
-            if (maps.length >= 8 || length > 16 * 1024 * 1024) {
-              throw const FormatException('Too many or oversized maps.');
+            if (length > 16 * 1024 * 1024) {
+              throw const FormatException('Oversized map.');
             }
             final source = utf8.decode(bytes);
             final map = AreaNetwork.parse(source);
             if (!versions.add(map.version)) {
               throw const FormatException('Repeated map.');
             }
-            maps.add(source);
+            final mapFile = File('${directory.path}/map-${mapFiles.length}');
+            await mapFile.writeAsBytes(bytes, flush: true);
+            mapFiles.add(mapFile);
           case 'walk':
             final walk = WalkCodec.importBackup(utf8.decode(bytes)).single;
             if (!uids.add(walk.uid) || walks.length >= 100000) {
@@ -318,7 +321,19 @@ class BackupArchive {
 }
 
 class StagedBackup {
-  StagedBackup(this.metadata, this.photos, this.walkFiles);
+  StagedBackup(
+    this.metadata,
+    this.photos,
+    this.walkFiles, [
+    this.mapFiles = const [],
+  ]);
+  final List<File> mapFiles;
+  Stream<String> maps() async* {
+    for (final f in mapFiles) {
+      yield await f.readAsString();
+    }
+  }
+
   final List<File> walkFiles;
   Stream<SavedWalk> walks() async* {
     for (final file in walkFiles) {

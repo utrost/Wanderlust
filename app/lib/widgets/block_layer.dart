@@ -89,7 +89,7 @@ class BlockLayer {
         final recorder = PictureRecorder();
         Canvas(recorder).drawPath(
           fillPath,
-          Paint()..color = const Color(0xff6f9874).withValues(alpha: .27),
+          Paint()..color = const Color(0xffcf7777).withValues(alpha: .27),
         );
         tile.picture?.dispose();
         tile.picture = recorder.endRecording();
@@ -97,7 +97,7 @@ class BlockLayer {
     }
     _filled = fill;
     final paint = Paint()
-      ..color = const Color(0xff6f9874).withValues(alpha: .27);
+      ..color = const Color(0xffcf7777).withValues(alpha: .27);
     final candidates = visible == null
         ? _byBlock.values.toSet()
         : _index.query(visible);
@@ -105,7 +105,7 @@ class BlockLayer {
       if (tile.picture != null) canvas.drawPicture(tile.picture!);
     }
     if (fading.isNotEmpty) {
-      paint.color = const Color(0xff6f9874).withValues(alpha: .27 * alpha);
+      paint.color = const Color(0xffcf7777).withValues(alpha: .27 * alpha);
       for (final id in fading) {
         final path = _paths[id];
         if (path != null &&
@@ -120,7 +120,7 @@ class BlockLayer {
       canvas.drawPath(
         selectedPath,
         Paint()
-          ..color = const Color(0xff5b7561)
+          ..color = const Color(0xff995555)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2 / zoom,
       );

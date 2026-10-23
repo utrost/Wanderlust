@@ -1,3 +1,7 @@
+import '../maps/library_analysis.dart';
+import '../blocks/block_store.dart';
+import 'dart:ui';
+import '../maps/active_maps.dart';
 import '../blocks/block_controller.dart';
 import '../recording/activity_type.dart';
 import '../exploration/exploration.dart';
@@ -50,26 +54,66 @@ class WalkingSession extends ChangeNotifier {
       showElapsed: () => preferences.showTime,
       loadHistory: () => history.listSummaries(recover: true),
     );
+    if (maps is SpatialAreaStore) activeMaps = ActiveMaps(maps);
     coverage = CoverageController(
       store: coverageStore,
       loadWalk: history.loadWalk,
-      loadSavedNetworks: () async => [
-        for (final area in await maps.listAreas())
-          if (await maps.readArea(area.version) case final source?) source,
-      ],
+      loadActiveNetworks: activeMaps == null
+          ? null
+          : () async {
+              await activeMaps!.initialize();
+              return activeMaps!.networks;
+            },
+      loadSavedNetworks: activeMaps != null
+          ? null
+          : () async => [
+              for (final area in await maps.listAreas())
+                if (await maps.readArea(area.version) case final source?)
+                  source,
+            ],
       loadNetwork: () async {
+        if (activeMaps case final active?) {
+          await active.initialize();
+          return active.anchor;
+        }
         final selected = await maps.readActiveArea();
         if (selected != null) return selected;
         final saved = await maps.listAreas();
         return saved.isEmpty ? null : maps.readArea(saved.first.version);
       },
     );
-    blocks = BlockController(coverage);
+    activeMaps?.addListener(_activeChanged);
+    blocks = BlockController(
+      coverage,
+      cache: coverageStore is BlockCacheStore
+          ? coverageStore as BlockCacheStore
+          : null,
+    );
     blocks.addListener(notifyListeners);
+    if (activeMaps != null && coverageStore is BlockCacheStore) {
+      libraryAnalysis = LibraryAnalysis(
+        active: activeMaps!,
+        store: coverageStore,
+        cache: coverageStore as BlockCacheStore,
+        loadWalk: history.loadWalk,
+        walks: () => recorder.savedWalks,
+        preferences: () => preferences,
+        canRun: () =>
+            !_closed &&
+            _foreground &&
+            !recorder.isRecording &&
+            !recorder.isBusy &&
+            !coverage.busy &&
+            coverage.initialized,
+        onUpdated: () => blocks.refreshTotal(),
+      );
+    }
+
     automaticMaps = AutomaticMaps(
       store: maps,
       networks: () => coverage.networks,
       onSaved: () async {
+        await activeMaps?.refresh();
         await coverage.refreshMaps();
         await coverage.synchronize(recorder.savedWalks);
       },
@@ -106,15 +150,23 @@ class WalkingSession extends ChangeNotifier {
     _foreground = visible;
     coverage.setPreviewActive(visible);
     recorder.setForeground(visible);
+    if (visible) libraryAnalysis?.schedule();
   }
 
   void _recordingChanged() {
     if (_closed) return;
+    final position = recorder.latestPosition;
+    activeMaps?.position(
+      recorder.isRecording && position != null
+          ? Offset(position.longitude, position.latitude)
+          : null,
+    );
     if (recorder.isRecording) {
       unawaited(automaticMaps.consider(recorder.latestPosition));
     } else if (automaticMaps.busy) {
       automaticMaps.cancel();
     }
+    libraryAnalysis?.schedule();
     if (!_foreground) return;
     exploration.update(
       preferences.fogOfWar,
@@ -129,6 +181,44 @@ class WalkingSession extends ChangeNotifier {
     }
   }
 
+  void browseStarted() {
+    activeMaps?.gestureStarted();
+    blocks.setViewportBusy(true);
+  }
+
+  void viewportSettled(Rect bounds) {
+    activeMaps?.view(bounds);
+    blocks.setViewportBusy(false);
+    libraryAnalysis?.schedule();
+  }
+
+  LibraryAnalysis? libraryAnalysis;
+  ActiveMaps? activeMaps;
+  String _activeKey = '';
+  Timer? _activeRefreshTimer;
+  void _activeChanged() {
+    if (_closed) return;
+    libraryAnalysis?.schedule();
+    final active = activeMaps!;
+    final key =
+        '${active.anchor}/${active.networks.map((n) => n.version).join('|')}';
+    if (key != _activeKey) {
+      _activeKey = key;
+      _activeRefreshTimer?.cancel();
+      _activeRefreshTimer = Timer(const Duration(milliseconds: 200), () {
+        if (_closed) return;
+        unawaited(
+          coverage.refreshMaps().then((_) async {
+            if (_closed) return;
+            await coverage.synchronize(recorder.savedWalks);
+            libraryAnalysis?.schedule();
+          }),
+        );
+      });
+    }
+    notifyListeners();
+  }
+
   late final BlockController blocks;
   late final ExplorationController exploration;
   late final AutomaticMaps automaticMaps;
@@ -139,7 +229,10 @@ class WalkingSession extends ChangeNotifier {
   void dispose() {
     if (_closed) return;
     _closed = true;
+    _activeRefreshTimer?.cancel();
     recorder.removeListener(_recordingChanged);
+    activeMaps?.dispose();
+    libraryAnalysis?.dispose();
     exploration.dispose();
     blocks.dispose();
     _preferences.dispose();
@@ -148,6 +241,7 @@ class WalkingSession extends ChangeNotifier {
     unawaited(
       Future.wait([
         coverage.settled,
+        if (libraryAnalysis != null) libraryAnalysis!.settled,
         automaticMaps.settled,
         _preferences.settled,
       ]).whenComplete(recorder.dispose),

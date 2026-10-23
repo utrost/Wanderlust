@@ -24,11 +24,13 @@ List<PlacedMapLabel> layoutMapLabels(
   final candidates = <(String, Offset, bool, double, Offset)>[];
   final visibleLengths = <String, double>{};
   final seenEdges = <int>{};
+  var edgesHandled = false;
   for (final map in maps) {
     for (final p in map.places) {
       candidates.add((p.name, project(p.point), true, 0, Offset.zero));
     }
-    if (!streets) continue;
+    if (!streets || edgesHandled) continue;
+    edgesHandled = visibleEdges != null;
     for (final edge in visibleEdges ?? map.edges) {
       if (!seenEdges.add(edge.id)) continue;
       final name = edge.name?.trim();

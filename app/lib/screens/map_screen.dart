@@ -1,3 +1,4 @@
+import '../maps/area_store.dart';
 import '../blocks/block_geometry.dart';
 import '../blocks/block_progress.dart';
 import '../widgets/block_controls.dart';
@@ -181,7 +182,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool get _visible => _mapLocation.visible;
   int _areaRequest = 0;
   Timer? _gpsClock;
-  void _browseMap() => _mapLocation.browseMap();
+  void _browseMap() {
+    _mapLocation.browseMap();
+  }
+
   Future<void> _centerOnMe() => _mapLocation.centerOnMe();
   Future<void> _autoCenter() async {
     if (mounted && _visible && _coverage.network != null) {
@@ -204,9 +208,23 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           initialSizeKm: _preferences.mapSizeKm,
           onSizeChanged: (size) =>
               _session.savePreferences(_preferences.copyWith(mapSizeKm: size)),
-          activeVersion: _coverage.network?.version,
-          onMapsChanged: () => _coverage.refreshMaps(),
+          activeVersion: _coverage.network?.version.replaceFirst(
+            RegExp(r'^view/'),
+            '',
+          ),
+          onMapsChanged: () async {
+            await _session.activeMaps?.refresh();
+            await _coverage.refreshMaps();
+          },
           onSelect: (source, version) async {
+            if (_session.activeMaps case final active?) {
+              if (version == null) return false;
+              await active.select(version);
+              await _coverage.refreshMaps();
+              if (mounted) setState(() => _areaRequest++);
+              await _coverage.synchronize(_recorder.savedWalks);
+              return true;
+            }
             final ok = await _coverage.useNetwork(
               source,
               persistSelection: () => _store.selectArea(version),
@@ -318,6 +336,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       builder: (context, _) => _coverage.network == null
                           ? const Center(child: Text('Loading saved streets…'))
                           : AreaMap(
+                              onViewportSettled: _session.viewportSettled,
+                              savedFootprints: [
+                                for (final area
+                                    in _session.activeMaps?.library ??
+                                        <OfflineArea>[])
+                                  if (area.bounds case final bounds?) bounds,
+                              ],
                               blocks: _preferences.completeBlocks
                                   ? _session.blocks.blocks
                                   : const [],
@@ -361,7 +386,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                   isOldFix(_currentFix!, DateTime.now()),
                               centerRequest: _centerRequest,
                               areaRequest: _areaRequest,
-                              onInteractionStart: _browseMap,
+                              onInteractionStart: () {
+                                _browseMap();
+                                _session.browseStarted();
+                              },
                             ),
                     ),
                     SafeArea(
@@ -386,6 +414,30 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                 onPressed: () =>
                                     showBlockDetails(context, _session.blocks),
                               ),
+                            if (_session.activeMaps case final active?)
+                              if (active.indexing ||
+                                  active.limited ||
+                                  active.error != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: ActionChip(
+                                    avatar: Icon(
+                                      active.error != null
+                                          ? Icons.refresh
+                                          : Icons.map_outlined,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      active.error != null
+                                          ? 'Retry nearby maps'
+                                          : active.indexing
+                                          ? 'Preparing saved maps…'
+                                          : 'Zoom in for more streets',
+                                    ),
+                                    onPressed: () =>
+                                        unawaited(active.refresh()),
+                                  ),
+                                ),
                             RouteUpdateNotice(
                               coverage: _coverage,
                               onRetry: () => unawaited(
@@ -713,6 +765,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           onChanged: () async {
             await _recorder.refreshSavedWalks();
             await _loadPreferences();
+            await _session.activeMaps?.refresh();
             await _coverage.refreshMaps();
             await _loadMemories();
             await _coverage.synchronize(_recorder.savedWalks);

@@ -85,7 +85,7 @@ void main() {
   );
 
   test(
-    'map capacity failure rolls back walks, memories and settings together',
+    'restoration retains more than eight maps, walks, memories and settings',
     () async {
       await store.saveArea(networkJson(version: 'local'));
       await store.selectArea('local');
@@ -93,20 +93,17 @@ void main() {
       final memory = WalkMemory.create(
         walkUid: walk.uid,
       ).copyWith(note: 'Keep me', draft: false);
-      await expectLater(
-        store.mergeWalks(
-          [walk],
-          memories: [memory],
-          maps: [for (var i = 0; i < 8; i++) networkJson(version: 'import-$i')],
-          preferences: const WalkPreferences(mapSizeKm: 25),
-        ),
-        throwsFormatException,
+      await store.mergeWalks(
+        [walk],
+        memories: [memory],
+        maps: [for (var i = 0; i < 12; i++) networkJson(version: 'import-$i')],
+        preferences: const WalkPreferences(mapSizeKm: 25),
       );
-      expect(await store.listSaved(), isEmpty);
-      expect(await store.memories.list(), isEmpty);
-      expect(await store.listAreas(), hasLength(1));
+      expect(await store.listSaved(), hasLength(1));
+      expect(await store.memories.list(), hasLength(1));
+      expect(await store.listAreas(), hasLength(13));
       expect(await store.readActiveArea(), networkJson(version: 'local'));
-      expect((await store.readPreferences()).mapSizeKm, 4);
+      expect((await store.readPreferences()).mapSizeKm, 25);
     },
   );
 

@@ -1,3 +1,4 @@
+import 'package:wanderlust/maps/map_cells.dart';
 import 'package:wanderlust/blocks/block_geometry.dart';
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -68,8 +69,19 @@ void main() {
             ),
           ]),
     ];
+    final windowCache = MapGeometryCache();
+    final chunks = indexMapCells(map.geojson).toList();
+    final windows = [
+      for (final c in chunks)
+        AreaNetwork.parse(
+          mergeCellSources(c['cell'] as String, [c['geojson'] as String]),
+        ),
+    ];
+    final anchor = AreaNetwork.parse(
+      emptyMap(map.name, map.bbox, 'benchmark-view'),
+    );
     final completed = {for (final b in blocks) b.id};
-    int run({bool withBlocks = false}) {
+    int run({bool withBlocks = false, bool windowed = false}) {
       final watch = Stopwatch()..start();
       for (var i = 0; i < 25; i++) {
         final r = ui.PictureRecorder();
@@ -80,9 +92,10 @@ void main() {
         AreaMapPainter(
           blocks: withBlocks ? blocks : const [],
           completedBlocks: withBlocks ? completed : const {},
-          network: map,
+          network: windowed ? anchor : map,
+          networks: windowed ? windows : const [],
           counts: counts,
-          geometry: cache,
+          geometry: windowed ? windowCache : cache,
           transform: t,
         ).paint(canvas, size);
         r.endRecording().dispose();
@@ -93,18 +106,25 @@ void main() {
 
     run();
     run(withBlocks: true);
-    final baseline = <int>[], enabled = <int>[];
+    run(windowed: true);
+    final baseline = <int>[], enabled = <int>[], windowedTimes = <int>[];
     for (var i = 0; i < 7; i++) {
       baseline.add(run());
       enabled.add(run(withBlocks: true));
+      windowedTimes.add(run(windowed: true));
     }
     baseline.sort();
     enabled.sort();
+    windowedTimes.sort();
     final after = baseline[3], blocksTime = enabled[3];
     debugPrint(
       'BLOCK_PAN_BENCHMARK baseline_ms=$after blocks_ms=$blocksTime polygons=${blocks.length}',
     );
     expect(blocksTime, lessThanOrEqualTo(after * 1.2));
+    debugPrint(
+      'ACTIVE_MAP_PAN_BENCHMARK baseline_ms=$after windowed_ms=${windowedTimes[3]} cells=${windows.length}',
+    );
+    expect(windowedTimes[3], lessThanOrEqualTo(after * 1.2));
     debugPrint(
       'PAN_BENCHMARK edges=${map.edges.length} frames=25 indexed_ms=$after',
     );
@@ -113,5 +133,6 @@ void main() {
       lessThan(map.edges.length ~/ 10),
     );
     cache.dispose();
+    windowCache.dispose();
   });
 }

@@ -24,7 +24,7 @@ class AppDatabase {
       return await _factory.openDatabase(
         file,
         options: OpenDatabaseOptions(
-          version: 1,
+          version: 2,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
           },
@@ -41,6 +41,7 @@ class AppDatabase {
             await _createAreas(db);
             await _createPreferences(db);
             await MemoryStore.create(db);
+            await _createSpatial(db);
           },
           onOpen: (db) async {
             final identity = await db.rawQuery('PRAGMA application_id');
@@ -53,6 +54,14 @@ class AppDatabase {
           // The com.simiono identity starts a new schema lineage. No upgrade or
           // downgrade may silently open a database from another lineage.
           onUpgrade: (db, oldVersion, newVersion) async {
+            final identity = await db.rawQuery('PRAGMA application_id');
+            if (identity.single.values.single != applicationId) {
+              throw StateError('Unsupported database lineage');
+            }
+            if (oldVersion == 1 && newVersion == 2) {
+              await _createSpatial(db);
+              return;
+            }
             throw StateError('Unsupported database version: $oldVersion');
           },
         ),
@@ -61,6 +70,70 @@ class AppDatabase {
       _opening = null;
       rethrow;
     }
+  }
+
+  static Future<void> _createSpatial(DatabaseExecutor db) async {
+    await db.execute(
+      'CREATE TABLE topology_cache (key TEXT PRIMARY KEY, data TEXT NOT NULL, used INTEGER NOT NULL)',
+    );
+    await db.execute(
+      'CREATE TABLE analysis_stamp (cell TEXT PRIMARY KEY, stamp TEXT NOT NULL)',
+    );
+    await db.execute('ALTER TABLE offline_area ADD COLUMN bbox TEXT');
+    await db.execute(
+      'ALTER TABLE offline_area ADD COLUMN indexed INTEGER NOT NULL DEFAULT 0',
+    );
+    await db.execute(
+      'CREATE TABLE map_cell (source TEXT NOT NULL REFERENCES offline_area(version) ON DELETE CASCADE, cell TEXT NOT NULL, geojson TEXT NOT NULL, bytes INTEGER NOT NULL, sections INTEGER NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(source,cell))',
+    );
+    await db.execute('CREATE INDEX map_cell_lookup ON map_cell(cell)');
+    await db.execute(
+      'CREATE TABLE match_evidence (walk_id INTEGER NOT NULL REFERENCES recorded_walk(id) ON DELETE CASCADE, network TEXT NOT NULL, fingerprint TEXT NOT NULL, supported TEXT NOT NULL, estimated TEXT NOT NULL, unmatched TEXT NOT NULL, PRIMARY KEY(walk_id,network))',
+    );
+    await db.execute(
+      'CREATE TABLE walk_bounds (walk_id INTEGER PRIMARY KEY REFERENCES recorded_walk(id) ON DELETE CASCADE, fingerprint TEXT NOT NULL, bbox TEXT)',
+    );
+    await db.execute(
+      'CREATE TABLE block_cache (id TEXT PRIMARY KEY, owner TEXT NOT NULL, revision TEXT NOT NULL, geometry TEXT NOT NULL, complete INTEGER NOT NULL, history TEXT NOT NULL, dirty INTEGER NOT NULL DEFAULT 1, west REAL NOT NULL, south REAL NOT NULL, east REAL NOT NULL, north REAL NOT NULL)',
+    );
+    await db.execute(
+      'CREATE TABLE block_section (block TEXT NOT NULL REFERENCES block_cache(id) ON DELETE CASCADE, section INTEGER NOT NULL, PRIMARY KEY(block,section))',
+    );
+    await db.execute(
+      'CREATE INDEX block_section_lookup ON block_section(section)',
+    );
+    await db.execute(
+      'CREATE TABLE supported_section (walk_id INTEGER NOT NULL REFERENCES recorded_walk(id) ON DELETE CASCADE, network TEXT NOT NULL, section INTEGER NOT NULL, PRIMARY KEY(walk_id,network,section))',
+    );
+    await db.execute(
+      'CREATE INDEX supported_section_lookup ON supported_section(section)',
+    );
+    await db.execute(
+      'CREATE TABLE network_source (network TEXT NOT NULL, source TEXT NOT NULL REFERENCES offline_area(version) ON DELETE CASCADE, PRIMARY KEY(network,source))',
+    );
+    await db.execute(
+      'CREATE TABLE block_source (block TEXT NOT NULL REFERENCES block_cache(id) ON DELETE CASCADE, source TEXT NOT NULL REFERENCES offline_area(version) ON DELETE CASCADE, PRIMARY KEY(block,source))',
+    );
+    for (final event in ['INSERT', 'DELETE']) {
+      final row = event == 'INSERT' ? 'NEW' : 'OLD';
+      await db.execute(
+        'CREATE TRIGGER dirty_block_${event.toLowerCase()} AFTER $event ON supported_section BEGIN UPDATE block_cache SET dirty = 1 WHERE id IN (SELECT block FROM block_section WHERE section = $row.section); END',
+      );
+    }
+    await db.execute(
+      "CREATE TRIGGER changed_walk_evidence AFTER UPDATE OF fingerprint,trace_metadata ON recorded_walk WHEN (OLD.fingerprint IS NOT NULL AND OLD.fingerprint IS NOT NEW.fingerprint) OR json_extract(OLD.trace_metadata, '\$.confirmedSections') IS NOT json_extract(NEW.trace_metadata, '\$.confirmedSections') OR json_extract(OLD.trace_metadata, '\$.activity') IS NOT json_extract(NEW.trace_metadata, '\$.activity') BEGIN DELETE FROM supported_section WHERE walk_id = OLD.id; DELETE FROM match_evidence WHERE walk_id = OLD.id; END",
+    );
+    const invalidate =
+        "DELETE FROM supported_section WHERE network IN (SELECT network FROM network_source WHERE source = OLD.version); DELETE FROM match_evidence WHERE network IN (SELECT network FROM network_source WHERE source = OLD.version); DELETE FROM walk_match WHERE network_version IN (SELECT network FROM network_source WHERE source = OLD.version); DELETE FROM coverage_edge WHERE network_version IN (SELECT network FROM network_source WHERE source = OLD.version); DELETE FROM coverage_network WHERE version IN (SELECT network FROM network_source WHERE source = OLD.version); DELETE FROM block_cache WHERE id IN (SELECT block FROM block_source WHERE source = OLD.version); DELETE FROM network_source WHERE source = OLD.version;";
+    await db.execute(
+      'CREATE TRIGGER remove_map_derived BEFORE DELETE ON offline_area BEGIN $invalidate END',
+    );
+    await db.execute(
+      'CREATE TRIGGER refresh_map_derived BEFORE UPDATE OF geojson ON offline_area WHEN OLD.geojson != NEW.geojson BEGIN $invalidate DELETE FROM map_cell WHERE source = OLD.version; UPDATE offline_area SET indexed = 0 WHERE version = OLD.version; END',
+    );
+    await db.execute(
+      "CREATE TRIGGER added_map_geometry AFTER INSERT ON offline_area WHEN NEW.bbox IS NOT NULL BEGIN DELETE FROM block_cache WHERE west <= json_extract(NEW.bbox, '\$[2]') AND east >= json_extract(NEW.bbox, '\$[0]') AND south <= json_extract(NEW.bbox, '\$[3]') AND north >= json_extract(NEW.bbox, '\$[1]'); END",
+    );
   }
 
   static Future<void> _createPreferences(DatabaseExecutor db) => db.execute(

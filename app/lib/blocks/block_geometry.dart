@@ -7,7 +7,7 @@ import '../coverage/street_display.dart';
 import '../data/area_network.dart';
 import '../widgets/map_spatial_index.dart';
 
-const blockRevision = 'street-blocks-v1';
+const blockRevision = 'street-blocks-v2';
 
 class BlockBoundary {
   BlockBoundary(
@@ -74,6 +74,22 @@ bool _boundaryRoad(AreaEdge e) =>
     const {'', 'no'}.contains(e.bridge) &&
     const {'', 'no'}.contains(e.tunnel);
 
+// Public connectors can close a street perimeter, but cannot split its interior.
+// Sidewalks/crossings remain coverage equivalents, not separate boundaries.
+bool _connectorRoad(AreaEdge e) =>
+    const {'path', 'footway', 'cycleway', 'service'}.contains(e.highway) &&
+    !const {'sidewalk', 'crossing'}.contains(e.footway) &&
+    const {
+      '',
+      'yes',
+      'permissive',
+      'designated',
+      'destination',
+    }.contains(e.access) &&
+    const {'', '0'}.contains(e.layer) &&
+    const {'', 'no'}.contains(e.bridge) &&
+    const {'', 'no'}.contains(e.tunnel);
+
 double metres(Offset a, Offset b) =>
     math.sqrt(
       math.pow((a.dx - b.dx) * math.cos((a.dy + b.dy) * math.pi / 360), 2) +
@@ -91,16 +107,47 @@ double lineLength(List<Offset> points) {
 
 /// Runs on the worker isolate. Original node identities define connectivity;
 /// visual proximity alone can never create a junction.
-BlockTopology buildBlockTopology(List<AreaNetwork> networks) {
+BlockTopology buildBlockTopology(List<AreaNetwork> networks) =>
+    _buildBlockTopology(networks, includeConnectors: true);
+
+BlockTopology _buildBlockTopology(
+  List<AreaNetwork> networks, {
+  required bool includeConnectors,
+}) {
   final all = <int, AreaEdge>{};
   for (final n in networks) {
     for (final e in n.edges) {
       all.putIfAbsent(e.id, () => e);
     }
   }
+  // Existing street enclosures take precedence over paths inside them. New
+  // connecting corridors can close otherwise open street boundaries.
+  final existing = includeConnectors
+      ? _buildBlockTopology(networks, includeConnectors: false).blocks
+      : <StreetBlock>[];
+  final existingIndex = MapSpatialIndex<StreetBlock>(cellSize: .001);
+  for (final block in existing) {
+    existingIndex.add(block, block.bounds);
+  }
+  bool internal(AreaEdge e) {
+    for (var i = 1; i < e.points.length; i++) {
+      final midpoint = (e.points[i - 1] + e.points[i]) / 2;
+      for (final block in existingIndex.query(
+        Rect.fromCircle(center: midpoint, radius: 1e-10),
+      )) {
+        if (_containsPoint(block.points, midpoint)) return true;
+      }
+    }
+    return false;
+  }
+
   var needsRefresh = false;
   final roads = <int, AreaEdge>{};
-  for (final e in all.values.where(_boundaryRoad)) {
+  for (final e in all.values.where(
+    (e) =>
+        _boundaryRoad(e) ||
+        (includeConnectors && _connectorRoad(e) && !internal(e)),
+  )) {
     if (e.fromNode == null || e.toNode == null || e.wayId == null) {
       needsRefresh = true;
       continue;
@@ -244,7 +291,8 @@ BlockTopology buildBlockTopology(List<AreaNetwork> networks) {
       if (reverse < 0 || next.isEmpty) break;
       current = next[(reverse - 1 + next.length) % next.length];
     }
-    if (ring.any((d) => ambiguous.contains(d.$1)) ||
+    if (!ring.any((d) => _boundaryRoad(roads[d.$1]!)) ||
+        ring.any((d) => ambiguous.contains(d.$1)) ||
         current != start ||
         ring.length < 2 ||
         ring.map(from).toSet().length != ring.length) {
@@ -371,13 +419,7 @@ bool _insideUnion(List<Offset> polygon, List<AreaNetwork> maps) {
     var uncovered = [
       Rect.fromLTRB(r.left - dx, r.top - dy, r.right + dx, r.bottom + dy),
     ];
-    for (final map in maps) {
-      final box = Rect.fromLTRB(
-        map.bbox[0],
-        map.bbox[1],
-        map.bbox[2],
-        map.bbox[3],
-      );
+    for (final box in maps.expand((m) => m.coveredFootprints)) {
       uncovered = [for (final part in uncovered) ..._subtract(part, box)];
       if (uncovered.isEmpty) break;
     }
@@ -460,4 +502,57 @@ bool _containsPoint(List<Offset> poly, Offset p) {
     }
   }
   return inside;
+}
+
+String topologyCacheKey(List<AreaNetwork> maps) {
+  final versions = maps.map((m) => m.version).toList()..sort();
+  return '$blockRevision/${sha256.convert(utf8.encode(versions.join('|')))}';
+}
+
+Map<String, Object?> encodeStreetBlock(StreetBlock b) => {
+  'id': b.id,
+  'boundary': [
+    for (final e in b.boundary)
+      {
+        'points': [
+          for (final p in e.points) [p.dx, p.dy],
+        ],
+        'length': e.length,
+        'evidence': {
+          for (final v in e.evidence.entries)
+            '${v.key}': [
+              for (final r in v.value) [r.$1, r.$2],
+            ],
+        },
+      },
+  ],
+};
+StreetBlock decodeStreetBlock(Map<String, dynamic> j) =>
+    StreetBlock(j['id'] as String, [
+      for (final e in j['boundary'] as List)
+        BlockBoundary(
+          [
+            for (final p in e['points'] as List)
+              Offset((p[0] as num).toDouble(), (p[1] as num).toDouble()),
+          ],
+          (e['length'] as num).toDouble(),
+          {
+            for (final v in (e['evidence'] as Map).entries)
+              int.parse(v.key as String): [
+                for (final r in v.value as List)
+                  ((r[0] as num).toDouble(), (r[1] as num).toDouble()),
+              ],
+          },
+        ),
+    ]);
+String encodeBlockTopology(BlockTopology t) => jsonEncode({
+  'refresh': t.needsRefresh,
+  'blocks': [for (final b in t.blocks) encodeStreetBlock(b)],
+});
+BlockTopology decodeBlockTopology(String source) {
+  final j = jsonDecode(source) as Map<String, dynamic>;
+  return BlockTopology([
+    for (final b in j['blocks'] as List)
+      decodeStreetBlock((b as Map).cast<String, dynamic>()),
+  ], needsRefresh: j['refresh'] as bool);
 }

@@ -206,7 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SwitchListTile(
           title: const Text('Download maps as I walk'),
           subtitle: const Text(
-            'Within 500 m of uncovered terrain, save a 2 × 2 km map automatically. Uses mobile data or Wi-Fi and sends the surrounding area to OpenStreetMap’s Overpass service. Stops when eight maps are saved.',
+            'Within 500 m of uncovered terrain, save a 2 × 2 km map automatically. Uses mobile data or Wi-Fi and sends the surrounding area to OpenStreetMap’s Overpass service. Saved maps stay offline; nearby areas load automatically.',
           ),
           value: value.autoDownloadMaps,
           onChanged: busy

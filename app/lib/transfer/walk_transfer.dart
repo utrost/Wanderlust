@@ -130,13 +130,14 @@ class WalkTransfer {
       progress.check();
       if (memory.photo != null) await _checkPhoto(memory.photo!);
     }
-    var options = RestoreOptions(maps: bundle.maps.isNotEmpty);
-    if (backup && (bundle.maps.isNotEmpty || bundle.preferences != null)) {
+    final mapCount = staged?.mapFiles.length ?? bundle.maps.length;
+    var options = RestoreOptions(maps: mapCount > 0);
+    if (backup && (mapCount > 0 || bundle.preferences != null)) {
       final selected = await choose(
         RestoreSummary(
           walks: bundle.walks.length,
           memories: bundle.memories.length,
-          maps: bundle.maps.length,
+          maps: mapCount,
           hasSettings: bundle.preferences != null,
         ),
       );
@@ -152,6 +153,7 @@ class WalkTransfer {
       memories: staged == null ? bundle.memories : const [],
       memoryStream: staged?.memories(),
       walkStream: staged?.walks(),
+      mapStream: options.maps ? staged?.maps() : null,
       maps: options.maps ? bundle.maps : const [],
       preferences: options.settings ? bundle.preferences : null,
       activeMap: options.maps ? bundle.activeMap : null,

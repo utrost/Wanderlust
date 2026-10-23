@@ -115,7 +115,7 @@ void main() {
     expect(store.maps, isEmpty);
     controller.dispose();
   });
-  test('eight maps pauses without evicting any user map', () async {
+  test('eight maps no longer prevents a ninth download', () async {
     final store = MemoryAreas();
     for (var i = 0; i < 8; i++) {
       store.maps['$i'] = area('$i', [8.799, 53.06, 8.82, 53.08]);
@@ -127,14 +127,14 @@ void main() {
       networks: () => [AreaNetwork.parse(store.maps.values.first)],
       fetch: (_) async {
         calls++;
-        throw StateError('unexpected');
+        return area('new', NearbyArea.around(53.07, 8.8, sizeKm: 2).bbox);
       },
       onSaved: () async {},
     );
     await controller.consider(fix(20));
-    expect(calls, 0);
-    expect(store.maps, hasLength(8));
-    expect(controller.message, contains('eight'));
+    expect(calls, 1);
+    expect(store.maps, hasLength(9));
+    expect(controller.message, isNull);
     controller.dispose();
   });
 }

@@ -248,7 +248,7 @@ void main() {
       try {
         for (var i = 0; i < 2; i++) {
           final id = await store.begin(fix(i).timestamp);
-          await store.append(id, 0, fix(i + 1));
+          await store.append(id, 0, Position.fromMap({...fix(i+1).toJson(),'latitude':53.02,'longitude':8.755}));
           await store.finish(id, fix(i + 2).timestamp, 'completed');
         }
         final walks = await store.listSaved();

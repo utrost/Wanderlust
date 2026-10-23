@@ -85,6 +85,78 @@ void main() {
     expect(two.blocks.single.boundary.length, 4);
     expect(blockProgress(one.blocks.single, {1, 2, 3, 4}).complete, true);
   });
+  test('public path and service chain closes a street perimeter', () {
+    final f = square()..removeAt(0);
+    f.addAll([
+      edge(10, 1, 5, [p(0, 0), p(50, 0)], highway: 'footway'),
+      edge(11, 5, 2, [p(50, 0), p(100, 0)], highway: 'service'),
+      edge(12, 5, 6, [p(50, 0), p(50, -30)], highway: 'path'),
+    ]);
+    final result = buildBlockTopology([network(f)]);
+    expect(result.blocks.length, 1);
+    expect(
+      blockProgress(result.blocks.single, {2, 3, 4, 10, 11}).complete,
+      true,
+    );
+    expect(blockProgress(result.blocks.single, {2, 3, 4}).complete, false);
+    expect(
+      buildBlockTopology([network(f.reversed.toList())]).blocks.single.id,
+      result.blocks.single.id,
+    );
+  });
+  test(
+    'connector-only loops and restricted or elevated connectors excluded',
+    () {
+      final paths = [
+        for (final e in square())
+          {
+            ...e,
+            'properties': {...(e['properties'] as Map), 'highway': 'path'},
+          },
+      ];
+      expect(buildBlockTopology([network(paths)]).blocks, isEmpty);
+      for (final extra in [
+        {'access': 'private'},
+        {'access': 'no'},
+        {'bridge': 'yes'},
+        {'layer': '1'},
+        {'footway': 'sidewalk'},
+      ]) {
+        final f = square();
+        f[0] = edge(
+          1,
+          1,
+          2,
+          [p(0, 0), p(100, 0)],
+          highway: 'footway',
+          extra: extra,
+        );
+        expect(buildBlockTopology([network(f)]).blocks, isEmpty);
+      }
+    },
+  );
+  test(
+    'local-access connector closes a perimeter without awarding a park loop',
+    () {
+      final f = square();
+      f[0] = edge(
+        1,
+        1,
+        2,
+        [p(0, 0), p(100, 0)],
+        highway: 'path',
+        extra: {'access': 'destination'},
+      );
+      f.addAll([
+        edge(5, 1, 5, [p(0, 0), p(0, -100)], highway: 'path'),
+        edge(6, 5, 6, [p(0, -100), p(100, -100)], highway: 'path'),
+        edge(7, 6, 2, [p(100, -100), p(100, 0)], highway: 'path'),
+      ]);
+      final blocks = buildBlockTopology([network(f)]).blocks;
+      expect(blocks.length, 1);
+      expect(blocks.single.perimeter, closeTo(400, .1));
+    },
+  );
   test('internal footpath does not subdivide; street does', () {
     final features = square()
       ..add(edge(5, 1, 3, [p(0, 0), p(100, 100)], highway: 'footway'));
