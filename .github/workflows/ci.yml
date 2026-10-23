@@ -55,6 +55,11 @@ jobs:
       - name: Read pinned toolchain
         run: sed '/^#/d; /^$/d' tools/toolchain.env >> "$GITHUB_ENV"
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}

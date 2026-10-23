@@ -1,3 +1,8 @@
+import 'dart:ui';
+import '../maps/map_cells.dart';
+import '../blocks/block_store.dart';
+import '../blocks/block_geometry.dart';
+import '../blocks/block_progress.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -38,12 +43,62 @@ class SqliteWalkStore
         WalkHistory,
         GapReviewStore,
         CoverageStore,
-        AreaStore,
+        SpatialAreaStore,
+        PersistentCoverageStore,
+        BlockCacheStore,
         PreferencesStore,
         WalkImporter {
   SqliteWalkStore({DatabaseFactory? factory, String? databasePath})
     : database = AppDatabase(factory: factory, databasePath: databasePath);
   final AppDatabase database;
+  @override
+  Future<String?> selectedVersion() => mapsRepository.selectedVersion();
+  @override
+  Future<bool> indexNext(Offset? focus) => mapsRepository.indexNext(focus);
+  @override
+  Future<List<CellSource>> listCells() => mapsRepository.listCells();
+  @override
+  Future<String?> readCell(String cell) => mapsRepository.readCell(cell);
+  @override
+  Future<void> syncEvidenceFingerprints(Map<int, String> expected) =>
+      coverageRepository.syncEvidenceFingerprints(expected);
+  @override
+  Future<StoredMatch?> readEvidence(int walk, String network) =>
+      coverageRepository.readEvidence(walk, network);
+  @override
+  Future<void> writeEvidence(int walk, String network, StoredMatch result) =>
+      coverageRepository.writeEvidence(walk, network, result);
+  @override
+  Future<List<double>?> readWalkBounds(int walk, String fingerprint) =>
+      coverageRepository.readWalkBounds(walk, fingerprint);
+  @override
+  Future<void> writeWalkBounds(
+    int walk,
+    String fingerprint,
+    List<double> bounds,
+  ) => coverageRepository.writeWalkBounds(walk, fingerprint, bounds);
+  @override
+  Future<BlockTopology?> readTopology(String key) =>
+      coverageRepository.readTopology(key);
+  @override
+  Future<void> writeTopology(String key, BlockTopology topology) =>
+      coverageRepository.writeTopology(key, topology);
+  @override
+  Future<Map<String, String>> analysisStamps() =>
+      coverageRepository.analysisStamps();
+  @override
+  Future<void> saveAnalysisStamp(String cell, String stamp) =>
+      coverageRepository.saveAnalysisStamp(cell, stamp);
+  @override
+  Future<int> completedCount() => coverageRepository.completedCount();
+  @override
+  Future<void> saveBlocks(
+    List<StreetBlock> blocks,
+    Map<String, BlockProgress> progress,
+    List<String> sources,
+  ) => coverageRepository.saveBlocks(blocks, progress, sources);
+  @override
+  Future<void> reconcileBlocks() => coverageRepository.reconcileBlocks();
   @override
   Future<String> get recordingDatabasePath async =>
       (await database.database).path;
@@ -141,6 +196,7 @@ class SqliteWalkStore
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,
+    Stream<String>? mapStream,
     List<String> maps = const [],
     WalkPreferences? preferences,
     String? activeMap,
@@ -150,6 +206,7 @@ class SqliteWalkStore
     memories: memories,
     memoryStream: memoryStream,
     walkStream: walkStream,
+    mapStream: mapStream,
     maps: maps,
     preferences: preferences,
     activeMap: activeMap,

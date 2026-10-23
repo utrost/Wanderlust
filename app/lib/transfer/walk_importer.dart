@@ -10,6 +10,7 @@ abstract interface class WalkImporter {
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,
+    Stream<String>? mapStream,
     List<String> maps = const [],
     WalkPreferences? preferences,
     String? activeMap,

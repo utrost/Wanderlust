@@ -26,6 +26,7 @@ class BackupImporter implements WalkImporter {
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,
+    Stream<String>? mapStream,
     List<String> maps = const [],
     WalkPreferences? preferences,
     String? activeMap,
@@ -120,14 +121,8 @@ class BackupImporter implements WalkImporter {
         }
       }
       // Maps, settings, walks and memories commit together or not at all.
-      for (final source in maps) {
-        try {
-          await OfflineMapRepository.writeTo(txn, source, keepExisting: true);
-        } on OfflineMapCapacityException {
-          throw const FormatException(
-            'Restore would exceed eight maps. Restore without maps or remove an unused map first.',
-          );
-        }
+      await for (final source in mapStream ?? Stream.fromIterable(maps)) {
+        await OfflineMapRepository.writeTo(txn, source, keepExisting: true);
       }
       if (activeMap != null) {
         await txn.rawUpdate(

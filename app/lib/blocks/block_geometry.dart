@@ -419,13 +419,7 @@ bool _insideUnion(List<Offset> polygon, List<AreaNetwork> maps) {
     var uncovered = [
       Rect.fromLTRB(r.left - dx, r.top - dy, r.right + dx, r.bottom + dy),
     ];
-    for (final map in maps) {
-      final box = Rect.fromLTRB(
-        map.bbox[0],
-        map.bbox[1],
-        map.bbox[2],
-        map.bbox[3],
-      );
+    for (final box in maps.expand((m) => m.coveredFootprints)) {
       uncovered = [for (final part in uncovered) ..._subtract(part, box)];
       if (uncovered.isEmpty) break;
     }
@@ -508,4 +502,57 @@ bool _containsPoint(List<Offset> poly, Offset p) {
     }
   }
   return inside;
+}
+
+String topologyCacheKey(List<AreaNetwork> maps) {
+  final versions = maps.map((m) => m.version).toList()..sort();
+  return '$blockRevision/${sha256.convert(utf8.encode(versions.join('|')))}';
+}
+
+Map<String, Object?> encodeStreetBlock(StreetBlock b) => {
+  'id': b.id,
+  'boundary': [
+    for (final e in b.boundary)
+      {
+        'points': [
+          for (final p in e.points) [p.dx, p.dy],
+        ],
+        'length': e.length,
+        'evidence': {
+          for (final v in e.evidence.entries)
+            '${v.key}': [
+              for (final r in v.value) [r.$1, r.$2],
+            ],
+        },
+      },
+  ],
+};
+StreetBlock decodeStreetBlock(Map<String, dynamic> j) =>
+    StreetBlock(j['id'] as String, [
+      for (final e in j['boundary'] as List)
+        BlockBoundary(
+          [
+            for (final p in e['points'] as List)
+              Offset((p[0] as num).toDouble(), (p[1] as num).toDouble()),
+          ],
+          (e['length'] as num).toDouble(),
+          {
+            for (final v in (e['evidence'] as Map).entries)
+              int.parse(v.key as String): [
+                for (final r in v.value as List)
+                  ((r[0] as num).toDouble(), (r[1] as num).toDouble()),
+              ],
+          },
+        ),
+    ]);
+String encodeBlockTopology(BlockTopology t) => jsonEncode({
+  'refresh': t.needsRefresh,
+  'blocks': [for (final b in t.blocks) encodeStreetBlock(b)],
+});
+BlockTopology decodeBlockTopology(String source) {
+  final j = jsonDecode(source) as Map<String, dynamic>;
+  return BlockTopology([
+    for (final b in j['blocks'] as List)
+      decodeStreetBlock((b as Map).cast<String, dynamic>()),
+  ], needsRefresh: j['refresh'] as bool);
 }

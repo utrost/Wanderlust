@@ -1,3 +1,5 @@
+import '../maps/area_store.dart';
+import '../maps/active_maps.dart';
 import 'package:flutter/material.dart';
 
 import '../data/area_network.dart';
@@ -159,14 +161,6 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
     if (result == null) return;
     await _load();
     if (result.preferences != null) _restoredPreferences = result.preferences;
-    if (result.restoredMaps) {
-      _networks = [
-        for (final area in await _transfer.data.maps.listAreas())
-          if (await _transfer.data.maps.readArea(area.version)
-              case final source?)
-            AreaNetwork.parse(source),
-      ];
-    }
     await widget.onChanged();
     _message =
         '${result.added} walk${result.added == 1 ? '' : 's'} added; ${result.existing} already saved. '
@@ -186,6 +180,28 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
 
   Future<void> _review(SavedWalk summary) async {
     final walk = await _transfer.data.history.loadWalk(summary.id);
+    if (_transfer.data.maps case final SpatialAreaStore spatial) {
+      if (walk.points.isNotEmpty) {
+        var bounds = Rect.fromLTWH(
+          walk.points.first.longitude,
+          walk.points.first.latitude,
+          0,
+          0,
+        );
+        for (final p in walk.points) {
+          bounds = bounds.expandToInclude(
+            Rect.fromLTWH(p.longitude, p.latitude, 0, 0),
+          );
+        }
+        final window = ActiveMaps(spatial)..browsing = bounds.inflate(.002);
+        try {
+          await window.refresh();
+          _networks = List.of(window.networks);
+        } finally {
+          window.dispose();
+        }
+      }
+    }
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(

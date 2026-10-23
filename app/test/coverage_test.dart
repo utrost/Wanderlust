@@ -96,7 +96,7 @@ void main() {
         await controller.settled;
         controller = create();
         await controller.synchronize(walks);
-        expect(calls, 2);
+        expect(calls, 1);
         expect(controller.unmatchedTrails.single, hasLength(2));
         expect(controller.counts, {1: 1});
         await controller.synchronize([]);
@@ -294,7 +294,7 @@ void main() {
       await controller.settled;
       final failed = CoverageController(
         store: store,
-        loadNetwork: () async => networkJson(),
+        loadNetwork: () async => networkJson(version: 'changed'),
         match: (_, _) async => throw StateError('test failure'),
       );
       await failed.synchronize(saved);

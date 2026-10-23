@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../blocks/block_geometry.dart';
 import 'block_layer.dart';
 import 'dart:math' as math;
@@ -77,6 +78,8 @@ class AreaMap extends StatefulWidget {
     this.fitCoordinates = const [],
     this.onInteractionStart,
     this.onMapTap,
+    this.onViewportSettled,
+    this.savedFootprints = const [],
   });
   final List<AreaNetwork> networks;
   final double walkedLineWidth;
@@ -102,6 +105,8 @@ class AreaMap extends StatefulWidget {
   final List<Offset> fitCoordinates;
   final VoidCallback? onInteractionStart;
   final ValueChanged<Offset>? onMapTap;
+  final ValueChanged<Rect>? onViewportSettled;
+  final List<Rect> savedFootprints;
 
   @override
   State<AreaMap> createState() => _AreaMapState();
@@ -119,10 +124,37 @@ class _AreaMapState extends State<AreaMap> with SingleTickerProviderStateMixin {
   Size? _size;
   bool _pendingCenter = false;
   bool _pendingFit = true;
+  bool _waitForSettle = false;
+  Timer? _settleTimer;
+  void _cameraMoved() {
+    if (!_waitForSettle) return;
+    _settleTimer?.cancel();
+    _settleTimer = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted) return;
+      _waitForSettle = false;
+      _reportViewport();
+    });
+  }
+
+  void _reportViewport() {
+    if (_size == null) return;
+    final a = mapCoordinate(
+      widget.network,
+      _transform.toScene(Offset.zero),
+      _size!,
+    );
+    final b = mapCoordinate(
+      widget.network,
+      _transform.toScene(Offset(_size!.width, _size!.height)),
+      _size!,
+    );
+    widget.onViewportSettled?.call(Rect.fromPoints(a, b));
+  }
 
   @override
   void initState() {
     super.initState();
+    _transform.addListener(_cameraMoved);
     _pendingCenter = widget.centerRequest > 0;
   }
 
@@ -169,10 +201,13 @@ class _AreaMapState extends State<AreaMap> with SingleTickerProviderStateMixin {
         0,
       );
     _pendingCenter = false;
+    _reportViewport();
   }
 
   @override
   void dispose() {
+    _settleTimer?.cancel();
+    _transform.removeListener(_cameraMoved);
     _fade.dispose();
     _transform.dispose();
     _geometry.dispose();
@@ -205,6 +240,7 @@ class _AreaMapState extends State<AreaMap> with SingleTickerProviderStateMixin {
               0,
             );
           _pendingFit = false;
+          _reportViewport();
         });
       }
       if (_pendingCenter) {
@@ -235,7 +271,13 @@ class _AreaMapState extends State<AreaMap> with SingleTickerProviderStateMixin {
               boundaryMargin: const EdgeInsets.all(double.infinity),
               minScale: 1,
               maxScale: 12 * mapZoomFactor(widget.network),
+              onInteractionEnd: (_) {
+                _waitForSettle = true;
+                _cameraMoved();
+              },
               onInteractionStart: (_) {
+                _waitForSettle = false;
+                _settleTimer?.cancel();
                 _pendingCenter = false;
                 widget.onInteractionStart?.call();
               },
@@ -271,6 +313,19 @@ class _AreaMapState extends State<AreaMap> with SingleTickerProviderStateMixin {
               ),
             ),
           ),
+          if (widget.savedFootprints.isNotEmpty)
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _transform,
+                builder: (context, _) => CustomPaint(
+                  painter: _LibraryOutlinePainter(
+                    widget.network,
+                    widget.savedFootprints,
+                    _transform.value,
+                  ),
+                ),
+              ),
+            ),
           if (widget.onMemory != null && widget.memories.isNotEmpty)
             AnimatedBuilder(
               animation: _transform,
@@ -378,6 +433,7 @@ class MapGeometryCache {
   final fog = ExplorationFog();
   final blocks = BlockLayer();
   MapSpatialIndex<AreaEdge> edgeIndex = MapSpatialIndex();
+  MapSpatialIndex<AreaNetwork> mapIndex = MapSpatialIndex();
   List<AreaEdge> edges = const [];
   final sceneryIndex = <AreaNetwork, MapSpatialIndex<MapScenery>>{};
   void dispose() {
@@ -406,7 +462,15 @@ class MapGeometryCache {
       edges = unique.values.toList(growable: false);
       edgeIndex = MapSpatialIndex();
       sceneryIndex.clear();
+      mapIndex = MapSpatialIndex();
       for (final map in {network, ...networks}) {
+        mapIndex.add(
+          map,
+          Rect.fromPoints(
+            network.project(Offset(map.bbox[0], map.bbox[1]), size),
+            network.project(Offset(map.bbox[2], map.bbox[3]), size),
+          ),
+        );
         final index = MapSpatialIndex<MapScenery>();
         for (final feature in map.scenery) {
           Rect? bounds;
@@ -497,9 +561,9 @@ class AreaMapPainter extends CustomPainter {
     if (transform != null) canvas.transform(transform!.storage);
     canvas.translate(12, 80);
     final zoom = transform?.getMaxScaleOnAxis() ?? 1.0;
-    final maps = {
-      for (final map in [network, ...networks]) map.version: map,
-    }.values;
+    final maps = visible == null
+        ? {network, ...networks}
+        : cache.mapIndex.query(visible);
     final visibleScenery = {
       for (final map in maps)
         map: visible == null
@@ -508,6 +572,7 @@ class AreaMapPainter extends CustomPainter {
     };
     for (final kind in ['park', 'water', 'waterway']) {
       for (final map in maps) {
+        if (visibleScenery[map]!.isEmpty) continue;
         canvas.save();
         final a = network.project(Offset(map.bbox[0], map.bbox[3]), mapSize);
         final b = network.project(Offset(map.bbox[2], map.bbox[1]), mapSize);
@@ -711,4 +776,35 @@ Path _edgePath(AreaEdge edge, AreaNetwork network, Size size) {
     }
   }
   return path;
+}
+
+class _LibraryOutlinePainter extends CustomPainter {
+  _LibraryOutlinePainter(this.network, this.bounds, this.transform);
+  final AreaNetwork network;
+  final List<Rect> bounds;
+  final Matrix4 transform;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final zoom = transform.getMaxScaleOnAxis();
+    if (mapSpanKm(network) / zoom < 10) return;
+    canvas.save();
+    canvas.transform(transform.storage);
+    final pen = Paint()
+      ..color = const Color(0xff997c66)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1 / zoom;
+    for (final b in bounds) {
+      canvas.drawRect(
+        Rect.fromPoints(
+          network.project(b.topLeft, size),
+          network.project(b.bottomRight, size),
+        ),
+        pen,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _LibraryOutlinePainter old) => true;
 }

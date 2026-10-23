@@ -7,31 +7,46 @@ typedef _Pair = (Offset, Offset);
 /// Derived display data, never street credit. Keeps only unmatched geometry,
 /// not whole saved recordings. Rebuilt after restart or map/policy changes.
 class UnmatchedTrails {
+  final _excluded = <(int, String)>{};
+  void exclude(int walk, String area) {
+    _excluded.add((walk, area));
+  }
+
   final _walks = <int, Map<String, Map<int, _Pair>>>{};
 
   bool contains(int walk, String area) =>
       _walks[walk]?.containsKey(area) ?? false;
 
   void put(SavedWalk walk, String area, List<int> unmatched) {
+    _excluded.remove((walk.id, area));
     if (unmatched.any((i) => i <= 0 || i >= walk.points.length)) {
       throw StateError('Matcher returned an invalid GPS trail index');
     }
     (_walks[walk.id] ??= {})[area] = _pairs(walk, unmatched.toSet());
   }
 
-  void clear() => _walks.clear();
+  void clear() {
+    _walks.clear();
+    _excluded.clear();
+  }
+
   void retain(Set<int> walks) =>
       _walks.removeWhere((id, _) => !walks.contains(id));
 
   List<List<Offset>> lines(List<String> areas) => [
-    if (areas.isNotEmpty)
-      for (final entry in _walks.values)
-        ..._lines({
-          for (final i in common(
-            areas.map((a) => entry[a]?.keys.toSet() ?? {}),
-          ))
-            i: entry[areas.first]![i]!,
-        }),
+    for (final entry in _walks.entries)
+      ...(() {
+        final relevant = areas
+            .where((a) => !_excluded.contains((entry.key, a)))
+            .toList();
+        if (relevant.isEmpty) return <List<Offset>>[];
+        final commonIndices = common(
+          relevant.map((a) => entry.value[a]?.keys.toSet() ?? {}),
+        );
+        return _lines({
+          for (final i in commonIndices) i: entry.value[relevant.first]![i]!,
+        });
+      })(),
   ];
 
   /// A pair matched in any downloaded map must not also appear as fallback.

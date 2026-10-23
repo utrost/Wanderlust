@@ -1,3 +1,5 @@
+import 'package:wanderlust/maps/map_cells.dart';
+import 'package:wanderlust/coverage/coverage_store.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -19,6 +21,20 @@ import 'nearby_maps_test.dart' show smallNetwork;
 import 'recording_test.dart' show fix, FakeLocation;
 
 class BootStore extends SqliteWalkStore {
+  @override
+  Future<String?> selectedVersion() async => selected;
+  @override
+  Future<bool> indexNext(Offset? focus) async => false;
+  @override
+  Future<List<CellSource>> listCells() async => [];
+  @override
+  Future<String?> readCell(String cell) async => null;
+  @override
+  Future<int> completedCount() async => 0;
+  @override
+  Future<void> syncEvidenceFingerprints(Map<int, String> expected) async {}
+  @override
+  Future<StoredMatch?> readEvidence(int walk, String network) async => null;
   final _memories = FakeMemoryStore();
   @override
   MemoryRepository get memories => _memories;

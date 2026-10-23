@@ -33,6 +33,11 @@ jobs:
           WANDERLUST_TEST_KEYSTORE: ${{ secrets.WANDERLUST_TEST_KEYSTORE }}
         run: python3 tools/install_test_signing.py --destination "$RUNNER_TEMP/wanderlust-test.keystore"
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}

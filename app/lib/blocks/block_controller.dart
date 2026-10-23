@@ -1,3 +1,4 @@
+import 'block_store.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
@@ -12,10 +13,22 @@ class BlockController extends ChangeNotifier {
   BlockController(
     this.coverage, {
     Future<BlockTopology> Function(List<AreaNetwork>)? build,
+    this.cache,
   }) : _build = build ?? ((maps) => compute(buildBlockTopology, maps)) {
     coverage.addListener(_changed);
+    if (cache != null) {
+      _persisting = cache!.completedCount().then((value) {
+        if (!_closed) {
+          _total = value;
+          notifyListeners();
+        }
+      });
+    }
   }
   final CoverageController coverage;
+  final BlockCacheStore? cache;
+  int? _total;
+  Future<void> _persisting = Future.value();
   final Future<BlockTopology> Function(List<AreaNetwork>) _build;
   bool enabled = false, busy = false, needsRefresh = false;
   String? error;
@@ -31,8 +44,22 @@ class BlockController extends ChangeNotifier {
   Future<void> _pending = Future.value();
   Set<String>? _cachedSources;
   BlockTopology? _cachedTopology;
-  Future<void> get settled => _pending;
-  int get completed => saved.values.where((p) => p.complete).length;
+  Future<void> get settled async {
+    await _pending;
+    await _persisting;
+  }
+
+  Future<void> refreshTotal() async {
+    if (cache == null || _closed) return;
+    await cache!.reconcileBlocks();
+    final count = await cache!.completedCount();
+    if (!_closed && count != _total) {
+      _total = count;
+      notifyListeners();
+    }
+  }
+
+  int get completed => _total ?? saved.values.where((p) => p.complete).length;
   Set<String> get completedIds => {
     for (final e in saved.entries)
       if (e.value.complete) e.key,
@@ -58,8 +85,20 @@ class BlockController extends ChangeNotifier {
     _changed();
   }
 
+  bool _viewportBusy = false;
+  void setViewportBusy(bool value) {
+    _viewportBusy = value;
+    if (!value) _changed();
+  }
+
   void _changed() {
-    if (!enabled || _closed || coverage.busy || coverage.error != null) return;
+    if (_viewportBusy ||
+        !enabled ||
+        _closed ||
+        coverage.busy ||
+        coverage.error != null) {
+      return;
+    }
     final maps = coverage.networks;
     if (!listEquals(_maps, maps)) {
       _maps = List.of(maps);
@@ -80,11 +119,17 @@ class BlockController extends ChangeNotifier {
 
   Future<void> _rebuild(List<AreaNetwork> maps, int epoch) async {
     try {
-      final sources = {for (final map in maps) map.geojson};
+      final sources = {for (final map in maps) map.version};
       final result =
           _cachedTopology != null && setEquals(sources, _cachedSources)
           ? _cachedTopology!
-          : await _build(maps);
+          : cache == null
+          ? await _build(maps)
+          : await cache!.readTopology(topologyCacheKey(maps)) ??
+                await _build(maps);
+      if (cache != null) {
+        await cache!.writeTopology(topologyCacheKey(maps), result);
+      }
       if (_closed || epoch != _epoch || !enabled) return;
       _cachedSources = sources;
       _cachedTopology = result;
@@ -115,6 +160,7 @@ class BlockController extends ChangeNotifier {
 
   void _updateProgress({bool force = false}) {
     final supported = coverage.supportedSections;
+    final savedChanged = force || !setEquals(supported, _supported);
     final preview = {...supported, ...coverage.liveSupportedSections};
     final changed = {
       ...supported.difference(_supported),
@@ -122,7 +168,10 @@ class BlockController extends ChangeNotifier {
       ...preview.difference(_liveSupported),
       ..._liveSupported.difference(preview),
     };
-    if (!force && changed.isEmpty) return;
+    if (!force && changed.isEmpty) {
+      if (cache != null) _persisting = _persisting.then((_) => refreshTotal());
+      return;
+    }
     final affected = force
         ? blocks.toSet()
         : {for (final id in changed) ...?_reverse[id]};
@@ -135,6 +184,26 @@ class BlockController extends ChangeNotifier {
     _supported = supported;
     _liveSupported = preview;
     saved = Map.unmodifiable(nextSaved);
+    if (cache != null && savedChanged) {
+      final snapshot = blocks, progress = saved;
+      final sources = {for (final m in _maps) ...m.sourceVersions}.toList();
+      _persisting = _persisting
+          .then((_) async {
+            await cache!.saveBlocks(snapshot, progress, sources);
+            await cache!.reconcileBlocks();
+            final count = await cache!.completedCount();
+            if (!_closed) {
+              _total = count;
+              notifyListeners();
+            }
+          })
+          .catchError((Object e) {
+            if (!_closed) {
+              error = 'Could not update saved block progress.';
+              notifyListeners();
+            }
+          });
+    }
     live = Map.unmodifiable(nextLive);
     notifyListeners();
   }

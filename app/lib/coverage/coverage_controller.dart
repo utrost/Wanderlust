@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/area_network.dart';
+import '../maps/map_cells.dart';
 import '../geo/coverage_resolution.dart';
 import '../geo/geo_core_ffi.dart';
 import '../geo/matching_session.dart';
@@ -48,6 +49,7 @@ class CoverageController extends ChangeNotifier {
     Future<String?> Function()? loadNetwork,
     MatchBatch? match,
     this.loadSavedNetworks,
+    this.loadActiveNetworks,
     this.loadWalk,
     this.liveInterval = const Duration(seconds: 2),
   }) : _store = store,
@@ -56,6 +58,7 @@ class CoverageController extends ChangeNotifier {
   final Future<SavedWalk> Function(int)? loadWalk;
   final Duration liveInterval;
   final Future<List<String>> Function()? loadSavedNetworks;
+  final Future<List<AreaNetwork>> Function()? loadActiveNetworks;
   SavedWalk? _liveWalk;
   Set<int> _liveEdges = {};
   Set<int> _liveEstimated = {};
@@ -137,7 +140,14 @@ class CoverageController extends ChangeNotifier {
           final edges = <int>{};
           final estimated = <int>{};
           final unmatchedByArea = <Set<int>>[];
+          final traceBounds = Rect.fromLTRB(
+            walk.points.map((p) => p.longitude).reduce((a, b) => a < b ? a : b),
+            walk.points.map((p) => p.latitude).reduce((a, b) => a < b ? a : b),
+            walk.points.map((p) => p.longitude).reduce((a, b) => a > b ? a : b),
+            walk.points.map((p) => p.latitude).reduce((a, b) => a > b ? a : b),
+          ).inflate(.001);
           for (final area in networks) {
+            if (!traceBounds.overlaps(geographicBounds(area.bbox))) continue;
             final result = await _runMatch(area.geojson, [gpx]);
             if (result.length != 1 ||
                 !area.edgeIds.containsAll(result.single.walked)) {
@@ -310,8 +320,12 @@ class CoverageController extends ChangeNotifier {
     AreaNetwork? selected,
   ) async {
     final maps = <String, AreaNetwork>{
-      if (selected != null) selected.version: selected,
+      if (selected != null && selected.edges.isNotEmpty)
+        selected.version: selected,
     };
+    for (final map in await loadActiveNetworks?.call() ?? <AreaNetwork>[]) {
+      if (map.edges.isNotEmpty) maps.putIfAbsent(map.version, () => map);
+    }
     for (final source in await loadSavedNetworks?.call() ?? <String>[]) {
       final map = AreaNetwork.parse(source);
       maps.putIfAbsent(map.version, () => map);
@@ -402,6 +416,11 @@ class CoverageController extends ChangeNotifier {
     })();
   }
 
+  String _fingerprint(SavedWalk walk) {
+    final traceHash = walk.fingerprint ?? _prepare(walk).$2;
+    return '$matchingRevision/${walk.activity.name}/${_fillSmallGaps ? 'fill-v1' : 'direct'}/${_autoFillGaps ? 'auto-gaps-v1' : 'manual-gaps'}/$traceHash/${walk.confirmedSections.join(',')}';
+  }
+
   Future<void> _synchronize(List<SavedWalk> walks) async {
     if (_disposed) return;
     busy = true;
@@ -415,17 +434,84 @@ class CoverageController extends ChangeNotifier {
         await initialize();
       }
       if (error != null) return;
+      if (_store case final PersistentCoverageStore cache) {
+        await cache.syncEvidenceFingerprints({
+          for (final w in walks)
+            if (w.status != 'recording') w.id: _fingerprint(w),
+        });
+      }
       for (final area in networks) {
         final pending = <(SavedWalk, String, String)>[];
         for (final walk in walks) {
           if (walk.status == 'recording') continue;
+          SavedWalk? loaded;
+          Future<SavedWalk> fullWalk() async =>
+              loaded ??= walk.isSummary ? await loadWalk!(walk.id) : walk;
           final traceHash = walk.fingerprint ?? _prepare(walk).$2;
-          final fingerprint =
-              '$matchingRevision/${walk.activity.name}/${_fillSmallGaps ? 'fill-v1' : 'direct'}/${_autoFillGaps ? 'auto-gaps-v1' : 'manual-gaps'}/$traceHash/${walk.confirmedSections.join(',')}';
+          final fingerprint = _fingerprint(walk);
+          if (_store case final PersistentCoverageStore cache) {
+            final cached = await cache.readEvidence(
+              walk.id,
+              area.coverageVersion,
+            );
+            if (cached?.fingerprint == fingerprint) {
+              if (await _store.matchFingerprint(
+                    walk.id,
+                    area.coverageVersion,
+                  ) !=
+                  fingerprint) {
+                await _store.replaceWalkMatch(
+                  walk.id,
+                  area.coverageVersion,
+                  fingerprint,
+                  {...cached!.supported, ...cached.estimated},
+                );
+              }
+              _evidence.put(
+                walk.id,
+                area.version,
+                cached!.supported,
+                cached.estimated,
+              );
+              if (!_trails.contains(walk.id, area.version)) {
+                final full = walk.isSummary && cached.unmatched.isNotEmpty
+                    ? await fullWalk()
+                    : walk;
+                _trails.put(full, area.version, cached.unmatched);
+              }
+              continue;
+            }
+            var bounds = await cache.readWalkBounds(walk.id, traceHash);
+            if (bounds == null) {
+              final full = await fullWalk();
+              if (full.points.isNotEmpty) {
+                var r = Rect.fromLTWH(
+                  full.points.first.longitude,
+                  full.points.first.latitude,
+                  0,
+                  0,
+                );
+                for (final p in full.points) {
+                  r = r.expandToInclude(
+                    Rect.fromLTWH(p.longitude, p.latitude, 0, 0),
+                  );
+                }
+                bounds = boundsList(r);
+                await cache.writeWalkBounds(walk.id, traceHash, bounds);
+              }
+            }
+            if (bounds != null &&
+                !geographicBounds(
+                  bounds,
+                ).inflate(.001).overlaps(geographicBounds(area.bbox))) {
+              _trails.exclude(walk.id, area.version);
+              continue;
+            }
+          }
           if (await _store.matchFingerprint(walk.id, area.coverageVersion) !=
                   fingerprint ||
               !_trails.contains(walk.id, area.version)) {
-            final full = walk.isSummary ? await loadWalk!(walk.id) : walk;
+            final full = await fullWalk();
             pending.add((full, _prepare(full).$1, fingerprint));
           }
         }
@@ -467,6 +553,18 @@ class CoverageController extends ChangeNotifier {
             results[i].inferred.toSet(),
           );
           _trails.put(nonempty[i].$1, area.version, results[i].unmatched);
+          if (_store case final PersistentCoverageStore cache) {
+            await cache.writeEvidence(
+              nonempty[i].$1.id,
+              area.coverageVersion,
+              StoredMatch(
+                nonempty[i].$3,
+                supported,
+                results[i].inferred.toSet(),
+                results[i].unmatched,
+              ),
+            );
+          }
         }
         for (final p in pending) {
           if (p.$1.points.isEmpty) {

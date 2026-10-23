@@ -6,6 +6,7 @@ import '../data/area_network.dart';
 import 'area_store.dart';
 import 'map_download.dart';
 import 'map_extent.dart';
+import 'map_cells.dart';
 
 /// Serial, bounded map extension driven by a user-started walk's GPS stream.
 /// Never deletes maps, changes the selected map, or requests location itself.
@@ -50,7 +51,7 @@ class AutomaticMaps extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> consider(Position? fix) {
+  Future<void> consider(Position? fix) async {
     final now = _clock();
     if (_disposed ||
         !_enabled ||
@@ -68,7 +69,25 @@ class AutomaticMaps extends ChangeNotifier {
         fix.longitude.abs() > 180) {
       return Future.value();
     }
-    final maps = networks();
+    final epochBeforeRead = _epoch;
+    final saved = await store.listAreas();
+    if (_disposed ||
+        !_enabled ||
+        busy ||
+        epochBeforeRead != _epoch ||
+        (_nextAttempt != null && _clock().isBefore(_nextAttempt!))) {
+      return;
+    }
+    // During a legacy backfill, unknown footprints must not cause duplicates.
+    if (store is SpatialAreaStore && saved.any((a) => a.bounds == null)) return;
+    final maps = [
+      for (final area in saved)
+        if (area.bounds case final bounds?)
+          AreaNetwork.parse(
+            emptyMap(area.name, boundsList(bounds), area.version),
+          ),
+    ];
+    if (maps.isEmpty) maps.addAll(networks());
     // The first map remains an explicit setup action.
     if (maps.isEmpty ||
         MapExtent(
@@ -87,13 +106,7 @@ class AutomaticMaps extends ChangeNotifier {
 
   Future<void> _run(Position fix, int epoch) async {
     try {
-      final saved = await store.listAreas();
       if (_disposed || epoch != _epoch) return;
-      if (saved.length >= 8) {
-        message = 'Automatic maps paused: remove an unused map (eight saved).';
-        _nextAttempt = _clock().add(const Duration(minutes: 5));
-        return;
-      }
       final source = await (_fetch ?? _download.fetch)(
         NearbyArea.around(fix.latitude, fix.longitude, sizeKm: 2),
       );

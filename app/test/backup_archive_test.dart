@@ -56,7 +56,7 @@ void main() {
         staged.metadata.walks,
         memoryStream: staged.memories(),
         walkStream: staged.walks(),
-        maps: staged.metadata.maps,
+        mapStream: staged.maps(),
       );
       expect((await target.memories.read(m.id, false))!.photo, [1, 2, 3]);
     } finally {
