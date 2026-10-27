@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:crypto/crypto.dart';
 import 'dart:ui';
 import '../blocks/block_store.dart';
 import '../blocks/block_geometry.dart';
@@ -12,7 +13,11 @@ import '../data/area_network.dart';
 import 'app_database.dart';
 
 class CoverageRepository
-    implements CoverageStore, PersistentCoverageStore, BlockCacheStore {
+    implements
+        CoverageStore,
+        PersistentCoverageStore,
+        BatchCoverageStore,
+        BlockCacheStore {
   CoverageRepository(this.connection);
   final AppDatabase connection;
   Future<Database> get _db => connection.database;
@@ -122,19 +127,84 @@ class CoverageRepository
   @override
   Future<void> syncEvidenceFingerprints(Map<int, String> expected) async {
     await (await _db).transaction((tx) async {
-      for (final e in expected.entries) {
-        await tx.rawDelete(
+      final rows = await tx.rawQuery(
+        'SELECT DISTINCT walk_id, fingerprint FROM match_evidence',
+      );
+      final invalid = {
+        for (final row in rows)
+          if (expected[row['walk_id']] != null &&
+              expected[row['walk_id']] != row['fingerprint'])
+            row['walk_id'] as int,
+      };
+      final batch = tx.batch();
+      for (final id in invalid) {
+        batch.rawDelete(
           'DELETE FROM supported_section WHERE walk_id = ? AND network IN (SELECT network FROM match_evidence WHERE walk_id = ? AND fingerprint != ?)',
-          [e.key, e.key, e.value],
+          [id, id, expected[id]],
         );
-        await tx.delete(
+        batch.delete(
           'match_evidence',
           where: 'walk_id = ? AND fingerprint != ?',
-          whereArgs: [e.key, e.value],
+          whereArgs: [id, expected[id]],
         );
       }
+      await batch.commit(noResult: true);
     });
   }
+
+  @override
+  Future<Map<int, List<double>>> readWalkBoundsBatch(
+    Map<int, String> traces,
+  ) async {
+    final rows = await (await _db).query('walk_bounds');
+    return {
+      for (final row in rows)
+        if (traces[row['walk_id']] == row['fingerprint'] && row['bbox'] != null)
+          row['walk_id'] as int: (jsonDecode(row['bbox'] as String) as List)
+              .map((v) => (v as num).toDouble())
+              .toList(),
+    };
+  }
+
+  @override
+  Future<Map<int, (StoredMatch, String?)>> readEvidenceBatch(
+    String network, {
+    List<int>? walks,
+  }) async {
+    final db = await _db;
+    final result = <int, (StoredMatch, String?)>{};
+    // Small batches also stay below SQLite's bind-variable limit.
+    for (
+      var start = 0;
+      walks == null ? start == 0 : start < walks.length;
+      start += 400
+    ) {
+      final ids = walks?.skip(start).take(400).toList();
+      final filter = ids == null
+          ? ''
+          : 'AND e.walk_id IN (${List.filled(ids.length, '?').join(',')})';
+      final rows = await db.rawQuery(
+        'SELECT e.*, m.fingerprint AS display_fingerprint FROM match_evidence e '
+        'LEFT JOIN walk_match m ON m.walk_id = e.walk_id AND m.network_version = e.network '
+        'WHERE e.network = ? $filter',
+        [network, ...?ids],
+      );
+      for (final r in rows) {
+        result[r['walk_id'] as int] = (
+          _decodeEvidence(r),
+          r['display_fingerprint'] as String?,
+        );
+      }
+    }
+    return result;
+  }
+
+  StoredMatch _decodeEvidence(Map<String, Object?> r) => StoredMatch(
+    r['fingerprint'] as String,
+    (jsonDecode(r['supported'] as String) as List).cast<int>().toSet(),
+    (jsonDecode(r['estimated'] as String) as List).cast<int>().toSet(),
+    (jsonDecode(r['unmatched'] as String) as List).cast<int>(),
+  );
 
   @override
   Future<StoredMatch?> readEvidence(int walk, String network) async {
@@ -295,6 +365,7 @@ class CoverageRepository
     List<String> sources,
   ) async {
     final db = await _db;
+    final encoded = await compute(_encodeDefinitions, blocks);
     await db.transaction((tx) async {
       final areas = await tx.query(
         'offline_area',
@@ -305,75 +376,147 @@ class CoverageRepository
           if (a['bbox'] != null)
             a['version'] as String: geographicBounds(
               (jsonDecode(a['bbox'] as String) as List)
-                  .cast<num>()
-                  .map((n) => n.toDouble())
+                  .map((n) => (n as num).toDouble())
                   .toList(),
             ),
       };
-      for (final block in blocks) {
-        final geometry = jsonEncode([
-          for (final e in block.boundary)
-            {
-              'points': [
-                for (final p in e.points) [p.dx, p.dy],
-              ],
-              'length': e.length,
-              'evidence': {
-                for (final v in e.evidence.entries)
-                  '${v.key}': [
-                    for (final r in v.value) [r.$1, r.$2],
-                  ],
-              },
-            },
-        ]);
-        await tx.insert('block_cache', {
-          'id': block.id,
-          'owner': MapCell.at(block.bounds.center).id,
-          'revision': blockRevision,
-          'geometry': geometry,
-          'complete': progress[block.id]?.complete == true ? 1 : 0,
-          'history': '',
-          'west': block.bounds.left,
-          'south': block.bounds.top,
-          'east': block.bounds.right,
-          'north': block.bounds.bottom,
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
-        final sectionBatch = tx.batch();
-        for (final id in {for (final e in block.boundary) ...e.evidence.keys}) {
-          sectionBatch.insert('block_section', {
-            'block': block.id,
-            'section': id,
-          });
+      final existing = <String, String>{};
+      for (var start = 0; start < blocks.length; start += 400) {
+        final ids = blocks.skip(start).take(400).map((b) => b.id).toList();
+        final rows = await tx.rawQuery(
+          'SELECT id, history FROM block_cache WHERE id IN (${List.filled(ids.length, '?').join(',')})',
+          ids,
+        );
+        existing.addAll({
+          for (final r in rows) r['id'] as String: r['history'] as String,
+        });
+      }
+      final batch = tx.batch();
+      for (var i = 0; i < blocks.length; i++) {
+        final block = blocks[i], data = encoded[i];
+        // Immutable definitions are not rewritten when only evidence changes.
+        // Progress is reconciled against global supported evidence, not a window.
+        if (existing[block.id] != data.$2) {
+          final values = <String, Object?>{
+            'id': block.id,
+            'owner': MapCell.at(block.bounds.center).id,
+            'revision': blockRevision,
+            'geometry': data.$1,
+            'complete': progress[block.id]?.complete == true ? 1 : 0,
+            'history': data.$2,
+            'dirty': 1,
+            'west': block.bounds.left,
+            'south': block.bounds.top,
+            'east': block.bounds.right,
+            'north': block.bounds.bottom,
+          };
+          batch.insert(
+            'block_cache',
+            values,
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          batch.update(
+            'block_cache',
+            values,
+            where: 'id = ?',
+            whereArgs: [block.id],
+          );
+          batch.delete(
+            'block_section',
+            where: 'block = ?',
+            whereArgs: [block.id],
+          );
+          for (final id in {
+            for (final e in block.boundary) ...e.evidence.keys,
+          }) {
+            batch.insert('block_section', {'block': block.id, 'section': id});
+          }
         }
-        await sectionBatch.commit(noResult: true);
         for (final source in sources.where(
           (s) => footprints[s]?.overlaps(block.bounds.inflate(.0006)) ?? true,
         )) {
-          await tx.rawInsert(
+          batch.rawInsert(
             'INSERT OR IGNORE INTO block_source(block,source) SELECT ?,version FROM offline_area WHERE version = ?',
             [block.id, source],
           );
         }
       }
+      await batch.commit(noResult: true);
     });
   }
 
+  Future<void>? _reconciling;
   @override
-  Future<void> reconcileBlocks() async {
+  Future<void> reconcileBlocks() => _reconciling ??= _reconcileBlocks()
+      .whenComplete(() => _reconciling = null);
+
+  Future<void> _reconcileBlocks() async {
     final db = await _db;
-    String after = '';
-    // Stream definitions, never load the worldwide block collection into RAM.
     while (true) {
-      final rows = await db.query(
-        'block_cache',
-        where: 'id > ? AND dirty = 1',
-        whereArgs: [after],
-        orderBy: 'id',
-        limit: 1,
-      );
-      if (rows.isEmpty) break;
-      final row = rows.single;
-      after = row['id'] as String;
+      final updated = await db.transaction((tx) async {
+        final rows = await tx.query(
+          'block_cache',
+          where: 'dirty = 1',
+          orderBy: 'id',
+          limit: 16,
+        );
+        if (rows.isEmpty) return false;
+        final ids = rows.map((r) => r['id'] as String).toList();
+        final supported = await tx.rawQuery(
+          'SELECT DISTINCT s.section FROM supported_section s JOIN block_section b ON b.section = s.section '
+          'WHERE b.block IN (${List.filled(ids.length, '?').join(',')})',
+          ids,
+        );
+        final results = await compute(_reconcileBatch, (
+          rows,
+          supported.map((r) => r['section'] as int).toSet(),
+        ));
+        final batch = tx.batch();
+        for (final e in results.entries) {
+          batch.update(
+            'block_cache',
+            {'complete': e.value ? 1 : 0, 'dirty': 0},
+            where: 'id = ?',
+            whereArgs: [e.key],
+          );
+        }
+        await batch.commit(noResult: true);
+        return true;
+      });
+      if (!updated) return;
+      // Yield between bounded transactions; writers cannot race a stale result.
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+}
+
+List<(String, String)> _encodeDefinitions(List<StreetBlock> blocks) => [
+  for (final block in blocks)
+    (() {
+      final geometry = jsonEncode([
+        for (final e in block.boundary)
+          {
+            'points': [
+              for (final p in e.points) [p.dx, p.dy],
+            ],
+            'length': e.length,
+            'evidence': {
+              for (final v in e.evidence.entries)
+                '${v.key}': [
+                  for (final r in v.value) [r.$1, r.$2],
+                ],
+            },
+          },
+      ]);
+      return (geometry, sha256.convert(utf8.encode(geometry)).toString());
+    })(),
+];
+
+Map<String, bool> _reconcileBatch(
+  (List<Map<String, Object?>>, Set<int>) input,
+) => {
+  for (final row in input.$1)
+    row['id'] as String: (() {
       final boundary = [
         for (final e in jsonDecode(row['geometry'] as String) as List)
           BlockBoundary(
@@ -391,23 +534,9 @@ class CoverageRepository
             },
           ),
       ];
-      final ids = {for (final b in boundary) ...b.evidence.keys}.toList();
-      final supported = <int>{};
-      for (var start = 0; start < ids.length; start += 400) {
-        final batch = ids.skip(start).take(400).toList();
-        final found = await db.rawQuery(
-          'SELECT DISTINCT section FROM supported_section WHERE section IN (${List.filled(batch.length, '?').join(',')})',
-          batch,
-        );
-        supported.addAll(found.map((r) => r['section'] as int));
-      }
-      final progress = blockProgress(StreetBlock(after, boundary), supported);
-      await db.update(
-        'block_cache',
-        {'complete': progress.complete ? 1 : 0, 'dirty': 0},
-        where: 'id = ?',
-        whereArgs: [after],
-      );
-    }
-  }
-}
+      return blockProgress(
+        StreetBlock(row['id'] as String, boundary),
+        input.$2,
+      ).complete;
+    })(),
+};

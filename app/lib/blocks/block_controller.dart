@@ -59,7 +59,6 @@ class BlockController extends ChangeNotifier {
 
   Future<void> refreshTotal() async {
     if (cache == null || _closed) return;
-    await cache!.reconcileBlocks();
     final count = await cache!.completedCount();
     final pending = await cache!.blocksPending();
     if (!_closed && (count != _total || pending != _pendingBlocks)) {
@@ -98,6 +97,11 @@ class BlockController extends ChangeNotifier {
   bool _viewportBusy = false;
   void setViewportBusy(bool value) {
     _viewportBusy = value;
+    if (value && busy) {
+      _epoch++;
+      _maps = const [];
+      busy = false;
+    }
     if (!value) _changed();
   }
 
@@ -121,7 +125,11 @@ class BlockController extends ChangeNotifier {
       live = const {};
       _index = MapSpatialIndex(cellSize: .001);
       notifyListeners();
-      _pending = _rebuild(List.of(maps), epoch);
+      final snapshot = List<AreaNetwork>.of(maps);
+      _pending = _pending.then((_) async {
+        if (_closed || epoch != _epoch || !enabled) return;
+        await _rebuild(snapshot, epoch);
+      });
     } else if (!busy) {
       _updateProgress();
     }
@@ -130,17 +138,32 @@ class BlockController extends ChangeNotifier {
   Future<void> _rebuild(List<AreaNetwork> maps, int epoch) async {
     try {
       final sources = {for (final map in maps) map.version};
-      final result =
+      final cached =
           _cachedTopology != null && setEquals(sources, _cachedSources)
-          ? _cachedTopology!
-          : cache == null
-          ? await _build(maps)
-          : await cache!.readTopology(topologyCacheKey(maps)) ??
-                await _build(maps);
-      if (cache != null) {
+          ? _cachedTopology
+          : await cache?.readTopology(topologyCacheKey(maps));
+      if (_closed || epoch != _epoch || !enabled) return;
+      final result = cached ?? await _build(maps);
+      if (cache != null && cached == null) {
         await cache!.writeTopology(topologyCacheKey(maps), result);
       }
       if (_closed || epoch != _epoch || !enabled) return;
+      final support = coverage.supportedSections;
+      final preview = {...support, ...coverage.liveSupportedSections};
+      final prepared = result.blocks.length > 16
+          ? await compute(_initialProgress, (result.blocks, support, preview))
+          : null;
+      if (_closed || epoch != _epoch || !enabled) return;
+      if (!setEquals(support, coverage.supportedSections) ||
+          !setEquals(preview, {
+            ...coverage.supportedSections,
+            ...coverage.liveSupportedSections,
+          })) {
+        _maps = const [];
+        busy = false;
+        _changed();
+        return;
+      }
       _cachedSources = sources;
       _cachedTopology = result;
       blocks = result.blocks;
@@ -159,7 +182,7 @@ class BlockController extends ChangeNotifier {
       saved = {};
       live = {};
       busy = false;
-      _updateProgress(force: true);
+      _updateProgress(force: true, prepared: prepared);
     } catch (_) {
       if (_closed || epoch != _epoch) return;
       busy = false;
@@ -168,7 +191,10 @@ class BlockController extends ChangeNotifier {
     }
   }
 
-  void _updateProgress({bool force = false}) {
+  void _updateProgress({
+    bool force = false,
+    (Map<String, BlockProgress>, Map<String, BlockProgress>)? prepared,
+  }) {
     final supported = coverage.supportedSections;
     final savedChanged = force || !setEquals(supported, _supported);
     final preview = {...supported, ...coverage.liveSupportedSections};
@@ -178,24 +204,23 @@ class BlockController extends ChangeNotifier {
       ...preview.difference(_liveSupported),
       ..._liveSupported.difference(preview),
     };
-    if (!force && changed.isEmpty) {
-      if (cache != null) _persisting = _persisting.then((_) => refreshTotal());
-      return;
-    }
+    if (!force && changed.isEmpty) return;
     final affected = force
         ? blocks.toSet()
         : {for (final id in changed) ...?_reverse[id]};
     final nextSaved = Map<String, BlockProgress>.of(saved),
         nextLive = Map<String, BlockProgress>.of(live);
     for (final block in affected) {
-      nextSaved[block.id] = blockProgress(block, supported);
-      nextLive[block.id] = blockProgress(block, preview);
+      nextSaved[block.id] =
+          prepared?.$1[block.id] ?? blockProgress(block, supported);
+      nextLive[block.id] =
+          prepared?.$2[block.id] ?? blockProgress(block, preview);
     }
     _supported = supported;
     _liveSupported = preview;
     saved = Map.unmodifiable(nextSaved);
     if (cache != null && savedChanged) {
-      final snapshot = blocks, progress = saved;
+      final snapshot = affected.toList(), progress = saved;
       final sources = {for (final m in _maps) ...m.sourceVersions}.toList();
       _persisting = _persisting
           .then((_) async {
@@ -248,4 +273,16 @@ class BlockController extends ChangeNotifier {
     coverage.removeListener(_changed);
     super.dispose();
   }
+}
+
+(Map<String, BlockProgress>, Map<String, BlockProgress>) _initialProgress(
+  (List<StreetBlock>, Set<int>, Set<int>) input,
+) {
+  final saved = blockProgressBatch((input.$1, input.$2));
+  return (
+    saved,
+    setEquals(input.$2, input.$3)
+        ? saved
+        : blockProgressBatch((input.$1, input.$3)),
+  );
 }

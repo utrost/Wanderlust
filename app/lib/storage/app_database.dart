@@ -52,6 +52,12 @@ class AppDatabase {
                 'This database belongs to an unsupported app lineage.',
               );
             }
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS evidence_network_lookup ON match_evidence(network)',
+            );
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS dirty_blocks_lookup ON block_cache(dirty, id)',
+            );
             // Only derived caches are invalidated. Source maps and recordings
             // survive algorithm upgrades, including interrupted rebuilds.
             await db.transaction((tx) async {
