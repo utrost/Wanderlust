@@ -11,6 +11,74 @@ import 'recording_test.dart' show fix;
 
 void main() {
   sqfliteFfiInit();
+
+  test(
+    'algorithm upgrade removes obsolete parents and resumes partial rebuilding',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('block-revision-');
+      final path = '${dir.path}/db';
+      var store = SqliteWalkStore(
+        factory: databaseFactoryFfi,
+        databasePath: path,
+      );
+      try {
+        final map = network(square());
+        await store.saveArea(map.geojson);
+        while (await store.indexNext(null)) {}
+        final block = buildBlockTopology([map]).blocks.single;
+        await store.saveBlocks(
+          [block],
+          {
+            block.id: blockProgress(block, {1, 2, 3, 4}),
+          },
+          ['test'],
+        );
+        await store.writeTopology('old', BlockTopology([block]));
+        final db = await store.database.database;
+        await db.update('block_cache', {'revision': 'old-revision'});
+        await store.saveAnalysisStamp('__block_revision__', 'old-revision');
+        await store.saveAnalysisStamp('old-cell', 'old-stamp');
+        await store.close();
+        store = SqliteWalkStore(
+          factory: databaseFactoryFfi,
+          databasePath: path,
+        );
+        expect(await store.completedCount(), 0);
+        expect(await store.readTopology('old'), isNull);
+        expect(await store.blocksPending(), true);
+        expect((await store.database.database).path, path);
+        expect(
+          await (await store.database.database).query('block_cache'),
+          isEmpty,
+        );
+        expect((await store.listAreas()).length, 1);
+        final cells = (await store.listCells())
+            .map((e) => e.cell)
+            .toSet()
+            .toList();
+        await store.saveAnalysisStamp(
+          cells.first,
+          '$blockRevision/true/current',
+        );
+        await store.close();
+        store = SqliteWalkStore(
+          factory: databaseFactoryFfi,
+          databasePath: path,
+        );
+        expect(
+          (await store.analysisStamps())[cells.first],
+          '$blockRevision/true/current',
+        );
+        for (final cell in cells.skip(1)) {
+          await store.saveAnalysisStamp(cell, '$blockRevision/true/current');
+        }
+        expect(await store.blocksPending(), false);
+      } finally {
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test(
     'version-one upgrade retains raw maps and recordings, indexes stay rebuildable',
     () async {

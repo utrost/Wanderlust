@@ -3,6 +3,7 @@ import 'block_progress.dart';
 
 abstract class BlockCacheStore {
   Future<int> completedCount();
+  Future<bool> blocksPending();
   Future<BlockTopology?> readTopology(String key);
   Future<void> writeTopology(String key, BlockTopology topology);
   Future<Map<String, String>> analysisStamps();

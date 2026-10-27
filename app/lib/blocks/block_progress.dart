@@ -11,6 +11,29 @@ class BlockProgress {
   );
   final double covered, remaining, longestGap;
   final bool complete;
+  bool get coverageEnough =>
+      covered + remaining > 0 && covered / (covered + remaining) >= .95 - 1e-9;
+  bool get gapSmallEnough => longestGap <= 20 + 1e-6;
+
+  // Round conservatively: never display 95% or 20 m when that test fails.
+  String get percentageLabel {
+    final total = covered + remaining;
+    final percent = total == 0 ? 0.0 : covered / total * 100;
+    return '${(percent * 10 + 1e-7).floor().clamp(0, coverageEnough ? 1000 : 949) / 10}%';
+  }
+
+  String get gapLabel =>
+      '${gapSmallEnough ? (longestGap - 1e-6).ceil().clamp(0, 20) : longestGap.ceil().clamp(21, 100000000)} m';
+  String get remainingLabel =>
+      '${(remaining - 1e-6).ceil().clamp(0, 100000000)} m';
+  String get explanation {
+    if (complete) return 'Both completion requirements are met.';
+    if (!coverageEnough && !gapSmallEnough) {
+      return 'Below 95% supported coverage, and a missing stretch exceeds 20 metres.';
+    }
+    if (!coverageEnough) return 'Supported coverage is below 95%.';
+    return 'A missing stretch exceeds 20 metres.';
+  }
 }
 
 List<(double, double)> missingIntervals(

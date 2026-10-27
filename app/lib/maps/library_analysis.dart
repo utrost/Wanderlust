@@ -40,6 +40,17 @@ class LibraryAnalysis {
   Future<void> get settled => _pending;
   String? error;
   int remaining = 0;
+  Object? lastFailure;
+  int _retrySeconds = 5;
+  void _retryLater() {
+    if (_closed || _timer != null) return;
+    _timer = Timer(Duration(seconds: _retrySeconds), () {
+      _timer = null;
+      schedule();
+    });
+    _retrySeconds = (_retrySeconds * 2).clamp(5, 60);
+  }
+
   void schedule() {
     if (_running) {
       _again = true;
@@ -52,6 +63,7 @@ class LibraryAnalysis {
       _running = true;
       _pending = _run()
           .catchError((Object e) {
+            lastFailure = e;
             error = 'Saved-area analysis will retry when the map is idle.';
           })
           .whenComplete(() {
@@ -59,6 +71,8 @@ class LibraryAnalysis {
             if (_again) {
               _again = false;
               schedule();
+            } else if (remaining > 0 || error != null) {
+              _retryLater();
             }
           });
     });
@@ -69,6 +83,10 @@ class LibraryAnalysis {
     for (final row in await active.store.listCells()) {
       (grouped[row.cell] ??= []).add(row);
     }
+    remaining = grouped.length;
+    error = null;
+    lastFailure = null;
+    await onUpdated();
     if (grouped.isEmpty) return;
     final stamps = await cache.analysisStamps();
     final history = List<SavedWalk>.of(walks());
@@ -100,7 +118,7 @@ class LibraryAnalysis {
       final sources = entry.value
         ..sort((a, b) => a.version.compareTo(b.version));
       final stamp =
-          '$historyKey/${sources.map((s) => '${s.version}:${s.digest}:${s.bytes}:${s.sections}').join('|')}';
+          '$blockRevision/${prefs.completeBlocks}/$historyKey/${sources.map((s) => '${s.version}:${s.digest}:${s.bytes}:${s.sections}').join('|')}';
       if (stamps[entry.key] == stamp) {
         remaining--;
         continue;
@@ -145,19 +163,29 @@ class LibraryAnalysis {
           }
           await cache.reconcileBlocks();
           await cache.saveAnalysisStamp(entry.key, stamp);
+          remaining--;
           await onUpdated();
         } finally {
           coverage.dispose();
           await coverage.settled;
         }
+      } catch (e) {
+        // A failed cell has no completion stamp and remains eligible for retry.
+        // Continue other cells so a transient lock cannot stall the library.
+        lastFailure = e;
+        error = 'Saved-area analysis will retry when the map is idle.';
       } finally {
         active.releaseProcessing();
       }
-      remaining--;
       // Yield between cells. Never hold a worldwide graph or GPS collection.
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
-    error = null;
+    if (remaining == 0) {
+      error = null;
+      lastFailure = null;
+      _retrySeconds = 5;
+    }
+    await onUpdated();
   }
 
   void dispose() {

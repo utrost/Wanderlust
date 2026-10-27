@@ -141,8 +141,11 @@ class StreetDisplay {
 
 bool _road(AreaEdge e) => const {
   'primary',
+  'primary_link',
   'secondary',
+  'secondary_link',
   'tertiary',
+  'tertiary_link',
   'unclassified',
   'residential',
   'living_street',
@@ -165,7 +168,10 @@ bool equivalentStreetGeometry(AreaEdge a, AreaEdge b) {
       level(a.layer) == level(b.layer) &&
       structure(a.bridge) == structure(b.bridge) &&
       structure(a.tunnel) == structure(b.tunnel) &&
-      ((_road(a) && _road(b) && a.highway == b.highway) ||
+      ((_road(a) &&
+              _road(b) &&
+              a.highway.replaceFirst('_link', '') ==
+                  b.highway.replaceFirst('_link', '')) ||
           (_road(a) && _roadside(b)) ||
           (_road(b) && _roadside(a)));
 }

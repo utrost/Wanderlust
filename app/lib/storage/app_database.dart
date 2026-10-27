@@ -2,6 +2,7 @@ import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 import '../memories/memory_store.dart';
+import '../blocks/block_geometry.dart' show blockRevision;
 
 /// Owns the connection and schema; repositories share this lifetime.
 class AppDatabase {
@@ -27,6 +28,7 @@ class AppDatabase {
           version: 2,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
+            await db.execute('PRAGMA busy_timeout = 5000');
           },
           onCreate: (db, version) async {
             await db.execute('PRAGMA application_id = $applicationId');
@@ -50,6 +52,25 @@ class AppDatabase {
                 'This database belongs to an unsupported app lineage.',
               );
             }
+            // Only derived caches are invalidated. Source maps and recordings
+            // survive algorithm upgrades, including interrupted rebuilds.
+            await db.transaction((tx) async {
+              final revision = await tx.query(
+                'analysis_stamp',
+                where: 'cell = ?',
+                whereArgs: ['__block_revision__'],
+              );
+              if (revision.isEmpty ||
+                  revision.single['stamp'] != blockRevision) {
+                await tx.delete('block_cache');
+                await tx.delete('topology_cache');
+                await tx.delete('analysis_stamp');
+                await tx.insert('analysis_stamp', {
+                  'cell': '__block_revision__',
+                  'stamp': blockRevision,
+                });
+              }
+            });
           },
           // The com.simiono identity starts a new schema lineage. No upgrade or
           // downgrade may silently open a database from another lineage.

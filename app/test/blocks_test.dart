@@ -68,6 +68,119 @@ StreetBlock progressBlock(List<double> lengths) => StreetBlock('progress', [
     ),
 ]);
 void main() {
+  for (final highway in ['primary_link', 'secondary_link', 'tertiary_link']) {
+    test('$highway closes a public ground-level block', () {
+      final features = square();
+      features[2] = edge(
+        3,
+        3,
+        4,
+        [p(100, 100), p(0, 100)],
+        highway: highway,
+        name: 'North',
+      );
+      final block = buildBlockTopology([network(features)]).blocks.single;
+      expect(blockProgress(block, {1, 2, 3, 4}).complete, true);
+      // An equivalent sidewalk supplies the same perimeter without double counting.
+      features.add(
+        edge(
+          5,
+          50,
+          51,
+          [p(100, 105), p(0, 105)],
+          highway: 'footway',
+          name: 'North',
+          extra: {'footway': 'sidewalk'},
+        ),
+      );
+      final withSidewalk = buildBlockTopology([
+        network(features),
+      ]).blocks.single;
+      expect(blockProgress(withSidewalk, {1, 2, 4, 5}).complete, true);
+      expect(
+        blockProgress(withSidewalk, {1, 2, 3, 4, 5}).covered,
+        closeTo(withSidewalk.perimeter, .001),
+      );
+    });
+  }
+  for (final restriction in [
+    {'access': 'private'},
+    {'access': 'no'},
+    {'bridge': 'yes'},
+    {'tunnel': 'yes'},
+    {'layer': '1'},
+  ]) {
+    test('connector with $restriction cannot close a ground block', () {
+      final features = square();
+      features[2] = edge(
+        3,
+        3,
+        4,
+        [p(100, 100), p(0, 100)],
+        highway: 'primary_link',
+        extra: restriction,
+      );
+      expect(buildBlockTopology([network(features)]).blocks, isEmpty);
+    });
+  }
+  for (final highway in ['motorway', 'motorway_link', 'trunk', 'trunk_link']) {
+    test('$highway does not define a neighbourhood block', () {
+      final features = square();
+      features[2] = edge(3, 3, 4, [p(100, 100), p(0, 100)], highway: highway);
+      expect(buildBlockTopology([network(features)]).blocks, isEmpty);
+    });
+  }
+  test('connector coverage requires corridor identity and the same level', () {
+    final features = square();
+    features[2] = edge(
+      3,
+      3,
+      4,
+      [p(100, 100), p(0, 100)],
+      highway: 'primary_link',
+      name: 'North',
+    );
+    for (final extra in [
+      {'name': 'Other', 'highway': 'primary'},
+      {'name': 'North', 'highway': 'primary', 'bridge': 'yes'},
+    ]) {
+      final map = network([
+        ...features,
+        edge(5, 50, 51, [p(100, 105), p(0, 105)], extra: extra),
+      ]);
+      final block = buildBlockTopology([map]).blocks.single;
+      expect(blockProgress(block, {1, 2, 4, 5}).complete, false);
+    }
+    final map = network([
+      ...features,
+      edge(
+        5,
+        50,
+        51,
+        [p(100, 105), p(0, 105)],
+        highway: 'primary',
+        name: 'North',
+      ),
+    ]);
+    final block = buildBlockTopology([map]).blocks.single;
+    expect(blockProgress(block, {1, 2, 4, 5}).complete, true);
+  });
+
+  test('threshold descriptions do not round failures into success', () {
+    const below = BlockProgress(949.999, 50.001, 20, false);
+    expect(below.percentageLabel, '94.9%');
+    expect(below.explanation, 'Supported coverage is below 95%.');
+    const longGap = BlockProgress(980, 20, 20.0001, false);
+    expect(longGap.gapLabel, '21 m');
+    expect(longGap.explanation, 'A missing stretch exceeds 20 metres.');
+    const both = BlockProgress(90, 10, 30, false);
+    expect(both.explanation, contains('and a missing stretch'));
+    const complete = BlockProgress(950, 50, 20, true);
+    expect(complete.percentageLabel, '95.0%');
+    expect(complete.gapLabel, '20 m');
+    expect(complete.explanation, 'Both completion requirements are met.');
+  });
+
   test('optional preference roundtrips and old backups default off', () {
     expect(WalkPreferences.fromJson({}).completeBlocks, false);
     final prefs = const WalkPreferences().copyWith(completeBlocks: true);

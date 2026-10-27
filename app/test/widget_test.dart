@@ -32,6 +32,10 @@ class BootStore extends SqliteWalkStore {
   @override
   Future<int> completedCount() async => 0;
   @override
+  Future<bool> blocksPending() async => false;
+  @override
+  Future<void> reconcileBlocks() async {}
+  @override
   Future<void> syncEvidenceFingerprints(Map<int, String> expected) async {}
   @override
   Future<StoredMatch?> readEvidence(int walk, String network) async => null;

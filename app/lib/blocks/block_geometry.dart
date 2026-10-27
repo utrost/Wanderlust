@@ -7,7 +7,7 @@ import '../coverage/street_display.dart';
 import '../data/area_network.dart';
 import '../widgets/map_spatial_index.dart';
 
-const blockRevision = 'street-blocks-v2';
+const blockRevision = 'street-blocks-v3';
 
 class BlockBoundary {
   BlockBoundary(
@@ -65,8 +65,11 @@ bool _boundaryRoad(AreaEdge e) =>
       'living_street',
       'unclassified',
       'primary',
+      'primary_link',
       'secondary',
+      'secondary_link',
       'tertiary',
+      'tertiary_link',
       'pedestrian',
     }.contains(e.highway) &&
     const {'', 'yes', 'permissive', 'designated'}.contains(e.access) &&
