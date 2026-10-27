@@ -105,7 +105,10 @@ class WalkingSession extends ChangeNotifier {
             !recorder.isBusy &&
             !coverage.busy &&
             coverage.initialized,
-        onUpdated: () => blocks.refreshTotal(),
+        onUpdated: () async {
+          blocks.setAnalysisPending((libraryAnalysis?.remaining ?? 0) > 0);
+          await blocks.refreshTotal();
+        },
       );
     }
 

@@ -14,7 +14,9 @@ class BlockCountChip extends StatelessWidget {
   Widget build(BuildContext context) => ActionChip(
     avatar: const Icon(Icons.grid_view_outlined, size: 18),
     label: Text(
-      controller.busy
+      controller.updating
+          ? 'Updating blocks…'
+          : controller.busy
           ? 'Finding blocks…'
           : controller.error != null
           ? 'Blocks unavailable'
@@ -40,7 +42,10 @@ Future<void> showBlockDetails(
         child: ListenableBuilder(
           listenable: controller,
           builder: (context, _) {
-            final progress = block == null ? null : controller.live[block.id];
+            final selected = controller.resolve(block);
+            final progress = selected == null
+                ? null
+                : controller.live[selected.id];
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,7 +53,7 @@ Future<void> showBlockDetails(
                 Text(
                   block == null
                       ? 'Complete blocks'
-                      : controller.saved[block.id]?.complete == true
+                      : controller.saved[selected?.id]?.complete == true
                       ? 'Block completed'
                       : 'Explore this block',
                   style: Theme.of(context).textTheme.headlineSmall,
@@ -56,11 +61,14 @@ Future<void> showBlockDetails(
                 const SizedBox(height: 12),
                 if (progress != null) ...[
                   Text(
-                    '${(100 * progress.covered / block!.perimeter).floor()}% explored · ${progress.remaining.round()} m remaining',
+                    '${progress.percentageLabel} supported · ${progress.remainingLabel} remaining',
                   ),
                   const SizedBox(height: 8),
+                  Text('Longest missing stretch: ${progress.gapLabel}'),
+                  Text(progress.explanation),
+                  const SizedBox(height: 8),
                   const Text(
-                    'Highlighted streets show the remaining perimeter.',
+                    'Highlighted sections lack qualifying recorded evidence. You may have travelled them, but estimated routes count only after you confirm them.',
                   ),
                   if (recording)
                     const Text(
@@ -83,6 +91,17 @@ Future<void> showBlockDetails(
                 const Text(
                   'Removing journeys or maps, or refreshing street data, can change this count.',
                 ),
+                if (block != null && selected == null)
+                  const Text(
+                    'This block is being recalculated. Tap it again after the update.',
+                  ),
+                if (controller.updating)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Text(
+                      'Updating blocks… Existing journeys are being checked.',
+                    ),
+                  ),
                 if (controller.busy)
                   const Padding(
                     padding: EdgeInsets.only(top: 12),

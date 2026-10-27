@@ -92,6 +92,8 @@ class SqliteWalkStore
   @override
   Future<int> completedCount() => coverageRepository.completedCount();
   @override
+  Future<bool> blocksPending() => coverageRepository.blocksPending();
+  @override
   Future<void> saveBlocks(
     List<StreetBlock> blocks,
     Map<String, BlockProgress> progress,

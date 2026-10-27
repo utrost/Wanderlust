@@ -350,16 +350,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                   ? _session.blocks.completedIds
                                   : const {},
                               selectedBlock: _preferences.completeBlocks
-                                  ? _selectedBlock?.id
+                                  ? _session.blocks.resolve(_selectedBlock)?.id
                                   : null,
                               missingBlockLines:
                                   _preferences.completeBlocks &&
                                       _selectedBlock != null &&
-                                      _session.blocks.blocks.contains(
-                                        _selectedBlock,
-                                      )
+                                      _session.blocks.resolve(_selectedBlock) !=
+                                          null
                                   ? missingLines(
-                                      _selectedBlock!,
+                                      _session.blocks.resolve(_selectedBlock)!,
                                       _session.blocks.previewSections,
                                     )
                                   : const [],
@@ -799,6 +798,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final canCelebrate =
         _preferences.completeBlocks &&
         !_session.blocks.busy &&
+        !_session.blocks.updating &&
         !_coverage.busy &&
         _coverage.error == null &&
         _session.blocks.error == null;

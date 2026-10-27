@@ -17,9 +17,9 @@ class BlockController extends ChangeNotifier {
   }) : _build = build ?? ((maps) => compute(buildBlockTopology, maps)) {
     coverage.addListener(_changed);
     if (cache != null) {
-      _persisting = cache!.completedCount().then((value) {
+      _persisting = refreshTotal().catchError((Object e) {
         if (!_closed) {
-          _total = value;
+          error = 'Could not update saved block progress.';
           notifyListeners();
         }
       });
@@ -28,6 +28,14 @@ class BlockController extends ChangeNotifier {
   final CoverageController coverage;
   final BlockCacheStore? cache;
   int? _total;
+  bool _pendingBlocks = false, _analysisPending = false;
+  bool get updating => _pendingBlocks || _analysisPending;
+  void setAnalysisPending(bool value) {
+    if (_closed || _analysisPending == value) return;
+    _analysisPending = value;
+    notifyListeners();
+  }
+
   Future<void> _persisting = Future.value();
   final Future<BlockTopology> Function(List<AreaNetwork>) _build;
   bool enabled = false, busy = false, needsRefresh = false;
@@ -53,8 +61,10 @@ class BlockController extends ChangeNotifier {
     if (cache == null || _closed) return;
     await cache!.reconcileBlocks();
     final count = await cache!.completedCount();
-    if (!_closed && count != _total) {
+    final pending = await cache!.blocksPending();
+    if (!_closed && (count != _total || pending != _pendingBlocks)) {
       _total = count;
+      _pendingBlocks = pending;
       notifyListeners();
     }
   }
@@ -206,6 +216,12 @@ class BlockController extends ChangeNotifier {
     }
     live = Map.unmodifiable(nextLive);
     notifyListeners();
+  }
+
+  StreetBlock? resolve(StreetBlock? previous) {
+    if (previous == null) return null;
+    return blocks.where((b) => b.id == previous.id).firstOrNull ??
+        hit(previous.bounds.center);
   }
 
   StreetBlock? hit(Offset p) {

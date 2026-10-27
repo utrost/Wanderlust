@@ -122,6 +122,32 @@ void main() {
     controller.dispose();
     coverage.dispose();
   });
+  test(
+    'selection resolves by location after a block identity changes',
+    () async {
+      final coverage = BlockTestCoverage();
+      final map = network(square());
+      coverage.change(maps: [map], saved: {1, 2, 3, 4});
+      final controller = BlockController(
+        coverage,
+        build: (maps) async => buildBlockTopology(maps),
+      );
+      controller.setEnabled(true);
+      await controller.settled;
+      final original = controller.blocks.single;
+      final replacement = StreetBlock('replacement', original.boundary);
+      controller.blocks = [replacement];
+      // Matching ids are resolved to current objects, not obsolete instances.
+      expect(
+        controller.resolve(StreetBlock('replacement', original.boundary)),
+        same(replacement),
+      );
+      expect(controller.resolve(original), isNotNull);
+      controller.dispose();
+      coverage.dispose();
+    },
+  );
+
   testWidgets(
     'count and accessible details explain provisional progress and retry',
     (tester) async {
@@ -163,8 +189,16 @@ void main() {
       expect(find.text('0 blocks completed'), findsOneWidget);
       await tester.tap(find.byType(ActionChip));
       await tester.pumpAndSettle();
-      expect(find.textContaining('100% explored'), findsOneWidget);
+      expect(find.textContaining('100.0% supported'), findsOneWidget);
       expect(find.textContaining('provisional until saved'), findsOneWidget);
+      expect(
+        find.textContaining('Longest missing stretch: 0 m'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('qualifying recorded evidence'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       controller.dispose();

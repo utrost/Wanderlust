@@ -271,10 +271,23 @@ class CoverageRepository
   Future<int> completedCount() async =>
       Sqflite.firstIntValue(
         await (await _db).rawQuery(
-          'SELECT COUNT(*) FROM block_cache WHERE complete = 1',
+          'SELECT COUNT(*) FROM block_cache WHERE complete = 1 AND revision = ?',
+          [blockRevision],
         ),
       ) ??
       0;
+  @override
+  Future<bool> blocksPending() async {
+    final db = await _db;
+    final rows = await db.rawQuery(
+      "SELECT EXISTS(SELECT 1 FROM offline_area WHERE indexed = 0) OR "
+      "EXISTS(SELECT 1 FROM map_cell c LEFT JOIN analysis_stamp s ON s.cell = c.cell "
+      "WHERE s.stamp IS NULL OR s.stamp NOT LIKE ?) AS pending",
+      ['$blockRevision/true/%'],
+    );
+    return rows.single['pending'] == 1;
+  }
+
   @override
   Future<void> saveBlocks(
     List<StreetBlock> blocks,
