@@ -152,9 +152,13 @@ class ActiveMaps extends ChangeNotifier {
             }
           }
         }
+        if (_closed) return;
+        if (!_ready.isCompleted) {
+          _ready.complete();
+          notifyListeners();
+        }
         await _load();
         if (_closed) return;
-        if (!_ready.isCompleted) _ready.complete();
         // One map at a time, yielding between transactions; recording is independent.
         indexing = true;
         notifyListeners();
@@ -233,7 +237,7 @@ class ActiveMaps extends ChangeNotifier {
     var bytes = 0;
     limited = false;
     for (final id in ids) {
-      if (_closed || gesturing) return;
+      if (_closed || gesturing || _again) return;
       if (next.length >= cellBudget - (_reservedBytes > 0 ? 1 : 0)) {
         limited = true;
         break;
@@ -257,6 +261,7 @@ class ActiveMaps extends ChangeNotifier {
           continue;
         }
         final map = await compute(AreaNetwork.parse, source);
+        if (_closed || gesturing || _again) return;
         cached = (key, map, size);
       }
       final added = cached.$2.edgeIds.difference(sections);
@@ -268,6 +273,16 @@ class ActiveMaps extends ChangeNotifier {
       bytes += cached.$3;
       sections.addAll(added);
       next[id] = cached;
+      // Publish a useful first cell without waiting for the whole window. Later
+      // cells arrive together, preventing a matching/topology rebuild per cell.
+      if (networks.isEmpty && next.length == 1 && !_again && !_closed) {
+        _cache
+          ..clear()
+          ..addAll(next);
+        networks = List.unmodifiable(next.values.map((e) => e.$2));
+        notifyListeners();
+        await Future<void>.delayed(Duration.zero);
+      }
     }
     _cache
       ..clear()

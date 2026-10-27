@@ -45,6 +45,7 @@ class SqliteWalkStore
         CoverageStore,
         SpatialAreaStore,
         PersistentCoverageStore,
+        BatchCoverageStore,
         BlockCacheStore,
         PreferencesStore,
         WalkImporter {
@@ -62,6 +63,14 @@ class SqliteWalkStore
   @override
   Future<void> syncEvidenceFingerprints(Map<int, String> expected) =>
       coverageRepository.syncEvidenceFingerprints(expected);
+  @override
+  Future<Map<int, List<double>>> readWalkBoundsBatch(Map<int, String> traces) =>
+      coverageRepository.readWalkBoundsBatch(traces);
+  @override
+  Future<Map<int, (StoredMatch, String?)>> readEvidenceBatch(
+    String network, {
+    List<int>? walks,
+  }) => coverageRepository.readEvidenceBatch(network, walks: walks);
   @override
   Future<StoredMatch?> readEvidence(int walk, String network) =>
       coverageRepository.readEvidence(walk, network);

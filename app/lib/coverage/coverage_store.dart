@@ -36,3 +36,12 @@ abstract class PersistentCoverageStore {
     List<double> bounds,
   );
 }
+
+/// Bulk access keeps cached startup independent of walk-by-cell SQL round trips.
+abstract class BatchCoverageStore {
+  Future<Map<int, List<double>>> readWalkBoundsBatch(Map<int, String> traces);
+  Future<Map<int, (StoredMatch, String?)>> readEvidenceBatch(
+    String network, {
+    List<int>? walks,
+  });
+}

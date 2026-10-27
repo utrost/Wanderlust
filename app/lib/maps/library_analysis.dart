@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import '../blocks/block_geometry.dart';
@@ -35,6 +36,7 @@ class LibraryAnalysis {
   final bool Function() canRun;
   final Future<void> Function() onUpdated;
   Timer? _timer;
+  bool _waitingRetry = false;
   bool _closed = false, _running = false, _again = false;
   Future<void> _pending = Future.value();
   Future<void> get settled => _pending;
@@ -42,13 +44,15 @@ class LibraryAnalysis {
   int remaining = 0;
   Object? lastFailure;
   int _retrySeconds = 5;
-  void _retryLater() {
+  void _retryLater({bool backoff = true}) {
     if (_closed || _timer != null) return;
+    _waitingRetry = true;
     _timer = Timer(Duration(seconds: _retrySeconds), () {
       _timer = null;
+      _waitingRetry = false;
       schedule();
     });
-    _retrySeconds = (_retrySeconds * 2).clamp(5, 60);
+    if (backoff) _retrySeconds = (_retrySeconds * 2).clamp(5, 60);
   }
 
   void schedule() {
@@ -56,10 +60,18 @@ class LibraryAnalysis {
       _again = true;
       return;
     }
-    if (_closed || _timer != null) return;
+    if (_closed || (_timer != null && !_waitingRetry)) return;
+    _timer?.cancel();
+    _waitingRetry = false;
     _timer = Timer(const Duration(milliseconds: 600), () {
       _timer = null;
-      if (_closed || !canRun() || active.loading || active.gesturing) return;
+      if (_closed) return;
+      if (_again || !canRun() || active.loading || active.gesturing) {
+        // A save can keep coverage busy beyond the debounce. Do not lose that
+        // request just because no further GPS/UI event arrives afterwards.
+        _retryLater(backoff: false);
+        return;
+      }
       _running = true;
       _pending = _run()
           .catchError((Object e) {
@@ -91,34 +103,84 @@ class LibraryAnalysis {
     final stamps = await cache.analysisStamps();
     final history = List<SavedWalk>.of(walks());
     final prefs = preferences();
-    final historyKey = sha256
-        .convert(
-          utf8.encode(
-            jsonEncode([
-              matchingRevision,
-              blockRevision,
-              prefs.fillSmallGaps,
-              prefs.autoFillGaps,
-              prefs.completeBlocks,
-              for (final w in history)
-                [
-                  w.id,
-                  w.fingerprint,
-                  w.activity.name,
-                  w.confirmedSections,
-                  w.storedPointCount,
-                ],
-            ]),
-          ),
-        )
-        .toString();
+    final traces = {
+      for (final w in history)
+        if (w.fingerprint != null) w.id: w.fingerprint!,
+    };
+    final bounds = store is BatchCoverageStore
+        ? await (store as BatchCoverageStore).readWalkBoundsBatch(traces)
+        : <int, List<double>>{};
+    // Backfill only missing metadata once, rather than once for every map cell.
+    for (final w in history) {
+      if (_closed || !canRun() || active.gesturing) return;
+      if (bounds.containsKey(w.id) || w.status == 'recording') continue;
+      if (store case final PersistentCoverageStore persistent) {
+        final old = w.fingerprint == null
+            ? null
+            : await persistent.readWalkBounds(w.id, w.fingerprint!);
+        if (old != null) {
+          bounds[w.id] = old;
+          continue;
+        }
+        final full = w.isSummary ? await loadWalk(w.id) : w;
+        if (full.points.isEmpty) continue;
+        var r = Rect.fromLTWH(
+          full.points.first.longitude,
+          full.points.first.latitude,
+          0,
+          0,
+        );
+        for (final p in full.points) {
+          r = r.expandToInclude(Rect.fromLTWH(p.longitude, p.latitude, 0, 0));
+        }
+        bounds[w.id] = boundsList(r);
+        if (w.fingerprint != null) {
+          await persistent.writeWalkBounds(w.id, w.fingerprint!, bounds[w.id]!);
+        }
+      }
+    }
+    String historyKeyFor(String cell) {
+      final window = MapCell.parse(cell).bounds.inflate(.001);
+      return sha256
+          .convert(
+            utf8.encode(
+              jsonEncode([
+                matchingRevision,
+                blockRevision,
+                prefs.fillSmallGaps,
+                prefs.autoFillGaps,
+                prefs.completeBlocks,
+                'local-history-v1',
+                for (final w in history)
+                  if (w.status != 'recording' &&
+                      (bounds[w.id] == null ||
+                          geographicBounds(bounds[w.id]!).overlaps(window)))
+                    [
+                      w.id,
+                      w.fingerprint,
+                      w.activity.name,
+                      w.confirmedSections,
+                      w.storedPointCount,
+                    ],
+              ]),
+            ),
+          )
+          .toString();
+    }
+
     remaining = grouped.length;
     for (final entry in grouped.entries) {
-      if (_closed || !canRun() || active.loading || active.gesturing) return;
+      if (_closed ||
+          _again ||
+          !canRun() ||
+          active.loading ||
+          active.gesturing) {
+        return;
+      }
       final sources = entry.value
         ..sort((a, b) => a.version.compareTo(b.version));
       final stamp =
-          '$blockRevision/${prefs.completeBlocks}/$historyKey/${sources.map((s) => '${s.version}:${s.digest}:${s.bytes}:${s.sections}').join('|')}';
+          '$blockRevision/${prefs.completeBlocks}/${historyKeyFor(entry.key)}/${sources.map((s) => '${s.version}:${s.digest}:${s.bytes}:${s.sections}').join('|')}';
       if (stamps[entry.key] == stamp) {
         remaining--;
         continue;
@@ -149,17 +211,24 @@ class LibraryAnalysis {
           if (_closed || !canRun() || active.gesturing) return;
           if (prefs.completeBlocks) {
             final key = topologyCacheKey([map]);
+            final cached = await cache.readTopology(key);
             final topology =
-                await cache.readTopology(key) ??
+                cached ??
                 await compute<List<AreaNetwork>, BlockTopology>(
                   buildBlockTopology,
                   [map],
                 );
-            await cache.writeTopology(key, topology);
+            if (cached == null) await cache.writeTopology(key, topology);
             final support = coverage.supportedSections;
-            await cache.saveBlocks(topology.blocks, {
-              for (final b in topology.blocks) b.id: blockProgress(b, support),
-            }, map.sourceVersions);
+            final progress = await compute(blockProgressBatch, (
+              topology.blocks,
+              support,
+            ));
+            await cache.saveBlocks(
+              topology.blocks,
+              progress,
+              map.sourceVersions,
+            );
           }
           await cache.reconcileBlocks();
           await cache.saveAnalysisStamp(entry.key, stamp);

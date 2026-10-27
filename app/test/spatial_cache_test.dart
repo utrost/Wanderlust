@@ -163,6 +163,25 @@ void main() {
         await store.reconcileBlocks();
         await store.writeTopology('topology', topology);
         expect(await store.completedCount(), 1);
+        final beforeChanges = (await (await store.database.database).rawQuery(
+          'SELECT total_changes() AS n',
+        )).single['n'];
+        await store.saveBlocks([block], {block.id: blockProgress(block, {})}, [
+          'test',
+        ]);
+        await store.reconcileBlocks();
+        expect(
+          await store.completedCount(),
+          1,
+          reason: 'a partial window cannot overwrite global progress',
+        );
+        expect(
+          (await (await store.database.database).rawQuery(
+            'SELECT total_changes() AS n',
+          )).single['n'],
+          beforeChanges,
+          reason: 'unchanged definitions and clean progress perform no writes',
+        );
         await store.close();
         store = SqliteWalkStore(
           factory: databaseFactoryFfi,

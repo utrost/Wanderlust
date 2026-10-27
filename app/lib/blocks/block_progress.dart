@@ -110,3 +110,8 @@ List<Offset> _slice(List<Offset> points, double from, double to) {
   }
   return result;
 }
+
+/// Bulk historical progress is calculated in a worker, separately from topology.
+Map<String, BlockProgress> blockProgressBatch(
+  (List<StreetBlock>, Set<int>) input,
+) => {for (final block in input.$1) block.id: blockProgress(block, input.$2)};

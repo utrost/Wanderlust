@@ -31,6 +31,30 @@ class BlockTestCoverage extends CoverageController {
 
 void main() {
   test(
+    'large cached topology computes progress in a worker and remains responsive to evidence changes',
+    () async {
+      final coverage = BlockTestCoverage()
+        ..change(maps: [network(square())], saved: {1, 2, 3, 4});
+      final boundary = buildBlockTopology(
+        coverage.networks,
+      ).blocks.single.boundary;
+      final controller = BlockController(
+        coverage,
+        build: (_) async => BlockTopology([
+          for (var i = 0; i < 32; i++) StreetBlock('block-$i', boundary),
+        ]),
+      );
+      controller.setEnabled(true);
+      await controller.settled;
+      expect(controller.completed, 32);
+      coverage.change(maps: coverage.networks, saved: {1, 2, 3});
+      await controller.settled;
+      expect(controller.completed, 0);
+      controller.dispose();
+      coverage.dispose();
+    },
+  );
+  test(
     'history, live preview, save, removal, map switching and rebuild',
     () async {
       final coverage = BlockTestCoverage();
@@ -88,6 +112,7 @@ void main() {
         },
       );
       controller.setEnabled(true);
+      await Future<void>.delayed(Duration.zero); // First worker is in flight.
       controller.setEnabled(false);
       controller.setEnabled(true);
       pending[0].complete(buildBlockTopology(coverage.networks));

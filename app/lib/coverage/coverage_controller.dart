@@ -349,11 +349,30 @@ class CoverageController extends ChangeNotifier {
     network = selected ?? networks.firstOrNull;
     counts = loaded.$2;
     _resetLiveMaps();
+    await _restoreEvidence();
+  }
+
+  Future<void> _restoreEvidence() async {
+    if (_store case final BatchCoverageStore cache) {
+      for (final map in networks) {
+        for (final e in (await cache.readEvidenceBatch(
+          map.coverageVersion,
+        )).entries) {
+          _evidence.put(
+            e.key,
+            map.version,
+            e.value.$1.supported,
+            e.value.$1.estimated,
+          );
+        }
+      }
+    }
   }
 
   Future<void> refreshMaps() async {
+    final request = ++_mapRequest;
     _queue = _queue.then((_) async {
-      if (_disposed) return;
+      if (_disposed || request != _mapRequest) return;
       try {
         await initialize();
         final source = await _loadNetwork();
@@ -387,6 +406,7 @@ class CoverageController extends ChangeNotifier {
         counts = loaded.$2;
         network = area;
         _resetLiveMaps();
+        await _restoreEvidence();
         error = null;
         _initializing = Future.value();
         success = true;
@@ -404,9 +424,16 @@ class CoverageController extends ChangeNotifier {
   Future<void> synchronize(List<SavedWalk> walks) {
     if (_disposed) return Future.value();
     final snapshot = List<SavedWalk>.of(walks);
-    _queue = _queue.then((_) => _synchronize(snapshot));
+    final request = ++_syncRequest;
+    _queue = _queue.then(
+      (_) => request == _syncRequest
+          ? _synchronize(snapshot, request)
+          : Future<void>.value(),
+    );
     return _queue;
   }
+
+  int _syncRequest = 0, _mapRequest = 0;
 
   final _prepared = Expando<(String, String)>('prepared traces');
   (String, String) _prepare(SavedWalk walk) {
@@ -421,9 +448,8 @@ class CoverageController extends ChangeNotifier {
     return '$matchingRevision/${walk.activity.name}/${_fillSmallGaps ? 'fill-v1' : 'direct'}/${_autoFillGaps ? 'auto-gaps-v1' : 'manual-gaps'}/$traceHash/${walk.confirmedSections.join(',')}';
   }
 
-  Future<void> _synchronize(List<SavedWalk> walks) async {
+  Future<void> _synchronize(List<SavedWalk> walks, [int? request]) async {
     if (_disposed) return;
-    busy = true;
     var updatedRoutes = false;
     _notify();
     try {
@@ -434,32 +460,152 @@ class CoverageController extends ChangeNotifier {
         await initialize();
       }
       if (error != null) return;
+      busy = true;
+      _notify();
       if (_store case final PersistentCoverageStore cache) {
         await cache.syncEvidenceFingerprints({
           for (final w in walks)
             if (w.status != 'recording') w.id: _fingerprint(w),
         });
       }
+      final traces = {
+        for (final w in walks)
+          if (w.status != 'recording') w.id: w.fingerprint ?? _prepare(w).$2,
+      };
+      final boundsByWalk = _store is BatchCoverageStore
+          ? await (_store as BatchCoverageStore).readWalkBoundsBatch(traces)
+          : <int, List<double>>{};
+      final loadedWalks = <int, SavedWalk>{};
+      var loadedPoints = 0;
+      Future<SavedWalk> fullWalk(SavedWalk summary) async {
+        if (!summary.isSummary) return summary;
+        final existing = loadedWalks.remove(summary.id);
+        if (existing != null) {
+          loadedWalks[summary.id] = existing;
+          return existing;
+        }
+        final full = await loadWalk!(summary.id);
+        // Bounded LRU shared by all cells in this synchronization.
+        while (loadedWalks.isNotEmpty &&
+            loadedPoints + full.points.length > 50000) {
+          loadedPoints -= loadedWalks
+              .remove(loadedWalks.keys.first)!
+              .points
+              .length;
+        }
+        if (full.points.length <= 50000) {
+          loadedWalks[summary.id] = full;
+          loadedPoints += full.points.length;
+        }
+        return full;
+      }
+
       for (final area in networks) {
+        if (_disposed || (request != null && request != _syncRequest)) return;
+        final candidates = walks.where((w) {
+          final bounds = boundsByWalk[w.id];
+          return w.status != 'recording' &&
+              (bounds == null ||
+                  geographicBounds(
+                    bounds,
+                  ).inflate(.001).overlaps(geographicBounds(area.bbox)));
+        }).toList();
+        final candidateIds = candidates.map((w) => w.id).toSet();
+        for (final w in walks.where((w) => !candidateIds.contains(w.id))) {
+          _trails.exclude(w.id, area.version);
+          _evidence.put(w.id, area.version, {}, {});
+        }
+        final cachedBatch = _store is BatchCoverageStore
+            ? await (_store as BatchCoverageStore).readEvidenceBatch(
+                area.coverageVersion,
+                walks: candidates.map((w) => w.id).toList(),
+              )
+            : null;
         final pending = <(SavedWalk, String, String)>[];
-        for (final walk in walks) {
+        Future<void> flush() async {
+          if (pending.isNotEmpty) {
+            updatedRoutes = true;
+            rematching = true;
+            _notify();
+          }
+          // Do not send empty GPX to a parser which correctly rejects empty tracks.
+          final nonempty = pending
+              .where((p) => p.$1.points.isNotEmpty)
+              .toList();
+          final results = nonempty.isEmpty
+              ? <MatchResult>[]
+              : await _runMatch(
+                  area.geojson,
+                  nonempty.map((p) => p.$2).toList(),
+                  confirmed: nonempty
+                      .map((p) => p.$1.confirmedSections)
+                      .toList(),
+                );
+          if (results.length != nonempty.length) {
+            throw StateError('Matcher returned an incomplete batch');
+          }
+          final matched = <int, Set<int>>{};
+          for (var i = 0; i < nonempty.length; i++) {
+            final edges = results[i].walked.toSet();
+            if (!area.edgeIds.containsAll(edges)) {
+              throw StateError('Matcher returned unknown street ids');
+            }
+            edges.addAll(
+              nonempty[i].$1.confirmedSections.where(area.edgeIds.contains),
+            );
+            matched[nonempty[i].$1.id] = edges;
+            final supported = edges.difference(results[i].inferred.toSet())
+              ..addAll(
+                nonempty[i].$1.confirmedSections.where(area.edgeIds.contains),
+              );
+            _evidence.put(
+              nonempty[i].$1.id,
+              area.version,
+              supported,
+              results[i].inferred.toSet(),
+            );
+            _trails.put(nonempty[i].$1, area.version, results[i].unmatched);
+            if (_store case final PersistentCoverageStore cache) {
+              await cache.writeEvidence(
+                nonempty[i].$1.id,
+                area.coverageVersion,
+                StoredMatch(
+                  nonempty[i].$3,
+                  supported,
+                  results[i].inferred.toSet(),
+                  results[i].unmatched,
+                ),
+              );
+            }
+          }
+          for (final p in pending) {
+            if (p.$1.points.isEmpty) {
+              _trails.put(p.$1, area.version, const []);
+              _evidence.put(p.$1.id, area.version, {}, {});
+            }
+            await _store.replaceWalkMatch(
+              p.$1.id,
+              area.coverageVersion,
+              p.$3,
+              matched[p.$1.id] ?? {},
+            );
+          }
+          pending.clear();
+        }
+
+        for (final walk in candidates) {
           if (walk.status == 'recording') continue;
-          SavedWalk? loaded;
-          Future<SavedWalk> fullWalk() async =>
-              loaded ??= walk.isSummary ? await loadWalk!(walk.id) : walk;
           final traceHash = walk.fingerprint ?? _prepare(walk).$2;
           final fingerprint = _fingerprint(walk);
           if (_store case final PersistentCoverageStore cache) {
-            final cached = await cache.readEvidence(
-              walk.id,
-              area.coverageVersion,
-            );
+            final cached = cachedBatch == null
+                ? await cache.readEvidence(walk.id, area.coverageVersion)
+                : cachedBatch[walk.id]?.$1;
             if (cached?.fingerprint == fingerprint) {
-              if (await _store.matchFingerprint(
-                    walk.id,
-                    area.coverageVersion,
-                  ) !=
-                  fingerprint) {
+              final displayFingerprint = cachedBatch == null
+                  ? await _store.matchFingerprint(walk.id, area.coverageVersion)
+                  : cachedBatch[walk.id]?.$2;
+              if (displayFingerprint != fingerprint) {
                 await _store.replaceWalkMatch(
                   walk.id,
                   area.coverageVersion,
@@ -475,15 +621,19 @@ class CoverageController extends ChangeNotifier {
               );
               if (!_trails.contains(walk.id, area.version)) {
                 final full = walk.isSummary && cached.unmatched.isNotEmpty
-                    ? await fullWalk()
+                    ? await fullWalk(walk)
                     : walk;
                 _trails.put(full, area.version, cached.unmatched);
               }
               continue;
             }
-            var bounds = await cache.readWalkBounds(walk.id, traceHash);
+            var bounds =
+                boundsByWalk[walk.id] ??
+                (_store is BatchCoverageStore
+                    ? null
+                    : await cache.readWalkBounds(walk.id, traceHash));
             if (bounds == null) {
-              final full = await fullWalk();
+              final full = await fullWalk(walk);
               if (full.points.isNotEmpty) {
                 var r = Rect.fromLTWH(
                   full.points.first.longitude,
@@ -497,6 +647,7 @@ class CoverageController extends ChangeNotifier {
                   );
                 }
                 bounds = boundsList(r);
+                boundsByWalk[walk.id] = bounds;
                 await cache.writeWalkBounds(walk.id, traceHash, bounds);
               }
             }
@@ -508,76 +659,26 @@ class CoverageController extends ChangeNotifier {
               continue;
             }
           }
-          if (await _store.matchFingerprint(walk.id, area.coverageVersion) !=
+          if ((cachedBatch == null
+                      ? await _store.matchFingerprint(
+                          walk.id,
+                          area.coverageVersion,
+                        )
+                      : cachedBatch[walk.id]?.$2) !=
                   fingerprint ||
               !_trails.contains(walk.id, area.version)) {
-            final full = await fullWalk();
+            final full = await fullWalk(walk);
             pending.add((full, _prepare(full).$1, fingerprint));
+            if (pending.length >= 16) {
+              await flush();
+              if (_disposed || (request != null && request != _syncRequest)) {
+                return;
+              }
+              await Future<void>.delayed(Duration.zero);
+            }
           }
         }
-        if (pending.isNotEmpty) {
-          updatedRoutes = true;
-          rematching = true;
-          _notify();
-        }
-        // Do not send empty GPX to a parser which correctly rejects empty tracks.
-        final nonempty = pending.where((p) => p.$1.points.isNotEmpty).toList();
-        final results = nonempty.isEmpty
-            ? <MatchResult>[]
-            : await _runMatch(
-                area.geojson,
-                nonempty.map((p) => p.$2).toList(),
-                confirmed: nonempty.map((p) => p.$1.confirmedSections).toList(),
-              );
-        if (results.length != nonempty.length) {
-          throw StateError('Matcher returned an incomplete batch');
-        }
-        final matched = <int, Set<int>>{};
-        for (var i = 0; i < nonempty.length; i++) {
-          final edges = results[i].walked.toSet();
-          if (!area.edgeIds.containsAll(edges)) {
-            throw StateError('Matcher returned unknown street ids');
-          }
-          edges.addAll(
-            nonempty[i].$1.confirmedSections.where(area.edgeIds.contains),
-          );
-          matched[nonempty[i].$1.id] = edges;
-          final supported = edges.difference(results[i].inferred.toSet())
-            ..addAll(
-              nonempty[i].$1.confirmedSections.where(area.edgeIds.contains),
-            );
-          _evidence.put(
-            nonempty[i].$1.id,
-            area.version,
-            supported,
-            results[i].inferred.toSet(),
-          );
-          _trails.put(nonempty[i].$1, area.version, results[i].unmatched);
-          if (_store case final PersistentCoverageStore cache) {
-            await cache.writeEvidence(
-              nonempty[i].$1.id,
-              area.coverageVersion,
-              StoredMatch(
-                nonempty[i].$3,
-                supported,
-                results[i].inferred.toSet(),
-                results[i].unmatched,
-              ),
-            );
-          }
-        }
-        for (final p in pending) {
-          if (p.$1.points.isEmpty) {
-            _trails.put(p.$1, area.version, const []);
-            _evidence.put(p.$1.id, area.version, {}, {});
-          }
-          await _store.replaceWalkMatch(
-            p.$1.id,
-            area.coverageVersion,
-            p.$3,
-            matched[p.$1.id] ?? {},
-          );
-        }
+        await flush();
       }
       _trails.retain(walks.map((w) => w.id).toSet());
       _evidence.retain(walks.map((w) => w.id).toSet());

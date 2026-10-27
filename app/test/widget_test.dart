@@ -39,6 +39,16 @@ class BootStore extends SqliteWalkStore {
   Future<void> syncEvidenceFingerprints(Map<int, String> expected) async {}
   @override
   Future<StoredMatch?> readEvidence(int walk, String network) async => null;
+  @override
+  Future<Map<int, List<double>>> readWalkBoundsBatch(
+    Map<int, String> traces,
+  ) async => {};
+  @override
+  Future<Map<int, (StoredMatch, String?)>> readEvidenceBatch(
+    String network, {
+    List<int>? walks,
+  }) async => {};
+
   final _memories = FakeMemoryStore();
   @override
   MemoryRepository get memories => _memories;

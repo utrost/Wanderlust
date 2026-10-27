@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'package:wanderlust/maps/map_cells.dart';
+import 'active_maps_test.dart' show nearby;
+import 'recording_test.dart' show fix;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:wanderlust/blocks/block_geometry.dart';
@@ -13,6 +16,13 @@ class TransientStore extends SqliteWalkStore {
     : super(factory: databaseFactoryFfi, databasePath: path);
   bool fail = true;
   int writes = 0;
+  final cellsRead = <String>[];
+  @override
+  Future<String?> readCell(String cell) {
+    cellsRead.add(cell);
+    return super.readCell(cell);
+  }
+
   @override
   Future<void> writeTopology(String key, BlockTopology topology) async {
     writes++;
@@ -26,6 +36,95 @@ class TransientStore extends SqliteWalkStore {
 
 void main() {
   sqfliteFfiInit();
+  test(
+    'adding and deleting a local walk leaves distant analysis and topology unchanged',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('library-local-');
+      final store = TransientStore('${dir.path}/db')..fail = false;
+      final active = ActiveMaps(store);
+      List<SavedWalk> history = [];
+      final analysis = LibraryAnalysis(
+        active: active,
+        store: store,
+        cache: store,
+        loadWalk: store.loadWalk,
+        walks: () => history,
+        preferences: () => const WalkPreferences(completeBlocks: true),
+        canRun: () => true,
+        onUpdated: () async {},
+      );
+      Future<void> run() async {
+        analysis.schedule();
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        await analysis.settled;
+        expect(analysis.error, isNull, reason: analysis.lastFailure.toString());
+        expect(analysis.remaining, 0);
+      }
+
+      try {
+        await store.saveArea(network(square()).geojson);
+        await store.saveArea(nearby('far', const Offset(8.8, 53.1)));
+        await active.refresh();
+        await run();
+        final initial = await store.analysisStamps();
+        final topologyWrites = store.writes;
+        final id = await store.begin(fix(0).timestamp);
+        await store.finish(id, fix(1).timestamp, 'completed');
+        history = await store.listSummaries();
+        await store.writeWalkBounds(id, history.single.fingerprint!, [
+          0,
+          0,
+          .001,
+          .001,
+        ]);
+        store.cellsRead.clear();
+        await run();
+        final changed = store.cellsRead.toSet();
+        expect(changed, isNotEmpty);
+        expect(
+          changed.every((c) => MapCell.parse(c).bounds.center.dy.abs() < 1),
+          true,
+        );
+        expect(
+          store.writes,
+          topologyWrites,
+          reason: 'new evidence reuses immutable topology',
+        );
+        final after = await store.analysisStamps();
+        for (final e in initial.entries.where(
+          (e) => !changed.contains(e.key),
+        )) {
+          expect(after[e.key], e.value);
+        }
+        store.cellsRead.clear();
+        await run();
+        expect(
+          store.cellsRead,
+          isEmpty,
+          reason: 'unchanged reopening performs no cell analysis',
+        );
+        await (await store.database.database).delete(
+          'walk_match',
+          where: 'walk_id = ?',
+          whereArgs: [id],
+        );
+        await (await store.database.database).delete(
+          'recorded_walk',
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+        history = [];
+        await run();
+        expect(store.cellsRead.toSet(), changed);
+        expect(await store.analysisStamps(), initial);
+      } finally {
+        analysis.dispose();
+        active.dispose();
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test(
     'failed cell retries automatically; successful cells survive and gestures pause work',
     () async {
