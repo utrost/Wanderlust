@@ -22,7 +22,7 @@ void main() {
         await store.finish(id, fix(2).timestamp, 'completed');
         final uid = await store.walkUid(id);
         final db = await store.database.database;
-        expect(await db.getVersion(), 2);
+        expect(await db.getVersion(), 3);
         expect(
           (await db.rawQuery('PRAGMA application_id')).single.values.single,
           AppDatabase.applicationId,

@@ -185,13 +185,23 @@ class LibraryAnalysis {
         remaining--;
         continue;
       }
-      final bytes = sources.fold<int>(0, (n, s) => n + s.bytes);
-      final sections = sources.fold<int>(0, (n, s) => n + s.sections);
+      final loaded = active.loadedCell(entry.key, sources);
+      final bytes = loaded == null
+          ? sources.fold<int>(0, (n, s) => n + s.bytes)
+          : 0;
+      final sections = loaded == null
+          ? sources.fold<int>(0, (n, s) => n + s.sections)
+          : 0;
       if (!active.reserveProcessing(bytes, sections)) continue;
       try {
-        final source = await active.store.readCell(entry.key);
-        if (source == null) continue;
-        final map = await compute(AreaNetwork.parse, source);
+        final AreaNetwork map;
+        if (loaded != null) {
+          map = loaded;
+        } else {
+          final source = await active.store.readCell(entry.key);
+          if (source == null) continue;
+          map = await compute(AreaNetwork.parse, source);
+        }
         if (_closed || !canRun() || active.gesturing) return;
         final coverage = CoverageController(
           store: store,

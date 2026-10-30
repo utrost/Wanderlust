@@ -107,6 +107,7 @@ Map<String, Object?> readGpsDiagnostics(Object? value) {
     'maxDeliveryIntervalMs',
     'meanFixIntervalMs',
     'maxFixIntervalMs',
+    'stopRequestedAt',
   };
   return Map.unmodifiable({
     if (value['evidenceLog'] is String &&
@@ -117,7 +118,11 @@ Map<String, Object?> readGpsDiagnostics(Object? value) {
           (value[key] as num).isFinite &&
           (value[key] as num) >= 0)
         key: value[key],
-    for (final key in ['lastReportedProvider', 'permissionAccuracy'])
+    for (final key in [
+      'lastReportedProvider',
+      'permissionAccuracy',
+      'stopSource',
+    ])
       if (value[key] is String && (value[key] as String).length <= 80)
         key: value[key],
   });

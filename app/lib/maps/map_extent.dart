@@ -9,6 +9,7 @@ class MapExtent {
     : boxes = maps
           .map((m) => Rect.fromLTRB(m.bbox[0], m.bbox[1], m.bbox[2], m.bbox[3]))
           .toList();
+  MapExtent.footprints(Iterable<Rect> bounds) : boxes = bounds.toList();
   final List<Rect> boxes;
 
   bool contains(Offset p) => boxes.any(

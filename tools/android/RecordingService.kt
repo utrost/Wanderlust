@@ -43,6 +43,10 @@ class RecordingService : Service() {
         val callbackAt = callbackBeat
         val mainAt = mainBeat
         val enabled = wakeLockEnabled
+        val requestedInterval = cadence
+        val resting = policy?.stationary
+        val receivedAt = lastReceived
+        val currentProvider = provider
         try { evidenceWorker.execute {
             try {
                 val power = getSystemService(POWER_SERVICE) as PowerManager
@@ -53,6 +57,9 @@ class RecordingService : Service() {
                     .put("powerSave", power.isPowerSaveMode).put("batteryExempt", power.isIgnoringBatteryOptimizations(packageName))
                     .put("wakeLockHeld", lock?.isHeld == true)
                     .put("wakeLockEnabled", enabled ?: JSONObject.NULL)
+                    .put("requestedIntervalMs", requestedInterval)
+                    .put("stationary", resting ?: JSONObject.NULL)
+                    .put("lastAcceptedElapsed", receivedAt).put("provider", currentProvider)
                     .put("schema", 2).put("sdk", Build.VERSION.SDK_INT).put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
                 systemEvidence(data)
                 preferences(this).getString("database", null)?.let { path ->
@@ -171,10 +178,10 @@ class RecordingService : Service() {
                 if (activeId == null) {
                     try {
                         preferences(this).getString("database", null)?.let { path ->
-                            RecordingJournal(path).use { it.finish(id, System.currentTimeMillis(), true) }
+                            RecordingJournal(path).use { it.finish(id, System.currentTimeMillis(), true, "notification_without_service") }
                         }
                     } finally { shutdown() }
-                } else stopSession(id, false)
+                } else stopSession(id, false, "notification")
             }
             return START_NOT_STICKY
         }
@@ -237,11 +244,11 @@ class RecordingService : Service() {
 
     private fun requestUpdates() {
         val p = policy ?: return
-        evidence("request_updates")
         generation++
         val epoch = generation
         listener?.let { locations.removeUpdates(it) }
         cadence = p.interval(SystemClock.elapsedRealtime())
+        evidence("request_updates")
         lastAttempt = SystemClock.elapsedRealtime()
         val freshListener = object : LocationListener {
             override fun onLocationChanged(location: Location) { callbackBeat = SystemClock.elapsedRealtime(); val copy = Location(location); worker.execute {
@@ -366,11 +373,11 @@ class RecordingService : Service() {
             PendingIntent.getService(this, id.hashCode(), Intent(this, RecordingService::class.java).setAction(STOP).putExtra("walkId", id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build())
         return b.build()
     }
-    private fun stopSession(id: Long, interrupted: Boolean) {
+    private fun stopSession(id: Long, interrupted: Boolean, source: String) {
         try {
             if (activeId != id) return // An old notification cannot stop another walk.
-            evidence("stop")
-            journal?.finish(id, System.currentTimeMillis(), interrupted)
+            evidence("stop:$source")
+            journal?.finish(id, System.currentTimeMillis(), interrupted, source)
             notifications.cancel(ALERT_ID)
             shutdown()
         } catch (e: Exception) { storageFailure(e) }
@@ -462,8 +469,8 @@ class RecordingService : Service() {
                     try {
                         if (call.method == "stop") {
                             val id = call.argument<Number>("walkId")!!.toLong()
-                            if (service?.activeId == id) service.stopSession(id, false)
-                            else j.finish(id, System.currentTimeMillis(), true)
+                            if (service?.activeId == id) service.stopSession(id, false, "app")
+                            else j.finish(id, System.currentTimeMillis(), true, "app_without_service")
                             main.post { result.success(null) }
                         } else {
                             val s = j.state()
