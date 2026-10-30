@@ -16,12 +16,24 @@ void main() {
         'completed',
         [],
         uid: '11111111111111111111111111111111',
-        gpsDiagnostics: {'evidenceLog': evidence},
+        gpsDiagnostics: {
+          'evidenceLog': evidence,
+          'stopSource': 'notification',
+          'stopRequestedAt': 1790000000000,
+        },
       );
       final restored = await decodeBackup(
         await encodeBackup(BackupContents([walk], [])),
       );
       expect(restored.walks.single.gpsDiagnostics['evidenceLog'], evidence);
+      expect(
+        restored.walks.single.gpsDiagnostics['stopSource'],
+        'notification',
+      );
+      expect(
+        restored.walks.single.gpsDiagnostics['stopRequestedAt'],
+        1790000000000,
+      );
     },
   );
   test('bounded evidence survives diagnostic serialization', () {

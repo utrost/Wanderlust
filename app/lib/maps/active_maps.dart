@@ -36,7 +36,18 @@ class ActiveMaps extends ChangeNotifier {
 
   bool get loading => _running;
   int _reservedBytes = 0, _reservedSections = 0;
+
+  /// Reuse only an exact source-set match, never an obsolete loaded revision.
+  AreaNetwork? loadedCell(String cell, List<CellSource> sources) {
+    final ordered = [...sources]
+      ..sort((a, b) => a.version.compareTo(b.version));
+    final key = ordered.map((e) => '${e.version}/${e.digest}').join('|');
+    final entry = _cache[cell];
+    return entry?.$1 == key ? entry!.$2 : null;
+  }
+
   bool reserveProcessing(int bytes, int sections) {
+    if (bytes == 0 && sections == 0) return true;
     if (bytes + loadedBytes > byteBudget ||
         sections + loadedSections > sectionBudget ||
         networks.length >= cellBudget) {

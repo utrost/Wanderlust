@@ -84,4 +84,14 @@ class RecordingPolicyTest {
         policy.add(fix(90, 2000.0), 90000)
         assertTrue(policy.meters <= 11)
     }
+    @Test fun `long stationary provider intervals retain rest state then resume movement`() {
+        val policy = RecordingPolicy(false, 0, automatic = true)
+        for (s in 0..200 step 40) policy.add(fix(s, (s%3).toDouble(), 0.0), s*1000L)
+        assertTrue(policy.stationary)
+        assertEquals(15000L, policy.interval(200000))
+        assertEquals(0.0, policy.meters, 0.01)
+        policy.add(fix(203, 12.0, 1.2), 203000)
+        assertFalse(policy.stationary)
+        assertEquals(3000L, policy.interval(203000))
+    }
 }

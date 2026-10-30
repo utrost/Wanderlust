@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-import '../data/area_network.dart';
 import '../geo/location_freshness.dart';
 import '../maps/map_extent.dart';
 import 'map_surface.dart';
@@ -10,7 +9,7 @@ class MapLocationControl extends StatelessWidget {
   const MapLocationControl({
     super.key,
     required this.position,
-    required this.networks,
+    required this.footprints,
     required this.error,
     required this.locating,
     required this.showGps,
@@ -18,7 +17,7 @@ class MapLocationControl extends StatelessWidget {
     required this.onMaps,
   });
   final Position? position;
-  final List<AreaNetwork> networks;
+  final List<Rect> footprints;
   final String? error;
   final bool locating, showGps;
   final VoidCallback onDetails, onMaps;
@@ -27,7 +26,7 @@ class MapLocationControl extends StatelessWidget {
     final p = position;
     final old = p != null && isOldFix(p, DateTime.now());
     final coordinate = p == null ? null : Offset(p.longitude, p.latitude);
-    final extent = MapExtent(networks);
+    final extent = MapExtent.footprints(footprints);
     final outside = coordinate != null && !extent.contains(coordinate);
     final near =
         coordinate != null &&

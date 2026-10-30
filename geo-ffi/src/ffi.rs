@@ -34,6 +34,23 @@ pub unsafe extern "C" fn wanderlust_matcher_from_geojson(geojson: *const c_char)
     }
 }
 
+/// Validate a rejected network and return an owned error string, or null if valid.
+/// Free the result with `wanderlust_string_free`.
+///
+/// # Safety
+/// `geojson` must be a valid NUL-terminated UTF-8 C string (or null).
+#[no_mangle]
+pub unsafe extern "C" fn wanderlust_network_error(geojson: *const c_char) -> *mut c_char {
+    catch_unwind(|| {
+        let src = cstr(geojson)?;
+        let error = crate::geojson::segments_from_geojson(&src).err()?;
+        CString::new(error).ok().map(CString::into_raw)
+    })
+    .ok()
+    .flatten()
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Free a matcher handle.
 ///
 /// # Safety

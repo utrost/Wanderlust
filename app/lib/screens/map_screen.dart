@@ -606,7 +606,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Widget _locationControl() => MapLocationControl(
     position: _currentFix,
-    networks: _coverage.networks,
+    footprints: (_session.activeMaps?.library ?? <OfflineArea>[])
+        .map((a) => a.bounds)
+        .whereType<Rect>()
+        .toList(),
     error: _gpsError,
     locating: _locating,
     showGps: _preferences.showGps,

@@ -34,8 +34,63 @@ class TransientStore extends SqliteWalkStore {
   }
 }
 
+class AtCapacityMaps extends ActiveMaps {
+  AtCapacityMaps(super.store);
+  @override
+  bool reserveProcessing(int bytes, int sections) =>
+      bytes == 0 && sections == 0;
+}
+
 void main() {
   sqfliteFfiInit();
+  test(
+    'analysis completes at capacity by reusing the exact loaded cell',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('library-capacity-');
+      final store = TransientStore('${dir.path}/db')..fail = false;
+      final active = AtCapacityMaps(store);
+      final analysis = LibraryAnalysis(
+        active: active,
+        store: store,
+        cache: store,
+        loadWalk: store.loadWalk,
+        walks: () => [],
+        preferences: () => const WalkPreferences(completeBlocks: true),
+        canRun: () => true,
+        onUpdated: () async {},
+      );
+      try {
+        await store.saveArea(network(square()).geojson);
+        await active.refresh();
+        expect(active.networks, isNotEmpty);
+        store.cellsRead.clear();
+        analysis.schedule();
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        await analysis.settled;
+        expect(analysis.error, isNull);
+        expect(analysis.remaining, 0);
+        expect(store.cellsRead, isEmpty);
+        final sources = await store.listCells();
+        final cell = sources.first;
+        expect(
+          active.loadedCell(cell.cell, [
+            CellSource(
+              cell.cell,
+              'different-revision',
+              cell.bytes,
+              cell.sections,
+            ),
+          ]),
+          isNull,
+        );
+      } finally {
+        analysis.dispose();
+        active.dispose();
+        await store.close();
+        await dir.delete(recursive: true);
+      }
+    },
+  );
   test(
     'adding and deleting a local walk leaves distant analysis and topology unchanged',
     () async {
@@ -79,8 +134,13 @@ void main() {
         ]);
         store.cellsRead.clear();
         await run();
-        final changed = store.cellsRead.toSet();
+        final after = await store.analysisStamps();
+        final changed = {
+          for (final e in after.entries)
+            if (initial[e.key] != e.value) e.key,
+        };
         expect(changed, isNotEmpty);
+        expect(store.cellsRead.every(changed.contains), isTrue);
         expect(
           changed.every((c) => MapCell.parse(c).bounds.center.dy.abs() < 1),
           true,
@@ -90,7 +150,6 @@ void main() {
           topologyWrites,
           reason: 'new evidence reuses immutable topology',
         );
-        final after = await store.analysisStamps();
         for (final e in initial.entries.where(
           (e) => !changed.contains(e.key),
         )) {
@@ -115,7 +174,7 @@ void main() {
         );
         history = [];
         await run();
-        expect(store.cellsRead.toSet(), changed);
+        expect(store.cellsRead.every(changed.contains), isTrue);
         expect(await store.analysisStamps(), initial);
       } finally {
         analysis.dispose();

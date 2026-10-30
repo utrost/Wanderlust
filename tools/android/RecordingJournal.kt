@@ -82,9 +82,14 @@ class RecordingJournal(path: String) : AutoCloseable {
         db.execSQL("UPDATE native_recording SET meters=?,last_fix=?,resume_boundary=0 WHERE walk_id=? AND active=1", arrayOf<Any?>(meters, location.time, id))
         true
     }
-    fun finish(id: Long, now: Long, interrupted: Boolean): Boolean = transaction {
+    fun finish(id: Long, now: Long, interrupted: Boolean, source: String = "unknown"): Boolean = transaction {
         val s = state() ?: return@transaction false
         if (s["walkId"] != id || s["active"] != true) return@transaction false
+        val meta = metadata(id)
+        val diagnostics = meta.optJSONObject("gpsDiagnostics") ?: JSONObject()
+        diagnostics.put("stopSource", source).put("stopRequestedAt", now)
+        meta.put("gpsDiagnostics", diagnostics)
+        db.execSQL("UPDATE recorded_walk SET trace_metadata=? WHERE id=?", arrayOf<Any?>(meta.toString(), id))
         val end = if (interrupted) (s["lastFix"] as Long).takeIf { it > 0 }?.let { iso(it) } ?: s["startedAt"] else iso(now)
         db.execSQL("UPDATE recorded_walk SET status=?,ended_at=?,fingerprint=NULL WHERE id=?", arrayOf<Any?>(if (interrupted) "interrupted" else "completed", end, id))
         db.execSQL("UPDATE native_recording SET active=0 WHERE walk_id=?", arrayOf<Any?>(id))

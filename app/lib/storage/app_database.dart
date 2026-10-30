@@ -25,7 +25,7 @@ class AppDatabase {
       return await _factory.openDatabase(
         file,
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 3,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
             await db.rawQuery('PRAGMA busy_timeout = 5000');
@@ -85,8 +85,24 @@ class AppDatabase {
             if (identity.single.values.single != applicationId) {
               throw StateError('Unsupported database lineage');
             }
-            if (oldVersion == 1 && newVersion == 2) {
-              await _createSpatial(db);
+            if (oldVersion >= 1 && newVersion == 3) {
+              if (oldVersion == 1) {
+                await _createSpatial(db);
+              } else {
+                await db.execute(
+                  'ALTER TABLE map_cell ADD COLUMN encoding INTEGER NOT NULL DEFAULT 0',
+                );
+              }
+              // Reindex incrementally with compressed payloads. Only derived
+              // data is discarded; GPS and downloaded originals are untouched.
+              await db.delete('map_cell');
+              await db.update('offline_area', {'indexed': 0});
+              await db.delete('block_cache');
+              await db.delete('supported_section');
+              await db.delete('match_evidence');
+              await db.delete('network_source');
+              await db.delete('topology_cache');
+              await db.delete('analysis_stamp');
               return;
             }
             throw StateError('Unsupported database version: $oldVersion');
@@ -111,7 +127,7 @@ class AppDatabase {
       'ALTER TABLE offline_area ADD COLUMN indexed INTEGER NOT NULL DEFAULT 0',
     );
     await db.execute(
-      'CREATE TABLE map_cell (source TEXT NOT NULL REFERENCES offline_area(version) ON DELETE CASCADE, cell TEXT NOT NULL, geojson TEXT NOT NULL, bytes INTEGER NOT NULL, sections INTEGER NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(source,cell))',
+      'CREATE TABLE map_cell (source TEXT NOT NULL REFERENCES offline_area(version) ON DELETE CASCADE, cell TEXT NOT NULL, geojson BLOB NOT NULL, encoding INTEGER NOT NULL DEFAULT 0, bytes INTEGER NOT NULL, sections INTEGER NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(source,cell))',
     );
     await db.execute('CREATE INDEX map_cell_lookup ON map_cell(cell)');
     await db.execute(

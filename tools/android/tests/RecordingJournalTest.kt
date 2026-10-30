@@ -59,7 +59,11 @@ class RecordingJournalTest {
     @Test fun `stop is durable idempotent and rejects old notifications`() {
         val first = journal.start("walk", 1000, null)
         journal.append(first, fix(2000), 0.0, JSONObject())
-        assertTrue(journal.finish(first, 3000, false))
+        assertTrue(journal.finish(first, 3000, false, "notification"))
+        journal.close(); journal = RecordingJournal(file.path)
+        val diagnostic = journal.state()!!["diagnostics"] as Map<*, *>
+        assertEquals("notification", diagnostic["stopSource"])
+        assertEquals(3000, diagnostic["stopRequestedAt"])
         assertFalse(journal.finish(first, 4000, false))
         assertFalse(journal.append(first, fix(5000), 5.0, JSONObject()))
         val second = journal.start("cycle", 6000, null)

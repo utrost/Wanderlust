@@ -81,6 +81,10 @@ class RecordingServiceTest {
         val log = org.json.JSONArray((state()["diagnostics"] as Map<*, *>)["evidenceLog"] as String)
         val entry = (0 until log.length()).map { log.getJSONObject(it) }.last { it.getString("event") == "classification_test" }
         assertEquals(2, entry.getInt("schema"))
+        assertTrue(entry.has("requestedIntervalMs"))
+        assertTrue(entry.has("stationary"))
+        assertTrue(entry.has("lastAcceptedElapsed"))
+        assertTrue(entry.has("provider"))
         assertTrue(entry.has("importance"))
         assertTrue(entry.has("serviceReported"))
         assertTrue(entry.has("foregroundServiceType"))
@@ -124,6 +128,7 @@ class RecordingServiceTest {
         drain()
         assertEquals(false, state()["active"])
         assertEquals("completed", state()["status"])
+        assertEquals("notification", (state()["diagnostics"] as Map<*, *>)["stopSource"])
         accept() // Already queued/late provider callbacks cannot write after Stop.
         assertEquals(1L, state()["pointCount"])
     }

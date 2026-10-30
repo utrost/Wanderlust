@@ -1,4 +1,6 @@
 import 'dart:isolate';
+import 'dart:io';
+import 'dart:typed_data';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -194,8 +196,38 @@ String mergeCellSources(
   final footprints = <List<double>>[];
   Rect? bounds;
   Map<String, dynamic>? template;
-  for (final source in sources) {
-    final j = jsonDecode(source) as Map<String, dynamic>;
+  // Newest OSM snapshot wins; version breaks ties deterministically. Resolve
+  // nodes before edge deduplication so even old-only edges share the new node.
+  final decoded =
+      sources.map((s) => jsonDecode(s) as Map<String, dynamic>).toList()
+        ..sort((a, b) {
+          final am = a['wanderlust_network'] as Map;
+          final bm = b['wanderlust_network'] as Map;
+          final order = (bm['osm_base'] as String? ?? '').compareTo(
+            am['osm_base'] as String? ?? '',
+          );
+          return order != 0
+              ? order
+              : (bm['network_version'] as String).compareTo(
+                  am['network_version'] as String,
+                );
+        });
+  final nodes = <int, List<dynamic>>{};
+  for (final j in decoded) {
+    for (final f in j['features'] as List) {
+      final p = f['properties'] as Map;
+      final line = f['geometry']['coordinates'] as List;
+      for (final endpoint in [
+        ('from_node', line.first),
+        ('to_node', line.last),
+      ]) {
+        final id = p[endpoint.$1];
+        if (id is int) nodes.putIfAbsent(id, () => endpoint.$2 as List);
+      }
+    }
+  }
+  final parentSources = <int, Map<String, dynamic>>{};
+  for (final j in decoded) {
     template ??= j;
     versions.add(j['wanderlust_network']['network_version'] as String);
     final b = geographicBounds(
@@ -204,6 +236,16 @@ String mergeCellSources(
     footprints.add(boundsList(b));
     bounds = bounds?.expandToInclude(b) ?? b;
     for (final f in j['features'] as List) {
+      final p = f['properties'] as Map;
+      final parent = (p['coverage_parent'] ?? f['id']) as int;
+      // A changed parent length can produce fewer refined sections. Never
+      // retain stale tail sections from an older copy of that same parent.
+      if (!identical(parentSources.putIfAbsent(parent, () => j), j)) continue;
+      final line = f['geometry']['coordinates'] as List;
+      if (nodes[p['from_node']] != null) line[0] = nodes[p['from_node']];
+      if (nodes[p['to_node']] != null) {
+        line[line.length - 1] = nodes[p['to_node']];
+      }
       features.putIfAbsent(f['id'] as int, () => f);
     }
     for (final f in j['wanderlust_scenery'] as List? ?? []) {
@@ -220,7 +262,7 @@ String mergeCellSources(
   }
   versions.sort();
   final version =
-      'cell-v1/$cell/${sha256.convert(utf8.encode(jsonEncode([versions, features.values.toList(), scenery.values.toList(), places.values.toList()])))}';
+      'cell-v2/$cell/${sha256.convert(utf8.encode(jsonEncode([versions, features.values.toList(), scenery.values.toList(), places.values.toList()])))}';
   return jsonEncode({
     ...template!,
     'bbox': boundsList(bounds!),
@@ -266,6 +308,12 @@ Future<void> _indexWorker((String, SendPort) input) async {
   input.$2.send(ack.sendPort);
   try {
     for (final cell in indexMapCells(input.$1)) {
+      // Compression runs in this worker, never on the UI isolate. `bytes`
+      // remains the decoded processing size used by active-map budgets.
+      cell['geojson'] = Uint8List.fromList(
+        gzip.encode(utf8.encode(cell['geojson'] as String)),
+      );
+      cell['encoding'] = 1;
       input.$2.send(cell);
       if (!await replies.moveNext()) break;
     }

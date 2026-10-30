@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import '../maps/map_cells.dart';
@@ -16,7 +18,7 @@ class OfflineMapRepository implements SpatialAreaStore {
   @override
   Future<List<OfflineArea>> listAreas() async {
     final rows = await (await _db).rawQuery(
-      'SELECT a.version,a.name,a.downloaded_at,a.bytes,a.bbox,COALESCE((SELECT SUM(c.bytes) FROM map_cell c WHERE c.source=a.version),0) AS cache_bytes FROM offline_area a ORDER BY a.downloaded_at DESC',
+      'SELECT a.version,a.name,a.downloaded_at,a.bytes,a.bbox,COALESCE((SELECT SUM(length(CAST(c.geojson AS BLOB))) FROM map_cell c WHERE c.source=a.version),0) AS cache_bytes FROM offline_area a ORDER BY a.downloaded_at DESC',
     );
     return rows
         .map(
@@ -209,15 +211,14 @@ class OfflineMapRepository implements SpatialAreaStore {
     final db = await _db;
     // Cell payloads can exceed CursorWindow on dense maps: chunk text reads.
     final rows = await db.rawQuery(
-      'SELECT c.source,c.digest,length(c.geojson) AS n FROM map_cell c JOIN offline_area a ON a.version = c.source WHERE c.cell = ? AND a.indexed = 1 ORDER BY c.source',
+      'SELECT c.source,c.digest,c.encoding,length(c.geojson) AS n FROM map_cell c JOIN offline_area a ON a.version = c.source WHERE c.cell = ? AND a.indexed = 1 ORDER BY c.source',
       [cell],
     );
-    final sources = <String>[], versions = <String>[];
-    final digests = <String>{};
+    final sources = <Object>[], versions = <String>[];
     for (final row in rows) {
       versions.add(row['source'] as String);
-      if (!digests.add(row['digest'] as String)) continue;
       final b = StringBuffer();
+      final compressed = BytesBuilder(copy: false);
       for (
         var start = 1;
         start <= (row['n'] as int);
@@ -227,9 +228,13 @@ class OfflineMapRepository implements SpatialAreaStore {
           'SELECT substr(geojson,?,?) AS chunk FROM map_cell WHERE cell = ? AND source = ?',
           [start, _mapChunkCharacters, cell, row['source']],
         );
-        b.write(part.single['chunk']);
+        if (row['encoding'] == 1) {
+          compressed.add(part.single['chunk'] as Uint8List);
+        } else {
+          b.write(part.single['chunk']);
+        }
       }
-      sources.add(b.toString());
+      sources.add(row['encoding'] == 1 ? compressed.takeBytes() : b.toString());
     }
     return sources.isEmpty
         ? null
@@ -237,8 +242,13 @@ class OfflineMapRepository implements SpatialAreaStore {
   }
 }
 
-String _mergeCell((String, List<String>, List<String>) value) =>
-    mergeCellSources(value.$1, value.$2, value.$3);
+String _mergeCell((String, List<Object>, List<String>) value) =>
+    mergeCellSources(value.$1, [
+      for (final source in value.$2)
+        source is String
+            ? source
+            : utf8.decode(gzip.decode(source as Uint8List)),
+    ], value.$3);
 
 String _sourceBounds(String source) =>
     jsonEncode((jsonDecode(source) as Map)['bbox']);

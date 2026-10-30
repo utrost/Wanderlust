@@ -14,6 +14,9 @@ import 'dart:io' show Platform;
 import 'package:ffi/ffi.dart';
 
 // ── native signatures ───────────────────────────────────────────────────────
+typedef _NetworkErrorNative = Pointer<Utf8> Function(Pointer<Utf8>);
+typedef _NetworkError = Pointer<Utf8> Function(Pointer<Utf8>);
+
 typedef _FromGeoJsonNative = Pointer<Void> Function(Pointer<Utf8>);
 typedef _FromGeoJson = Pointer<Void> Function(Pointer<Utf8>);
 
@@ -62,7 +65,12 @@ class MatchResult {
 /// Loads the native library and exposes the geo-core entry points.
 class WanderlustGeo {
   WanderlustGeo._(DynamicLibrary lib)
-    : _fromGeoJson = lib.lookupFunction<_FromGeoJsonNative, _FromGeoJson>(
+    : _networkError = lib.providesSymbol('wanderlust_network_error')
+          ? lib.lookupFunction<_NetworkErrorNative, _NetworkError>(
+              'wanderlust_network_error',
+            )
+          : null,
+      _fromGeoJson = lib.lookupFunction<_FromGeoJsonNative, _FromGeoJson>(
         'wanderlust_matcher_from_geojson',
       ),
       _matchGpx = lib.lookupFunction<_MatchGpxNative, _MatchGpx>(
@@ -75,6 +83,7 @@ class WanderlustGeo {
         'wanderlust_string_free',
       );
 
+  final _NetworkError? _networkError;
   final _FromGeoJson _fromGeoJson;
   final _MatchGpx _matchGpx;
   final _FreeMatcher _freeMatcher;
@@ -97,6 +106,14 @@ class WanderlustGeo {
     try {
       final handle = _fromGeoJson(ptr);
       if (handle == nullptr) {
+        final error = _networkError?.call(ptr);
+        if (error != null && error != nullptr) {
+          try {
+            throw FormatException(error.toDartString());
+          } finally {
+            _freeString(error);
+          }
+        }
         throw const FormatException('geo-core rejected the street network');
       }
       return Matcher._(this, handle);

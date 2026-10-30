@@ -21,6 +21,9 @@ typedef struct Matcher Matcher;
 /* Build a matcher from a GeoJSON street network. Returns NULL on bad input. */
 Matcher *wanderlust_matcher_from_geojson(const char *geojson);
 
+/* Optional validation detail; free non-NULL result with wanderlust_string_free. */
+char *wanderlust_network_error(const char *geojson);
+
 /* Free a matcher handle. */
 void wanderlust_matcher_free(Matcher *matcher);
 

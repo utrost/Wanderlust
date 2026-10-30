@@ -121,7 +121,7 @@ void main() {
       );
       try {
         final db = await upgraded.database;
-        expect(await db.getVersion(), 2);
+        expect(await db.getVersion(), 3);
         expect((await db.query('offline_area')).single['geojson'], original);
         expect((await db.query('recorded_walk')).single['fingerprint'], 'keep');
         expect((await db.query('offline_area')).single['indexed'], 0);

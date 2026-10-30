@@ -338,7 +338,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
               ),
             ListTile(
               title: Text(
-                '${_areas.length} saved maps · ${(_areas.fold<int>(0, (n, a) => n + a.bytes + a.cacheBytes) / (1024 * 1024)).toStringAsFixed(1)} MiB',
+                '${_areas.length} saved maps · ${(_areas.fold<int>(0, (n, a) => n + a.bytes + a.cacheBytes) / (1024 * 1024)).toStringAsFixed(1)} MiB stored\nMap data and locally generated cache. The cache can be rebuilt.',
               ),
               subtitle: const Text(
                 'Includes downloaded maps and their rebuildable street index. Nearby maps load automatically; other downloads stay available offline.',
@@ -348,7 +348,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
               ListTile(
                 title: Text(area.name),
                 subtitle: Text(
-                  '${area.bounds == null ? '' : '${(area.bounds!.width * area.bounds!.height * 111.32 * 111.32 * math.cos(area.bounds!.center.dy * math.pi / 180)).toStringAsFixed(1)} km² · '}${((area.bytes + area.cacheBytes) / (1024 * 1024)).toStringAsFixed(1)} MiB · saved ${area.downloadedAt.toLocal().toString().split(' ').first}${_active == area.version ? ' · selected' : ''}',
+                  '${area.bounds == null ? '' : '${(area.bounds!.width * area.bounds!.height * 111.32 * 111.32 * math.cos(area.bounds!.center.dy * math.pi / 180)).toStringAsFixed(1)} km² · '}${((area.bytes + area.cacheBytes) / (1024 * 1024)).toStringAsFixed(1)} MiB total · ${(area.bytes / (1024 * 1024)).toStringAsFixed(1)} MiB map + ${(area.cacheBytes / (1024 * 1024)).toStringAsFixed(1)} MiB cache · saved ${area.downloadedAt.toLocal().toString().split(' ').first}${_active == area.version ? ' · selected' : ''}',
                 ),
                 leading: const Icon(Icons.offline_pin_outlined),
                 trailing: Row(
