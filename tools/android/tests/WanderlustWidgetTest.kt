@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
+import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import org.junit.Assert.*
@@ -82,11 +83,25 @@ class WanderlustWidgetTest {
         val after = shadowOf(manager).getViewFor(id).findViewById<TextView>(R.id.widget_updated).text.toString()
         assertEquals(before, after)
     }
+    @Test fun `small card at large text uses readable shortcut until enlarged`() {
+        RuntimeEnvironment.setFontScale(2.0f)
+        val id = shadowOf(manager).createWidget(WanderlustWidget::class.java, R.layout.wanderlust_widget)
+        WanderlustWidget.publish(context, state(), true)
+        val root = shadowOf(manager).getViewFor(id)
+        assertEquals(View.GONE, root.findViewById<TextView>(R.id.widget_updated).visibility)
+        assertEquals("Open Wanderlust", root.findViewById<TextView>(R.id.widget_status).text.toString())
+        assertTrue(root.findViewById<View>(R.id.widget_root).contentDescription.contains("Last recording update"))
+    }
     @Test @Config(qualifiers="w320dp-h640dp") fun `large text remains within a resized card and has complete accessible label`() {
         RuntimeEnvironment.setFontScale(2.0f)
         val id = shadowOf(manager).createWidget(WanderlustWidget::class.java, R.layout.wanderlust_widget)
         WanderlustWidget.publish(context, state(), true)
         val root = shadowOf(manager).getViewFor(id)
+        manager.updateAppWidgetOptions(id, Bundle().apply {
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 240)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 300)
+        })
+        assertEquals(View.VISIBLE, root.findViewById<TextView>(R.id.widget_updated).visibility)
         val width = (300 * context.resources.displayMetrics.density).toInt()
         val height = (240 * context.resources.displayMetrics.density).toInt()
         root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))

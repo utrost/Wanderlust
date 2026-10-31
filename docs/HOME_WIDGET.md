@@ -3,8 +3,8 @@
 The optional Wanderlust widget opens the existing app and shows a dated recording
 summary. Add it from the launcher's Widgets menu; there is no app setting to enable
 it. It starts at roughly three columns by two rows (launcher dependent), with a
-minimum content size of 180×160 dp, and can grow in either direction. Enlarge it
-when using large system text. It follows the system light/dark theme.
+minimum content size of 180×110 dp, and can grow in either direction. Enlarge it
+when using large system text: a small card shows an open-app shortcut, and resizing reveals the summary. It follows the system light/dark theme.
 
 ![Compact and enlarged widget concepts](images/wanderlust-widget-concept.svg)
 

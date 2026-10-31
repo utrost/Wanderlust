@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import android.text.format.DateFormat
+import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONObject
 import java.util.Date
@@ -96,13 +97,20 @@ class WanderlustWidget : AppWidgetProvider() {
             val intent = PendingIntent.getActivity(context, 5413,
                 Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val views = RemoteViews(context.packageName, R.layout.wanderlust_widget).apply {
-                setTextViewText(R.id.widget_status, text)
-                setTextViewText(R.id.widget_updated, caption)
-                setContentDescription(R.id.widget_root, context.getString(R.string.widget_open) + ". " + text + ". " + caption)
-                setOnClickPendingIntent(R.id.widget_root, intent)
+            for (id in ids) {
+                val height = manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110)
+                // At large text sizes a small card becomes a clear open-app shortcut;
+                // resizing restores the visual summary. TalkBack always has full text.
+                val compact = height < 36 + 72 * context.resources.configuration.fontScale
+                val views = RemoteViews(context.packageName, R.layout.wanderlust_widget).apply {
+                    setTextViewText(R.id.widget_status, if (compact) context.getString(R.string.widget_open) else text)
+                    setViewVisibility(R.id.widget_updated, if (compact) View.GONE else View.VISIBLE)
+                    setTextViewText(R.id.widget_updated, caption)
+                    setContentDescription(R.id.widget_root, context.getString(R.string.widget_open) + ". " + text + ". " + caption)
+                    setOnClickPendingIntent(R.id.widget_root, intent)
+                }
+                manager.updateAppWidget(id, views)
             }
-            manager.updateAppWidget(ids, views)
         }
     }
 }
