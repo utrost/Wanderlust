@@ -131,6 +131,21 @@ class RecordingServiceTest {
         assertEquals("attention", WanderlustWidget.read(context)!!.phase)
         assertEquals(true, state()["active"])
     }
+    @Test fun `stopping recovery without a service clears the widget recording snapshot`() {
+        val id = state()["walkId"] as Long
+        controller.destroy(); drain()
+        val activity = Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
+        var replied = false
+        RecordingService.handle(activity, true, io.flutter.plugin.common.MethodCall("stop", mapOf("database" to file.path, "walkId" to id)), object : io.flutter.plugin.common.MethodChannel.Result {
+            override fun success(value: Any?) { replied = true }
+            override fun error(code: String, message: String?, details: Any?) { fail(message) }
+            override fun notImplemented() { fail("stop should be handled") }
+        })
+        drain()
+        assertTrue(replied)
+        assertEquals("idle", WanderlustWidget.read(context)!!.phase)
+        assertEquals(false, state()["active"])
+    }
     @Test fun `capture and notification Stop need no Flutter engine`() {
         accept()
         assertEquals(1L, state()["pointCount"])
