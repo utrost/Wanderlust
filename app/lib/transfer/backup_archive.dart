@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 import 'package:crypto/crypto.dart';
 
@@ -9,25 +9,11 @@ import '../memories/memory.dart';
 import '../recording/saved_walk.dart';
 import '../settings/walk_preferences.dart';
 import 'backup_contents.dart';
+import 'backup_progress.dart';
 import 'backup_data.dart';
 import 'walk_codec.dart';
 
-class BackupCancelled implements Exception {}
-
-class BackupProgress {
-  bool cancelled = false;
-  int records = 0;
-  final void Function(int)? onProgress;
-  BackupProgress({this.onProgress});
-  void check() {
-    if (cancelled) throw BackupCancelled();
-  }
-
-  void advance() {
-    check();
-    onProgress?.call(++records);
-  }
-}
+export 'backup_progress.dart';
 
 /// Version 4: bounded records with individual SHA-256 checksums and raw photos.
 /// Files are staged in private cache; never trust archive names as file paths.
@@ -161,12 +147,21 @@ class BackupArchive {
     if (await file.length() > maxArchive) {
       throw const FormatException('Backup exceeds 2 GiB.');
     }
+    final fileSize = await file.length();
+    progress.stage(
+      'Checking backup',
+      total: fileSize,
+      estimate: true,
+      bytes: true,
+    );
     final input = await file.open();
+    var consumed = 0;
     Future<Uint8List> exact(int length) async {
       final bytes = await input.read(length);
       if (bytes.length != length) {
         throw const FormatException('Backup is incomplete.');
       }
+      consumed += bytes.length;
       return bytes;
     }
 
@@ -197,7 +192,7 @@ class BackupArchive {
           throw const FormatException('Backup record exceeds its size limit.');
         }
         final bytes = await exact(length);
-        if (sha256.convert(bytes).toString() != header['sha256']) {
+        if (await compute(_checksum, bytes) != header['sha256']) {
           throw const FormatException('Backup checksum does not match.');
         }
         if (waitingPhoto != null && kind != 'photo') {
@@ -218,6 +213,7 @@ class BackupArchive {
               'Backup contents are incomplete or inconsistent.',
             );
           }
+          progress.update(fileSize, detail: 'Backup checked');
           return StagedBackup(
             BackupContents(
               walks,
@@ -254,15 +250,15 @@ class BackupArchive {
               throw const FormatException('Oversized map.');
             }
             final source = utf8.decode(bytes);
-            final map = AreaNetwork.parse(source);
-            if (!versions.add(map.version)) {
+            final version = await compute(_mapVersion, source);
+            if (!versions.add(version)) {
               throw const FormatException('Repeated map.');
             }
             final mapFile = File('${directory.path}/map-${mapFiles.length}');
             await mapFile.writeAsBytes(bytes, flush: true);
             mapFiles.add(mapFile);
           case 'walk':
-            final walk = WalkCodec.importBackup(utf8.decode(bytes)).single;
+            final walk = await compute(_decodeWalkBytes, bytes);
             if (!uids.add(walk.uid) || walks.length >= 100000) {
               throw const FormatException('Repeated or too many walks.');
             }
@@ -306,6 +302,11 @@ class BackupArchive {
             throw const FormatException('Unknown backup record.');
         }
         count++;
+        progress.update(
+          consumed,
+          detail:
+              '${walks.length} recordings · ${mapFiles.length} maps · ${memories.length} memories checked',
+        );
         progress.advance();
       }
     } on BackupCancelled {
@@ -337,7 +338,8 @@ class StagedBackup {
   final List<File> walkFiles;
   Stream<SavedWalk> walks() async* {
     for (final file in walkFiles) {
-      yield WalkCodec.importBackup(await file.readAsString()).single;
+      final source = await file.readAsString();
+      yield await compute(_decodeWalk, source);
     }
   }
 
@@ -354,3 +356,9 @@ class StagedBackup {
     }
   }
 }
+
+// Top-level workers avoid capturing file handles or UI progress callbacks.
+String _checksum(Uint8List bytes) => sha256.convert(bytes).toString();
+String _mapVersion(String source) => AreaNetwork.parse(source).version;
+SavedWalk _decodeWalk(String source) => WalkCodec.importBackup(source).single;
+SavedWalk _decodeWalkBytes(Uint8List bytes) => _decodeWalk(utf8.decode(bytes));

@@ -93,16 +93,16 @@ class OfflineMapRepository implements SpatialAreaStore {
     if (bytes > 16 * 1024 * 1024) {
       throw const FormatException('Map exceeds the 16 MiB offline limit.');
     }
-    final area = AreaNetwork.parse(geojson);
+    final area = await compute(_validatedMapInfo, geojson);
     final rows = await tx.query('offline_area', columns: ['version']);
-    final exists = rows.any((row) => row['version'] == area.version);
+    final exists = rows.any((row) => row['version'] == area.$1);
     if (keepExisting && exists) return;
     final values = {
-      'name': area.name,
+      'name': area.$2,
       'geojson': geojson,
       'downloaded_at': DateTime.now().toUtc().toIso8601String(),
       'bytes': bytes,
-      'bbox': jsonEncode(area.bbox),
+      'bbox': jsonEncode(area.$3),
     };
     // UPDATE preserves the selection foreign key; REPLACE would clear it.
     if (exists) {
@@ -110,10 +110,10 @@ class OfflineMapRepository implements SpatialAreaStore {
         'offline_area',
         values,
         where: 'version = ?',
-        whereArgs: [area.version],
+        whereArgs: [area.$1],
       );
     } else {
-      await tx.insert('offline_area', {'version': area.version, ...values});
+      await tx.insert('offline_area', {'version': area.$1, ...values});
     }
   }
 
@@ -252,3 +252,8 @@ String _mergeCell((String, List<Object>, List<String>) value) =>
 
 String _sourceBounds(String source) =>
     jsonEncode((jsonDecode(source) as Map)['bbox']);
+
+(String, String, List<double>) _validatedMapInfo(String source) {
+  final area = AreaNetwork.parse(source);
+  return (area.version, area.name, area.bbox);
+}

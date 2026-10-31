@@ -25,6 +25,7 @@ import '../settings/walk_preferences.dart';
 import '../theme/wanderlust_theme.dart';
 import '../transfer/walk_files.dart';
 import '../transfer/walk_transfer.dart';
+import '../transfer/backup_progress.dart';
 import '../widgets/area_map.dart';
 import '../widgets/coverage_status.dart';
 import '../widgets/gps_hud.dart';
@@ -764,18 +765,38 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           autoFillGaps: _preferences.autoFillGaps,
           showStreetNames: _preferences.showStreetNames,
           showMemories: _preferences.showMemories,
-          onChanged: () async {
-            await _recorder.refreshSavedWalks();
-            await _loadPreferences();
-            await _session.activeMaps?.refresh();
-            await _coverage.refreshMaps();
-            await _loadMemories();
-            await _coverage.synchronize(_recorder.savedWalks);
-          },
+          onChanged: _refreshHistory,
+          onRestored: (progress) => _refreshHistory(progress: progress),
         ),
       ),
     );
     await _loadMemories();
+  }
+
+  Future<void> _refreshHistory({BackupProgress? progress}) async {
+    progress?.stage('Loading restored recordings');
+    await _recorder.refreshSavedWalks();
+    await _loadPreferences();
+    progress?.stage(
+      'Preparing offline maps',
+      detail:
+          'Your backup is saved. Large maps can take several minutes to prepare.',
+    );
+    await _session.activeMaps?.refresh();
+    await _coverage.refreshMaps();
+    await _loadMemories();
+    progress?.stage(
+      'Updating routes in nearby maps',
+      detail:
+          'Matching your saved recordings to streets. Blocks will continue updating on the map.',
+    );
+    await _coverage.synchronize(_recorder.savedWalks);
+    // Controllers keep failures in state so the map can show Retry. A restore
+    // must distinguish those failures from successfully finishing all updates.
+    if (progress != null &&
+        (_coverage.error != null || _session.activeMaps?.error != null)) {
+      throw StateError('Restored data saved; map preparation needs a retry.');
+    }
   }
 
   Future<void> _openBlockAt(Offset point) async {

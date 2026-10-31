@@ -77,6 +77,7 @@ class LibraryStore
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
+    void Function(int completed, int total)? onWalkProgress,
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,
@@ -170,6 +171,53 @@ Future<void> perform(
 }
 
 void main() {
+  testWidgets('saved backup remains successful when route preparation fails', (
+    tester,
+  ) async {
+    final store = LibraryStore();
+    final files = TestFiles();
+    files.picked = await tester.runAsync(
+      () => encodeBackup(
+        BackupContents(
+          [WalkCodec.importGpx(segmentedGpx)],
+          const [],
+          preferences: const WalkPreferences(),
+        ),
+      ),
+    );
+    var prepared = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WalkLibraryScreen(
+          transfer: WalkTransfer(
+            data: store.backupData,
+            importer: store,
+            files: files,
+          ),
+          onChanged: () async =>
+              fail('Restore uses the progress-aware callback'),
+          onRestored: (progress) async {
+            prepared = true;
+            expect(progress.canCancel, isFalse);
+            expect(store.walks, hasLength(1));
+            progress.stage('Preparing offline maps');
+            throw StateError('Native matching failed');
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await perform(tester, find.text('Restore backup'));
+    expect(prepared, isTrue);
+    expect(store.walks, hasLength(1));
+    expect(
+      find.textContaining('Backup saved. Map updates could not finish'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Backup restored with memories'), findsNothing);
+    expect(find.text('Cancel'), findsNothing);
+  });
+
   testWidgets(
     'library imports, exports and restores through document actions',
     (tester) async {

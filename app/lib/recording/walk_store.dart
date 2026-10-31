@@ -204,6 +204,7 @@ class SqliteWalkStore
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
+    void Function(int completed, int total)? onWalkProgress,
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,
@@ -214,6 +215,7 @@ class SqliteWalkStore
   }) => importerRepository.mergeWalks(
     incoming,
     deduplicateTrace: deduplicateTrace,
+    onWalkProgress: onWalkProgress,
     memories: memories,
     memoryStream: memoryStream,
     walkStream: walkStream,

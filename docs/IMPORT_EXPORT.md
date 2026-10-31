@@ -57,15 +57,27 @@ internal codec, not a separately supported backup import format.
 
 GPX input is limited to **32 MiB / 100,000 points**. Full archives are limited to
 **2 GiB**, with **32 MiB per record**, **8 MiB per photo**, **100,000 walks**,
-**10,000 memories**, and **eight maps of 16 MiB each**. Walk and photo data are
+**10,000 memories**, and **16 MiB per map**. There is no fixed map-count limit. Walk and photo data are
 staged and committed one item at a time; no combined 80 MiB photo ceiling remains.
 
 Restore offers optional offline maps and an unchecked **Replace my settings**
 choice. Existing walks, memories, maps and map selection take precedence. On a
 fresh installation the backed-up selected map becomes active. Selected content
 commits in one transaction, including settings; an error rolls everything back.
-Export and restore show progress and allow cancellation before commit. Private
-staging files are removed after success, cancellation or failure.
+Restore shows the current stage, elapsed time, bytes checked, item counts and
+GPS points written within each recording. The checking stage may show an
+approximate remaining time once enough work has been measured; this describes
+that stage, not the whole restore. Map preparation and route rebuilding have no
+reliable time estimate, so they show elapsed time and explain what is happening.
+Validation and map parsing run in workers so the progress display remains usable.
+
+Cancellation is available before the database commit begins. Once saving starts,
+keep Wanderlust open until it finishes; the complete restore remains atomic even
+though points are written in small batches. After saving, the screen distinguishes
+preparing offline maps from updating nearby routes. A route-update failure reports
+that the backup was saved and directs the user back to the map to retry. Block
+analysis can continue after returning to the map. Private staging files are removed
+after success, cancellation or failure.
 
 ## Storage and verification
 
