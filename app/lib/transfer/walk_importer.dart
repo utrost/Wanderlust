@@ -7,6 +7,7 @@ abstract interface class WalkImporter {
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
+    void Function(int completed, int total)? onWalkProgress,
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,

@@ -125,14 +125,18 @@ class WalkTransfer {
     void Function()? onCommit,
     StagedBackup? staged,
   }) async {
+    progress.stage('Checking photos', total: bundle.memories.length);
+    var checked = 0;
     await for (final memory
         in staged?.memories() ?? Stream.fromIterable(bundle.memories)) {
       progress.check();
       if (memory.photo != null) await _checkPhoto(memory.photo!);
+      progress.update(++checked);
     }
     final mapCount = staged?.mapFiles.length ?? bundle.maps.length;
     var options = RestoreOptions(maps: mapCount > 0);
     if (backup && (mapCount > 0 || bundle.preferences != null)) {
+      progress.stage('Choose what to restore');
       final selected = await choose(
         RestoreSummary(
           walks: bundle.walks.length,
@@ -146,18 +150,39 @@ class WalkTransfer {
     }
     progress.check();
     // Cancellation is allowed up to this boundary. The commit itself is atomic.
+    progress.canCancel = false;
+    progress.stage('Saving backup to this device');
     onCommit?.call();
     final added = await importer.mergeWalks(
       bundle.walks,
       deduplicateTrace: !backup,
       memories: staged == null ? bundle.memories : const [],
-      memoryStream: staged?.memories(),
-      walkStream: staged?.walks(),
-      mapStream: options.maps ? staged?.maps() : null,
+      memoryStream: progress.track(
+        staged?.memories() ?? Stream.fromIterable(bundle.memories),
+        'Restoring memories',
+        bundle.memories.length,
+      ),
+      walkStream: progress.track(
+        staged?.walks() ?? Stream.fromIterable(bundle.walks),
+        'Restoring recordings',
+        bundle.walks.length,
+      ),
+      mapStream: options.maps
+          ? progress.track(
+              staged?.maps() ?? Stream.fromIterable(bundle.maps),
+              'Restoring offline maps',
+              mapCount,
+            )
+          : null,
+      onWalkProgress: (done, total) {
+        progress.detail = '$done of $total GPS points saved in this recording';
+        progress.notify();
+      },
       maps: options.maps ? bundle.maps : const [],
       preferences: options.settings ? bundle.preferences : null,
       activeMap: options.maps ? bundle.activeMap : null,
     );
+    progress.stage('Backup saved', detail: 'Preparing the updated map…');
     return RestoreResult(
       added: added,
       existing: bundle.walks.length - added,
@@ -170,8 +195,10 @@ class WalkTransfer {
     final directory = await _temporaryRoot.createTemp('wanderlust-export-');
     try {
       final file = File('${directory.path}/backup.wanderlust');
+      progress.stage('Creating backup');
       await BackupArchive.write(file, data, progress);
       progress.check();
+      progress.stage('Saving backup file');
       return await files.saveArchive(file);
     } finally {
       await directory.delete(recursive: true);

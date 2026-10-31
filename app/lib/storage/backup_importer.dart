@@ -23,6 +23,7 @@ class BackupImporter implements WalkImporter {
   Future<int> mergeWalks(
     List<SavedWalk> incoming, {
     bool deduplicateTrace = false,
+    void Function(int completed, int total)? onWalkProgress,
     List<WalkMemory> memories = const [],
     Stream<WalkMemory>? memoryStream,
     Stream<SavedWalk>? walkStream,
@@ -87,7 +88,8 @@ class BackupImporter implements WalkImporter {
             'confirmedSections': walk.confirmedSections,
           }),
         });
-        final batch = txn.batch();
+        var batch = txn.batch();
+        onWalkProgress?.call(0, walk.points.length);
         for (var i = 0; i < walk.points.length; i++) {
           final p = walk.points[i];
           batch.insert('recorded_point', {
@@ -96,8 +98,12 @@ class BackupImporter implements WalkImporter {
             'position': jsonEncode(p.toJson()),
             'timestamp': p.timestamp.toUtc().toIso8601String(),
           });
+          if ((i + 1) % 500 == 0 || i + 1 == walk.points.length) {
+            await batch.commit(noResult: true);
+            onWalkProgress?.call(i + 1, walk.points.length);
+            batch = txn.batch();
+          }
         }
-        await batch.commit(noResult: true);
         byUid[walk.uid] = id;
         if (deduplicateTrace) traces.add(walk.traceKey);
         added++;

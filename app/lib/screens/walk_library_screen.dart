@@ -1,4 +1,5 @@
 import '../maps/area_store.dart';
+import '../widgets/backup_progress_panel.dart';
 import '../maps/active_maps.dart';
 import 'package:flutter/material.dart';
 
@@ -15,6 +16,7 @@ class WalkLibraryScreen extends StatefulWidget {
     super.key,
     required this.transfer,
     required this.onChanged,
+    this.onRestored,
     this.showSamples = false,
     this.networks = const [],
     this.fillSmallGaps = false,
@@ -24,6 +26,7 @@ class WalkLibraryScreen extends StatefulWidget {
   });
   final WalkTransfer transfer;
   final Future<void> Function() onChanged;
+  final Future<void> Function(BackupProgress)? onRestored;
   final bool showSamples;
   final List<AreaNetwork> networks;
   final bool fillSmallGaps;
@@ -54,17 +57,16 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
 
   String? _message;
   BackupProgress? _archiveProgress;
-  int _archiveRecords = 0;
   BackupProgress _beginArchive() {
-    _archiveRecords = 0;
     return _archiveProgress = BackupProgress(
       onProgress: (records) {
-        if (mounted) setState(() => _archiveRecords = records);
+        if (mounted) setState(() {});
       },
     );
   }
 
   Future<void> _cancelArchive() async {
+    if (_archiveProgress?.canCancel != true) return;
     _archiveProgress?.cancelled = true;
     await _transfer.cancel();
   }
@@ -155,16 +157,32 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
       choose: _chooseRestore,
       progress: progress,
       onCommit: () {
-        if (mounted) setState(() => _archiveProgress = null);
+        if (mounted) setState(() {});
       },
     );
     if (result == null) return;
     await _load();
     if (result.preferences != null) _restoredPreferences = result.preferences;
-    await widget.onChanged();
+    progress.stage(
+      'Updating maps and routes',
+      detail:
+          'Your backup is saved. Large offline maps can take several minutes to prepare.',
+    );
+    try {
+      if (backup && widget.onRestored != null) {
+        await widget.onRestored!(progress);
+      } else {
+        await widget.onChanged();
+      }
+    } catch (_) {
+      _message =
+          '${backup ? 'Backup' : 'Recording'} saved. Map updates could not finish; return to the map to retry.';
+      return;
+    }
+    progress.stage('Restore complete');
     _message =
         '${result.added} walk${result.added == 1 ? '' : 's'} added; ${result.existing} already saved. '
-        '${backup ? 'Backup restored with memories${result.restoredMaps ? ', offline maps' : ''}${result.preferences != null ? ' and settings' : ''}.' : 'Streets update for walks inside saved maps.'}';
+        '${backup ? 'Backup restored with memories${result.restoredMaps ? ', offline maps' : ''}${result.preferences != null ? ' and settings' : ''}. Blocks may continue updating on the map.' : 'Streets update for walks inside saved maps.'}';
   }
 
   Future<void> _backup() async {
@@ -241,7 +259,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
       appBar: AppBar(
         title: const Text('Recording history'),
         actions: [
-          if (_busy && _archiveProgress != null)
+          if (_busy && _archiveProgress?.canCancel == true)
             TextButton(onPressed: _cancelArchive, child: const Text('Cancel')),
         ],
       ),
@@ -255,8 +273,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                   child: Column(
                     children: [
                       if (_busy && _archiveProgress != null) ...[
-                        const LinearProgressIndicator(),
-                        Text('Processing backup · $_archiveRecords items'),
+                        BackupProgressPanel(progress: _archiveProgress!),
                         const SizedBox(height: 8),
                       ],
                       const Text(
@@ -290,7 +307,7 @@ class _WalkLibraryScreenState extends State<WalkLibraryScreen> {
                         'Backups include recordings, photos, maps and settings. Keep a copy somewhere safe. GPX contains one journey.',
                         style: TextStyle(fontSize: 12),
                       ),
-                      if (_busy)
+                      if (_busy && _archiveProgress == null)
                         const Padding(
                           padding: EdgeInsets.all(8),
                           child: LinearProgressIndicator(),

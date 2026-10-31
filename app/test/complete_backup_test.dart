@@ -27,6 +27,38 @@ void main() {
     await dir.delete(recursive: true);
   });
 
+  test('point batches report progress but remain one atomic restore', () async {
+    final small = WalkCodec.importGpx(segmentedGpx);
+    final walk = SavedWalk(
+      small.id,
+      small.startedAt,
+      small.endedAt,
+      small.status,
+      List.generate(1201, (_) => small.points.first),
+      uid: small.uid,
+    );
+    final updates = <int>[];
+    await expectLater(
+      store.mergeWalks(
+        [walk],
+        onWalkProgress: (done, total) {
+          expect(total, 1201);
+          updates.add(done);
+          if (done == 1000) throw StateError('Storage unavailable');
+        },
+      ),
+      throwsStateError,
+    );
+    expect(updates, [0, 500, 1000]);
+    expect(await store.listSaved(), isEmpty);
+    updates.clear();
+    await store.mergeWalks([
+      walk,
+    ], onWalkProgress: (done, total) => updates.add(done));
+    expect(updates, [0, 500, 1000, 1201]);
+    expect((await store.listSaved()).single.points, hasLength(1201));
+  });
+
   test(
     'streamed backup restores maps, settings, walks and pinned photos after restart',
     () async {
