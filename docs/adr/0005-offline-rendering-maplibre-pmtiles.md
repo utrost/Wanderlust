@@ -1,6 +1,6 @@
 # ADR-0005: Offline rendering with MapLibre Native + PMTiles
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0008](0008-offline-geojson-cell-rendering.md)
 - **Date:** 2026-07-07
 
 ## Context

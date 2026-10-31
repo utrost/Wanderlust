@@ -34,6 +34,7 @@ class RecordingServiceTest {
         RecordingService.worker.submit {}.get(10, TimeUnit.SECONDS)
     }
     @Before fun setup() {
+        WanderlustWidget.allowNextUpdate()
         shadowOf(context).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)
         file = context.getDatabasePath("wanderlust.db")
         file.parentFile!!.mkdirs(); file.delete()
@@ -115,6 +116,35 @@ class RecordingServiceTest {
         val field = RecordingService::class.java.getDeclaredField("evidenceWorker").apply { isAccessible=true }
         (field.get(controller.get()) as java.util.concurrent.ScheduledExecutorService).submit {}.get(5, TimeUnit.SECONDS)
         assertTrue(((state()["diagnostics"] as Map<*, *>)["evidenceLog"] as String).contains("legacy_test"))
+    }
+    @Test fun `widget follows committed recording and notification stop`() {
+        assertEquals("recording", WanderlustWidget.read(context)!!.phase)
+        accept()
+        val stop = shadowOf(notifications).getNotification(5411).actions.single().actionIntent
+        controller.get().onStartCommand(shadowOf(stop).savedIntent, 0, 2)
+        drain()
+        assertEquals("idle", WanderlustWidget.read(context)!!.phase)
+        assertEquals("completed", state()["status"])
+    }
+    @Test fun `widget marks a recoverable session when recording service is destroyed`() {
+        controller.destroy(); drain()
+        assertEquals("attention", WanderlustWidget.read(context)!!.phase)
+        assertEquals(true, state()["active"])
+    }
+    @Test fun `stopping recovery without a service clears the widget recording snapshot`() {
+        val id = state()["walkId"] as Long
+        controller.destroy(); drain()
+        val activity = Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
+        var replied = false
+        RecordingService.handle(activity, true, io.flutter.plugin.common.MethodCall("stop", mapOf("database" to file.path, "walkId" to id)), object : io.flutter.plugin.common.MethodChannel.Result {
+            override fun success(value: Any?) { replied = true }
+            override fun error(code: String, message: String?, details: Any?) { fail(message) }
+            override fun notImplemented() { fail("stop should be handled") }
+        })
+        drain()
+        assertTrue(replied)
+        assertEquals("idle", WanderlustWidget.read(context)!!.phase)
+        assertEquals(false, state()["active"])
     }
     @Test fun `capture and notification Stop need no Flutter engine`() {
         accept()
