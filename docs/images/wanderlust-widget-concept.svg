@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="430" viewBox="0 0 960 430" role="img" aria-label="Wanderlust widget concepts: compact idle, recording snapshot, and enlarged dark theme">
+<rect width="960" height="430" fill="#eee8e0"/>
+<g font-family="sans-serif" fill="#302c2b">
+<text x="32" y="34" font-size="20">Home-screen widget · layout concepts</text>
+<g transform="translate(32,65)">
+<rect width="240" height="200" rx="24" fill="#fcf8f0" stroke="#783f18"/>
+<text x="20" y="55" font-size="20" font-weight="bold" fill="#783f18">Wanderlust</text>
+<text x="20" y="90" font-size="17">Open your map</text><text x="20" y="115" font-size="17">to explore</text>
+<text x="20" y="155" font-size="14">Open Wanderlust</text>
+<text y="235" font-size="16">Idle · whole card opens app</text>
+</g>
+<g transform="translate(300,65)">
+<rect width="260" height="200" rx="24" fill="#fcf8f0" stroke="#783f18"/>
+<text x="20" y="55" font-size="20" font-weight="bold" fill="#783f18">Wanderlust</text>
+<text x="20" y="90" font-size="17">Last recording update:</text><text x="20" y="115" font-size="17">1.25 km</text>
+<text x="20" y="155" font-size="14">Updated 31/10/2026 16:35</text>
+<text y="235" font-size="16">Dated snapshot · no live timer</text>
+</g>
+<g transform="translate(590,65)">
+<rect width="338" height="310" rx="24" fill="#282321" stroke="#e4b894"/>
+<text x="24" y="64" font-size="32" font-weight="bold" fill="#e4b894">Wanderlust</text>
+<g fill="#f6eee7"><text x="24" y="120" font-size="28">Last recording</text><text x="24" y="158" font-size="28">update: 1.25 km</text>
+<text x="24" y="216" font-size="22">Updated 31/10/2026</text><text x="24" y="248" font-size="22">16:35</text></g>
+<text y="342" font-size="16">Enlarged card · dark theme</text>
+</g></g></svg>

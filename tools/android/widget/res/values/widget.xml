@@ -1,0 +1,13 @@
+<resources>
+    <string name="widget_name">Wanderlust</string>
+    <string name="widget_description">Open your map and see a dated recording summary.</string>
+    <string name="widget_open">Open Wanderlust</string>
+    <string name="widget_idle">Open your map to explore</string>
+    <string name="widget_recording">Last recording update: %1$.2f km</string>
+    <string name="widget_gps">GPS needed attention · %1$.2f km recorded</string>
+    <string name="widget_attention">Open app to check your recording</string>
+    <string name="widget_updated">Updated %1$s</string>
+    <color name="widget_background">#FCF8F0</color>
+    <color name="widget_text">#302C2B</color>
+    <color name="widget_accent">#783F18</color>
+</resources>

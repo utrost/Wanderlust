@@ -42,8 +42,23 @@ def configure(directory):
     ET.indent(tree, space='    ')
     tree.write(manifest, encoding='unicode')
     sources = Path(__file__).parent / 'android'
+    widget_name = 'com.simiono.wanderlust.WanderlustWidget'
+    if not any(r.get(f'{{{ANDROID}}}name') == widget_name for r in application.findall('receiver')):
+        receiver = ET.SubElement(application, 'receiver', {
+            f'{{{ANDROID}}}name': widget_name,
+            f'{{{ANDROID}}}exported': 'false',
+            f'{{{ANDROID}}}label': '@string/widget_name',
+        })
+        intent_filter = ET.SubElement(receiver, 'intent-filter')
+        ET.SubElement(intent_filter, 'action', {f'{{{ANDROID}}}name': 'android.appwidget.action.APPWIDGET_UPDATE'})
+        ET.SubElement(receiver, 'meta-data', {
+            f'{{{ANDROID}}}name': 'android.appwidget.provider',
+            f'{{{ANDROID}}}resource': '@xml/wanderlust_widget_info',
+        })
+    shutil.copytree(sources / 'widget/res', main / 'res', dirs_exist_ok=True)
     for source, relative in (
         ('RecordingBattery.kt', 'kotlin/com/simiono/wanderlust/RecordingBattery.kt'),
+        ('WanderlustWidget.kt', 'kotlin/com/simiono/wanderlust/WanderlustWidget.kt'),
         ('MainActivity.kt', 'kotlin/com/simiono/wanderlust/MainActivity.kt'),
         ('CompassEvents.kt', 'kotlin/com/simiono/wanderlust/CompassEvents.kt'),
         ('RecordingService.kt', 'kotlin/com/simiono/wanderlust/RecordingService.kt'),

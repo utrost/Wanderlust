@@ -178,7 +178,10 @@ class RecordingService : Service() {
                 if (activeId == null) {
                     try {
                         preferences(this).getString("database", null)?.let { path ->
-                            RecordingJournal(path).use { it.finish(id, System.currentTimeMillis(), true, "notification_without_service") }
+                            RecordingJournal(path).use {
+                                it.finish(id, System.currentTimeMillis(), true, "notification_without_service")
+                                WanderlustWidget.publish(this, it.state(), false)
+                            }
                         }
                     } finally { shutdown() }
                 } else stopSession(id, false, "notification")
@@ -359,6 +362,7 @@ class RecordingService : Service() {
         val s = journal?.state() ?: return
         val text = if (SystemClock.elapsedRealtime()-lastReceived >= 45000) "GPS paused · reconnecting" else if (!hasFreshFix) "Finding your location…" else String.format(Locale.getDefault(), "%.2f km · %s", (s["meters"] as Double)/1000, "Recording in progress")
         notifications.notify(NOTIFICATION_ID, notification(text, sessionStarted, activeId))
+        WanderlustWidget.publish(this, s, true, SystemClock.elapsedRealtime()-lastReceived >= 45000)
     }
     private fun builder(channel: String): Notification.Builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channel) else Notification.Builder(this)
     private fun openApp(): PendingIntent = PendingIntent.getActivity(this, 400,
@@ -383,6 +387,9 @@ class RecordingService : Service() {
         } catch (e: Exception) { storageFailure(e) }
     }
     private fun releaseResources() {
+        // This snapshot is advisory. A widget failure must never affect cleanup.
+        try { journal?.state()?.let { WanderlustWidget.publish(this, it, false) } }
+        catch (_: Exception) { /* Keep the previous dated snapshot. */ }
         evidenceWatch?.cancel(false); evidenceWatch = null
         if (receiverRegistered) { unregisterReceiver(screenReceiver); receiverRegistered = false }
         main.removeCallbacks(mainPulse)
@@ -470,7 +477,10 @@ class RecordingService : Service() {
                         if (call.method == "stop") {
                             val id = call.argument<Number>("walkId")!!.toLong()
                             if (service?.activeId == id) service.stopSession(id, false, "app")
-                            else j.finish(id, System.currentTimeMillis(), true, "app_without_service")
+                            else {
+                                j.finish(id, System.currentTimeMillis(), true, "app_without_service")
+                                WanderlustWidget.publish(activity, j.state(), false)
+                            }
                             main.post { result.success(null) }
                         } else {
                             val s = j.state()
@@ -484,6 +494,7 @@ class RecordingService : Service() {
                                 val after = if (call.argument<Number>("walkId")?.toLong() == id) call.argument<Number>("after")?.toInt() ?: -1 else -1
                                 s["points"] = j.points(id, after)
                             }
+                            WanderlustWidget.publish(activity, s, s?.get("running") == true, s?.get("stale") == true)
                             main.post { result.success(s) }
                         }
                     } finally { if (own) j.close() }
