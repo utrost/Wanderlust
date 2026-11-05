@@ -1,3 +1,4 @@
+import '../diagnostics/map_diagnostics.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
@@ -304,7 +305,8 @@ class CoverageController extends ChangeNotifier {
       final source = await _loadNetwork();
       await _loadMaps(source == null ? null : AreaNetwork.parse(source));
       error = null;
-    } catch (e) {
+    } catch (e, stack) {
+      MapAttempt.current?.capture(e, stack);
       error = CoverageFailure(
         network == null
             ? 'Area could not load'
@@ -378,7 +380,8 @@ class CoverageController extends ChangeNotifier {
         final source = await _loadNetwork();
         await _loadMaps(source == null ? null : AreaNetwork.parse(source));
         error = null;
-      } catch (e) {
+      } catch (e, stack) {
+        MapAttempt.current?.capture(e, stack);
         error = CoverageFailure('Could not load saved maps', e.toString());
       }
       _notify();
@@ -410,7 +413,8 @@ class CoverageController extends ChangeNotifier {
         error = null;
         _initializing = Future.value();
         success = true;
-      } catch (e) {
+      } catch (e, stack) {
+        MapAttempt.current?.capture(e, stack);
         error = CoverageFailure('Could not open map', e.toString());
       } finally {
         busy = false;
@@ -703,7 +707,8 @@ class CoverageController extends ChangeNotifier {
       processedWalks = walks.where((w) => w.status != 'recording').length;
       error = null;
       if (updatedRoutes) routeUpdateRevision++;
-    } catch (e) {
+    } catch (e, stack) {
+      MapAttempt.current?.capture(e, stack);
       error = e is CoverageFailure
           ? e
           : CoverageFailure('Could not update streets', e.toString());

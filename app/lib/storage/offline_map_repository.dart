@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../diagnostics/map_diagnostics.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
@@ -89,11 +90,13 @@ class OfflineMapRepository implements SpatialAreaStore {
     String geojson, {
     bool keepExisting = false,
   }) async {
+    MapAttempt.current?.mark(MapStage.validation);
     final bytes = utf8.encode(geojson).length;
     if (bytes > 16 * 1024 * 1024) {
       throw const FormatException('Map exceeds the 16 MiB offline limit.');
     }
     final area = await compute(_validatedMapInfo, geojson);
+    MapAttempt.current?.mark(MapStage.save, bytes: bytes);
     final rows = await tx.query('offline_area', columns: ['version']);
     final exists = rows.any((row) => row['version'] == area.$1);
     if (keepExisting && exists) return;
