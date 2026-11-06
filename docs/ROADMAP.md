@@ -15,7 +15,9 @@ with offline memory pins, drafts, saved-walk associations and full backup/restor
 Screen-off recording and persistent APK signing are implemented, and the signing
 credential is provisioned. Actual-phone battery testing remains open. Activity-aware GPS sampling, a bounded
 foreground warm-up and per-activity local GPS diagnostics are implemented for the
-next field test.
+next field test. Recording and matching now adapt to movement automatically;
+optional history labels do not limit matching. Sequence-based
+matching can revise provisional live coverage as new evidence arrives.
 See [screen-off recording](SCREEN_OFF_RECORDING.md), [Android updates](ANDROID_UPDATES.md)
 and [nearby maps](NEARBY_MAPS.md).
 
@@ -317,9 +319,10 @@ accuracy scores. The private recording, backup and rendering are not committed.
 
 - Existing and newly downloaded OSM maps gain 10–20 m coverage portions, targeting
   15 m; shorter junction pieces remain intact. Saved walks rebuild heat locally.
-- GPS interval slider: 2 / 5 / 10 / 20 seconds, default 5, applied next walk.
+- GPS sampling now adapts to movement and pauses, with a manual 2 / 5 / 10 / 20 s override.
 - Automatic 2 × 2 km downloads during a walk, default on, within 500 m of uncovered
-  terrain. One request at a time, backoff on failure, eight-map cap, no eviction.
+  terrain. One request at a time and backoff on failure. The former eight-map cap
+  has been replaced by a persistent library with bounded active data.
 - First-run and privacy disclosures updated for optional automatic mobile-data use.
 
 Physical-phone checks: confirm all interval requests with the screen off, cross

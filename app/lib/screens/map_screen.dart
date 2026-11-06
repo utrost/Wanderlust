@@ -221,9 +221,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             if (_session.activeMaps case final active?) {
               if (version == null) return false;
               await active.select(version);
+              if (active.error != null) {
+                throw active.failure ?? StateError(active.error!);
+              }
               await _coverage.refreshMaps();
+              if (_coverage.error != null) throw _coverage.error!;
               if (mounted) setState(() => _areaRequest++);
               await _coverage.synchronize(_recorder.savedWalks);
+              if (_coverage.error != null) throw _coverage.error!;
               return true;
             }
             final ok = await _coverage.useNetwork(
@@ -233,6 +238,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             if (!ok) return false;
             if (mounted) setState(() => _areaRequest++);
             await _coverage.synchronize(_recorder.savedWalks);
+            if (_coverage.error != null) throw _coverage.error!;
             return true;
           },
         ),

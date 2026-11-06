@@ -2,7 +2,7 @@
 
 **Paint the streets you've walked.**
 
-Wanderlust is an offline-first, privacy-respecting walking app. As you walk, it
+Wanderlust is an offline-first, privacy-respecting walking and cycling app. As you explore, it
 colors the streets of your city onto the *real* street network — the more often
 you walk a street, the more intense its color and width. No pace, no calories,
 no streaks, no leaderboards. Just the quiet, addictive pleasure of watching your
@@ -30,17 +30,18 @@ cartographer of your own world.
 Implemented, with automated checks configured in CI:
 
 - **Rust geo-core** (`geo-core/`) with the platform-independent data model,
-  routing graph, snap-to-edge map matching, shortest-path fill, and the
-  "don't paint what you didn't walk" guardrail.
+  routing graph, sequence-based map matching and bounded gap inference.
+  Matching weighs accuracy, direction and connected movement; inferred routes
+  remain estimates.
 - **FFI layer** (`geo-ffi/`) with a C ABI, GeoJSON street-network loading, GPX
   matching, and integration tests.
-- **Flutter app scaffold** (`app/`) that renders the filling-map surface, calls
+- **Flutter app** (`app/`) that renders the filling-map surface, calls
   the real Rust geo-core through FFI on startup when the native library is
   bundled, with diagnostics available in Settings.
 - **Walk recording**: permission flow, distance, optional elapsed time/GPS
   samples, and an Android foreground service for screen-off walks; fixes are journaled to SQLite with timestamps and accuracy.
   Saved walks survive restarts, interrupted sessions are recovered, and failed
-  saves can be retried. Saved GPX is viewable/copyable in the app.
+  saves can be retried. GPX files are created only when you explicitly export them.
 - **Matching safeguards**: GPX segment/time boundaries, conservative ambiguity
   handling, and explicit native diagnostics. See [recording notes](docs/RECORDING.md).
 - **CI** (`.github/workflows/ci.yml`) for Rust format/clippy/tests plus Flutter
@@ -98,8 +99,10 @@ maintainer.
   never commands a route.
 - **A life map, not a log.** Over years it becomes a portrait of how you move
   through the world — a keepsake, not a statistic.
-- **Local by default.** No account, no login, no telemetry. Your location data —
-  the most sensitive thing an app can know about you — never leaves your device.
+- **Local by default.** No account, no login, no telemetry. Recorded
+  routes and memories stay in app-private storage. Map downloads send the
+  requested area to Overpass; exports and backups leave the app only when you
+  choose to share or save them. See the [privacy policy](docs/privacy.html).
 
 ---
 
@@ -148,16 +151,23 @@ offline maps; the location-status icon opens GPS details. The bottom icons show
 explored sections, add a memory, open memories, and open saved walks. Long-press
 icons for labels. Start/Stop remains labelled, and map-edge warnings stay visible.
 
-**Settings → GPS interval** offers 2, 5, 10 and 20 seconds, starting with the next walk. Five seconds is the default; longer intervals may miss short turns. The movement filter is two metres at 2 s and five metres otherwise.
+Tap **Start recording**; walking, cycling and other journeys share one map.
+Recording and matching adapt to movement automatically. Optional activity labels
+can be changed in journey review without changing the raw trace. Android sampling
+adapts to movement and pauses; disable automatic sampling in Settings to choose
+2, 5, 10 or 20 seconds. These intervals are requests, not guaranteed delivery
+rates. See [recording](docs/RECORDING.md).
 Street colouring now requires movement along the street in a compatible direction;
 see [matching changes, regression tests and limits](docs/MATCHING_EVIDENCE.md).
 
 **Settings → Fill small gaps** optionally fills short missing street sections
 between confidently matched parts of a walk. It updates both live and saved
-walks; switch it off to remove the extra estimates. Ambiguous routes and long GPS
-outages remain unfilled. See [matching evidence](docs/MATCHING_EVIDENCE.md).
+walks; switch it off to remove the extra estimates. Longer outages have a
+separate bounded route estimate, with explicit confirmation of repairs.
+Automatic outage filling is off by default. Some gaps remain unresolved when
+route evidence is insufficient. See [matching evidence](docs/MATCHING_EVIDENCE.md).
 
-**Walk history → tap a walk** opens a read-only review with GPS, matched streets
+**Walk history → tap a walk** opens a review with GPS, matched streets
 and dashed inferred gaps. Preview gap filling there without changing your saved
 coverage. Street labels work with existing maps; refresh downloaded maps to add
 place labels and clearer area names. See [walk review](docs/WALK_REVIEW.md).

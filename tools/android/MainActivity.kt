@@ -27,6 +27,11 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler(recordingBattery::handle)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/backups")
             .setMethodCallHandler(backupFiles::handle)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/diagnostics")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "environment") result.success(MapDiagnostics.environment(this))
+                else result.notImplemented()
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "wanderlust/about")
             .setMethodCallHandler { call, result ->
                 if (call.method == "version") {

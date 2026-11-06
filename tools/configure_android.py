@@ -64,6 +64,7 @@ def configure(directory):
         ('RecordingService.kt', 'kotlin/com/simiono/wanderlust/RecordingService.kt'),
         ('RecordingJournal.kt', 'kotlin/com/simiono/wanderlust/RecordingJournal.kt'),
         ('RecordingPolicy.kt', 'kotlin/com/simiono/wanderlust/RecordingPolicy.kt'),
+        ('MapDiagnostics.kt', 'kotlin/com/simiono/wanderlust/MapDiagnostics.kt'),
         ('BackupFiles.kt', 'kotlin/com/simiono/wanderlust/BackupFiles.kt'),
         ('ic_walk_notification.xml', 'res/drawable/ic_walk_notification.xml'),
         ('backup_rules.xml', 'res/xml/backup_rules.xml'),

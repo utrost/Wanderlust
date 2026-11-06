@@ -1,3 +1,4 @@
+import '../diagnostics/map_diagnostics.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
@@ -181,7 +182,8 @@ class ActiveMaps extends ChangeNotifier {
         }
         error = null;
         failure = null;
-      } catch (e) {
+      } catch (e, stack) {
+        MapAttempt.current?.capture(e, stack);
         failure = e;
         error = 'Could not load nearby maps. Your recording is safe.';
         indexing = false;

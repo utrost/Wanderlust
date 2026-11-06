@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import 'osm_network.dart';
+import '../diagnostics/map_diagnostics.dart';
 
 class NearbyArea {
   NearbyArea(this.bbox);
@@ -108,16 +109,19 @@ class MapDownload {
     _client = client;
     try {
       return await _fetch(client, area).timeout(const Duration(seconds: 75));
-    } on TimeoutException {
+    } on TimeoutException catch (e, stack) {
+      MapAttempt.current?.capture(e, stack);
       throw const FormatException(
         'Map download timed out. Your saved maps are unchanged. Choose a smaller size or retry later.',
       );
-    } on SocketException {
+    } on SocketException catch (e, stack) {
+      MapAttempt.current?.capture(e, stack);
       if (_cancelled) throw const FormatException('Map download cancelled.');
       throw const FormatException(
         'Map download could not connect. Check your internet connection.',
       );
-    } on IOException {
+    } on IOException catch (e, stack) {
+      MapAttempt.current?.capture(e, stack);
       throw FormatException(
         _cancelled
             ? 'Map download cancelled.'
@@ -130,6 +134,7 @@ class MapDownload {
   }
 
   Future<String> _fetch(HttpClient client, NearbyArea area) async {
+    MapAttempt.current?.mark(MapStage.request);
     final request = await client.postUrl(endpoint);
     request.headers.set(
       HttpHeaders.userAgentHeader,
@@ -142,6 +147,7 @@ class MapDownload {
     );
     request.write('data=${Uri.encodeQueryComponent(area.query)}');
     final response = await request.close();
+    MapAttempt.current?.mark(MapStage.response, status: response.statusCode);
     if (response.statusCode != 200) {
       throw FormatException(
         response.statusCode == 429 || response.statusCode >= 500
@@ -158,6 +164,11 @@ class MapDownload {
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in response) {
       if (_cancelled) throw const FormatException('Map download cancelled.');
+      MapAttempt.current?.mark(
+        MapStage.response,
+        bytes: bytes.length + chunk.length,
+        status: response.statusCode,
+      );
       if (bytes.length + chunk.length > maxBytes) {
         throw const FormatException(
           'This area is too detailed to download. Choose a smaller map size.',
@@ -165,6 +176,12 @@ class MapDownload {
       }
       bytes.add(chunk);
     }
+    MapAttempt.current?.mark(
+      MapStage.response,
+      bytes: bytes.length,
+      status: response.statusCode,
+    );
+    MapAttempt.current?.mark(MapStage.conversion);
     final xml = utf8.decode(bytes.takeBytes());
     final network = await compute(_normalize, (
       xml,
@@ -173,6 +190,10 @@ class MapDownload {
       area.name,
     ));
     if (_cancelled) throw const FormatException('Map download cancelled.');
+    MapAttempt.current?.mark(
+      MapStage.validation,
+      bytes: utf8.encode(network).length,
+    );
     return network;
   }
 }

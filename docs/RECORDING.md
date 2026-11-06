@@ -1,106 +1,115 @@
 # Recording and matching
 
-Walk recording journals each GPS fix to local SQLite before a walk
-is finalized. It retains timestamps and horizontal accuracy, prevents overlapping
-starts, freezes elapsed time on stop, and handles location stream errors and
-completion. Distance is accumulated incrementally; it is still a raw GPS-distance
-estimate and can include drift.
+Tap **Start recording** to record walking, cycling or other journeys on one map.
+Recording and matching adapt to movement. Optional activity labels in review
+organise history; they do not determine which movement is matched. No GPX file
+is needed: export is an explicit action in history. Labels can be changed
+without changing the raw GPS trace.
 
-The **Saved walks** button opens the library for completed and interrupted walks.
-It supports GPX import, per-walk GPX file export, and full streamed `.wanderlust` backup
-and merge restore. See [import/export](IMPORT_EXPORT.md) for formats, limits,
-duplicate handling, and phone acceptance checks.
-
-On relaunch, unfinished sessions become `interrupted`; their end time is the last
-committed fix (or start time if there were no fixes). Recovery never resumes GPS
-automatically. Committed points survive a process kill; fixes still awaiting a
-commit can be lost. User-started Android screen-off recording is implemented;
-see [behaviour, limits and battery acceptance](SCREEN_OFF_RECORDING.md).
+Fixes are journaled to local SQLite with timestamps and horizontal accuracy.
+Starts cannot overlap, stop waits for queued writes, and distance is accumulated
+incrementally. Display distance remains an estimate, not a survey measurement.
+The Android foreground service can continue while the app UI is closed, and
+Android may restart its sticky service after process termination. Recoverable
+recordings can be continued from the app. Committed fixes survive process
+termination; pending writes may be lost.
 
 If writing fails, recording stops and the in-memory trace remains available for
-**Retry saving walk**. Another walk cannot start until this save succeeds. Retry
-uses the original walk and point keys so partially saved traces aren't duplicated.
-Uncommitted fixes cannot survive process death while storage remains unavailable.
+**Retry saving walk**. Another activity cannot start until saving succeeds.
+Retries reuse original identities to avoid duplicate points. Uncommitted fixes
+cannot survive process death while storage remains unavailable.
 
-## Location on the map
+Walk history supports GPX import/export and streamed `.wanderlust` backups with
+merge restore. See [formats and limits](IMPORT_EXPORT.md). Android screen-off
+recording uses a user-started foreground service; real-phone battery and longer
+activity validation remain open. See [screen-off recording](SCREEN_OFF_RECORDING.md).
 
-The blue dot shows the latest GPS fix, with a translucent horizontal-accuracy
-circle. Starting a walk centers the first fix automatically. **Center on me**
-recenters on the recording's latest fix, or requests a one-off location while
-idle without creating a walk. Panning remains manual after centering; subsequent
-fixes move the dot without pulling the map away from where you are looking.
-**Show map area** returns to the full selected street view.
+## Location and sampling
 
-Optional GPS details show coordinates, accuracy, and the age of the fix. The HUD
-explicitly reports waiting for GPS and locations outside all saved maps. Fixes older than 30 seconds use a gray marker and a last-fix label;
-recording uses a 5 m distance filter, so an aging fix can also mean you have not
-moved. Coverage uses all saved networks. If your position is outside them,
-use **Download a map here** to save nearby streets; see [nearby maps](NEARBY_MAPS.md). Stopping retains the last marker; idle centering can
-refresh it. The bundled geo-core diagnostic is available in Settings.
+The blue dot shows the latest fix with its reported horizontal-accuracy circle.
+Opening or returning to the map recenters on a fresh fix when permission is
+already granted. Panning while a location request is pending preserves the user's
+chosen view. The location button recenters on demand; **Show map area** fits the
+selected map. During recording, fixes update the dot without continually pulling
+the map away from a manually chosen view.
 
-Phone follow-up: check initial positioning, accuracy-circle size, pan then
-recenter, area reset, and disabled GPS. Initial installation, permission prompt,
-and receiving a recording fix were confirmed by the tester on 2026-09-26; outdoor
-recording and saved coverage have since been confirmed by the tester. Broader
-trace-quality and screen-off battery testing remain open.
+Idle acquisition uses a bounded foreground warm-up stream: up to 20 seconds,
+ending early after two distinct fresh fixes reporting accuracy within 15 metres.
+It is cancelled when the app hides or recording starts. Preview fixes are not
+added to an activity. Warm-up cannot guarantee satellite reception or accuracy.
+
+Android automatic sampling requests frequent updates during acquisition and
+turns (1 second), faster travel (2 seconds), ordinary movement (3 seconds), and
+stationary periods (15 seconds). Disable automatic sampling in Settings to choose
+**2, 5, 10 or 20 seconds** for the next recording. These are requests to Android,
+not guaranteed arrival intervals.
+
+Optional GPS details show coordinates, reported accuracy and fix age. Fixes older
+than 30 seconds appear grey. A missing first fix shows a locating state. Outside
+saved maps, recording can continue; see [nearby map downloads](NEARBY_MAPS.md).
+
+## Matching and gaps
+
+The matcher uses nearby candidates and a sequence of observations rather than
+independent nearest-street choices. Accuracy, travel direction, along-street
+progress and network connectivity contribute to the result. New evidence can
+correct provisional live coverage. Networks use short sections targeting 15 metres
+(typically 10–20 metres), so crossing a junction need not colour an entire street.
+
+Matching infers movement constraints from the GPS sequence rather than the
+activity label, with an absolute 70 metres/second envelope. Normal continuous
+matching has a 30-second time-gap limit. Moderately inaccurate
+fixes may support a street when sustained movement provides enough evidence;
+recording retains rejected fixes too. Reliable unmatched movement can appear as
+a dashed GPS trail. This preserves off-network evidence without claiming it
+belongs to a nearby street.
+
+**Fill small gaps** controls short inferred connections. Longer outages use a
+separate route-estimation flow bounded by time, distance and detour limits
+(up to five minutes and 600 metres). Automatic outage filling is off by default;
+explicitly confirmed repairs are retained. An inferred route is an estimate, and
+insufficient or conflicting evidence can still leave gaps. Neither setting is a
+guarantee that every real journey is recovered.
+
+See [matching evidence](MATCHING_EVIDENCE.md) for the detailed rules, regression
+cases and known limitations. Downloads include street, cycle and useful railway
+geometry. These are recording maps, not navigation or a statement of legal access.
+See [automatic journeys](AUTOMATIC_JOURNEYS.md).
 
 ## Storage boundary
 
-`app/lib/recording/walk_store.dart` owns database schema version 5 in
-`wanderlust.db`: `recorded_walk` and `recorded_point`. SQLite plugin access is lazy
-so an unavailable database reports a recording error instead of crashing startup.
-Writes are serialized and stop waits for queued fixes. Foreign keys are enabled.
+`AppDatabase` in `app/lib/storage/app_database.dart` owns the current version-3
+schema for the `com.simiono.wanderlust` fresh-install lineage. `SqliteWalkStore`
+is a facade over focused repositories, including the recording journal, maps,
+preferences and derived coverage. Earlier versions within this lineage migrate in place; experimental predecessor
+databases are not migrated into it.
 
-The journal is separate from the older area/segment schema sketch in
-`geo-core/src/schema.rs`. Version 2 adds durable per-walk edge membership and
-network-scoped counts; see [Bremen coverage](BREMEN_SLICE.md). The current
-saved-walk list loads all recorded points; imports have explicit resource limits.
-Version 3 adds stable backup identities and segment/missing-time metadata. Older database versions migrate in place. Version 4 adds offline maps and
-persisted area selection. Version 5 adds local display preferences. Paging remains needed for large libraries.
+Writes are serialized and foreign keys are enabled. History loads summaries;
+full traces are loaded when needed. Activity mode and optional reception
+diagnostics live in trace metadata. Derived coverage fingerprints allow matching
+to be recalculated without replacing the original recorded points.
 
-## Conservative GPX matching
+## Local diagnostics
 
-- XML parsing supports namespaced and self-closing points and validates finite,
-  in-range coordinates and RFC3339 timestamps. Malformed/empty GPX is an error.
-- Each GPX track segment is independent. Missing times, non-increasing times,
-  gaps over 30 seconds, or displacement above 3 metres/second prohibit fill
-  between those fixes. Direct observations require consecutive unambiguous
-  support, along-street movement and a compatible travel direction. Fixes with
-  known horizontal accuracy worse than 25 m remain recorded but do not confirm
-  streets. See [matching evidence and evaluation](MATCHING_EVIDENCE.md).
-- Inferred path length is also capped by elapsed time at 3 metres/second, in
-  addition to the existing detour and absolute-distance limits.
-- Off-network fixes break continuity instead of being dropped and bridged over.
-- When the nearest two streets differ by at most 3 metres in snap distance,
-  that fix is left unmatched. This reduces junction/parallel-path false positives
-  at the cost of leaving more gaps; it is not a guarantee against all bad snaps.
-- Untimed GPX can still paint repeatedly observed streets, but receives no inferred
-  fill. The lower-level positions-only Rust API retains distance-based fill.
+The satellite action in saved-activity review shows optional GPS reception
+statistics: reported accuracy, delivered intervals, fix age, time to first fresh
+fix and stream restarts. Bounded summaries are checkpointed every 30 fixes and
+on stop; diagnostics failure does not prevent recording. These summaries contain
+no coordinates, remain local and are included in full backups, but not GPX.
+A copy action lets the user choose to share them. Reported accuracy is the
+receiver's estimate, not independently measured ground truth.
 
-These initial thresholds need validation on real walking traces. The Bremen pipeline now splits at junctions and bounds chain length where
-OSM nodes permit it; nearest-street matching remains a linear scan. Measured GPS
-accuracy is preserved, and the matcher reads Wanderlust's accuracy extension.
-
-## Tester diagnostics
-
-The startup status chip distinguishes sample asset loading, native library/ABI
-loading, street-network rejection, and matching failure. Tap a failed chip for
-its underlying local error. Invalid GPX returns an `error` JSON object over the
-C ABI, which the Dart binding reports as a format error. Nothing is transmitted.
-
-A packaged APK must successfully match the sample to pass the native smoke test;
-a graceful error message is useful diagnosis, not evidence that native code works.
+Settings also provides the native matcher diagnostic. A packaged APK must
+successfully run its native smoke test; a graceful error alone is not evidence
+that the native library works.
 
 ## Verification
 
-Run `cargo test --workspace`, `cargo clippy --all-targets --all-features -- -D warnings`,
-and `cargo fmt --check` from the repository root. Run `flutter analyze` and
-`flutter test` from `app/`.
+From the repository root, run `cargo test --workspace`,
+`cargo clippy --all-targets --all-features -- -D warnings`, and `cargo fmt --check`.
+From `app/`, run `flutter analyze` and `flutter test`.
 
-Tests cover recorder starts/stops and failures, save retry, interruption recovery
-against a real temporary SQLite database, diagnostic stages and cleanup, malformed
-GPX over the C ABI, and gaps/noisy junctions/parallel streets in the matcher.
-
-Implementation references: [sqflite transactions](https://pub.dev/packages/sqflite),
-[roxmltree XML parsing](https://docs.rs/roxmltree/0.21.1/roxmltree/struct.Document.html),
-and [Chrono timestamp parsing](https://docs.rs/chrono/latest/chrono/struct.DateTime.html#method.parse_from_rfc3339).
+Checks cover recording failures/retry/recovery, mixed-activity journeys and
+history labels, warm-up cancellation, sampling preferences, diagnostic
+persistence, malformed GPX, and matching around gaps, junctions and parallel
+streets. Field testing remains necessary for device reception and battery use.

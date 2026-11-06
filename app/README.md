@@ -5,9 +5,11 @@ correctness-critical geo logic lives in the Rust [`geo-core`](../geo-core/) and
 is linked via FFI.
 
 > **Pre-alpha in field testing.** Offline map downloads, live street heatmaps,
-> repeat-visit colouring, screen-off recording, walk history, GPX exchange,
+> repeat-visit colouring, automatic mixed-activity recording, screen-off recording, history, GPX exchange,
 > full backups and notes/photos with map pins are implemented. New users download
 > their first map around their location. See [the roadmap](../docs/ROADMAP.md).
+> GPS sampling adapts to movement, with a manual override, bounded foreground
+> warm-up and local reception diagnostics. See [recording](../docs/RECORDING.md).
 > Android uses a source-only fork of Geolocator's platform provider without a
 > Google Play Services dependency. Real-phone battery and release testing continue.
 

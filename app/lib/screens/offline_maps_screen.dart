@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import '../diagnostics/map_diagnostics.dart';
+import '../diagnostics/map_report_dialog.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../recording/walk_recorder.dart';
@@ -21,7 +23,9 @@ class OfflineMapsScreen extends StatefulWidget {
     this.onSizeChanged,
     this.locate,
     this.onMapsChanged,
+    this.diagnostics,
   });
+  final MapDiagnostics? diagnostics;
   final AreaStore store;
   final Position? position;
   final String? activeVersion;
@@ -38,8 +42,11 @@ class OfflineMapsScreen extends StatefulWidget {
 
 class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
   final _download = MapDownload();
+  MapDiagnostics get _diagnostics =>
+      widget.diagnostics ?? MapDiagnostics.instance;
   List<OfflineArea> _areas = [];
   bool _busy = false;
+  bool _closeAfterOperation = false;
   bool _loaded = false;
   bool _fetching = false;
   bool _cancelRequested = false;
@@ -64,30 +71,48 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
   }
 
   Future<void> _load() async {
+    MapAttempt.current?.mark(MapStage.listing);
     _areas = await widget.store.listAreas();
     _loaded = true;
   }
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _run(
+    Future<void> Function() action, {
+    String operation = 'library',
+  }) async {
     setState(() {
       _busy = true;
       _error = null;
     });
+    _closeAfterOperation = false;
+    final attempt = MapAttempt(operation);
+    if (operation == 'library') attempt.mark(MapStage.listing);
     try {
-      await action();
-    } on FormatException catch (e) {
-      _error = e.message;
-    } on StateError catch (e) {
-      _error = e.message;
-    } catch (_) {
-      _error =
-          'Could not save or open the map. Check available storage and try again.';
+      await attempt.run(action);
+    } catch (e, stack) {
+      attempt.capture(e, stack);
+      _error = attempt.saved
+          ? attempt.userMessage
+          : e is FormatException
+          ? e.message
+          : e is StateError
+          ? e.message
+          : attempt.userMessage;
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if ((operation == 'download' || operation == 'refresh') &&
+          _cancelRequested) {
+        attempt.cancelled = true;
+      }
+      await _diagnostics.finish(attempt);
+      if (mounted) {
+        setState(() => _busy = false);
+        if (_closeAfterOperation && _error == null) Navigator.pop(context);
+      }
     }
   }
 
   Future<void> _select(String source, String? version) async {
+    MapAttempt.current?.mark(MapStage.activation);
     _progress = 'Opening map and updating walked streets…';
     if (mounted) setState(() {});
     final ok = await widget.onSelect(source, version);
@@ -100,7 +125,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
   }
 
   void _close() {
-    if (mounted) Navigator.pop(context);
+    _closeAfterOperation = true;
   }
 
   Future<void> _nearby() async {
@@ -112,19 +137,26 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
     setState(() => _fetching = true);
     late final String source;
     try {
+      MapAttempt.current?.mark(MapStage.request);
       source = await (widget.fetch ?? _download.fetch)(area);
     } finally {
       if (mounted) setState(() => _fetching = false);
     }
-    if (_cancelRequested || !mounted) return;
+    if (_cancelRequested || !mounted) {
+      MapAttempt.current?.cancelled = true;
+      return;
+    }
     // Commit a complete, validated map before switching away from the old map.
+    MapAttempt.current?.mark(MapStage.save);
     await widget.store.saveArea(source);
+    MapAttempt.current?.saved = true;
     await _load();
     await _select(source, AreaNetwork.parse(source).version);
     _close();
   }
 
   Future<void> _refresh(OfflineArea old) async {
+    MapAttempt.current?.mark(MapStage.validation);
     final source = await widget.store.readArea(old.version);
     if (source == null) throw StateError('Saved map is unavailable.');
     final area = AreaNetwork.parse(source);
@@ -133,12 +165,19 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
     setState(() => _fetching = true);
     late final String updated;
     try {
+      MapAttempt.current?.mark(MapStage.request);
       updated = await (widget.fetch ?? _download.fetch)(NearbyArea(area.bbox));
     } finally {
       if (mounted) setState(() => _fetching = false);
     }
-    if (!mounted || _cancelRequested) return;
+    if (!mounted || _cancelRequested) {
+      MapAttempt.current?.cancelled = true;
+      return;
+    }
+    MapAttempt.current?.mark(MapStage.save);
     await widget.store.saveArea(updated);
+    MapAttempt.current?.saved = true;
+    await _load();
     final version = AreaNetwork.parse(updated).version;
     await _select(updated, version);
     if (version != old.version) await widget.store.deleteArea(old.version);
@@ -295,7 +334,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   FilledButton.icon(
                     onPressed: _busy || !_loaded || _position == null
                         ? null
-                        : () => _run(_nearby),
+                        : () => _run(_nearby, operation: 'download'),
                     icon: const Icon(Icons.download_outlined),
                     label: const Text('Download nearby map'),
                   ),
@@ -314,6 +353,11 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                   ],
                   if (_error != null)
                     Text(_error!, key: const Key('map-download-error')),
+                  if (_error != null && !_busy)
+                    TextButton(
+                      onPressed: () => showMapReports(context, _diagnostics),
+                      child: const Text('Details'),
+                    ),
                   if (!_busy && !_loaded)
                     TextButton(
                       onPressed: () => _run(_load),
@@ -359,7 +403,10 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                       icon: const Icon(Icons.refresh),
                       onPressed: _busy
                           ? null
-                          : () => _run(() => _refresh(area)),
+                          : () => _run(
+                              () => _refresh(area),
+                              operation: 'refresh',
+                            ),
                     ),
                     IconButton(
                       tooltip: 'Remove downloaded map',
@@ -371,6 +418,7 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                 onTap: _busy
                     ? null
                     : () => _run(() async {
+                        MapAttempt.current?.mark(MapStage.activation);
                         final source = await widget.store.readArea(
                           area.version,
                         );
@@ -381,6 +429,11 @@ class _OfflineMapsScreenState extends State<OfflineMapsScreen> {
                         _close();
                       }),
               ),
+            ListTile(
+              title: const Text('Recent map reports'),
+              leading: const Icon(Icons.bug_report_outlined),
+              onTap: () => showMapReports(context, _diagnostics),
+            ),
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
