@@ -130,10 +130,7 @@ List<ReviewGap> _suggest((List<String>, SavedWalk) input) {
     final straight = _distance(from, to);
     final start = nearest(from), end = nearest(to);
     final routes = <GapRoute>[];
-    final budget = math.min(
-      600.0,
-      math.min(seconds * 30, straight * 1.8 + 30),
-    );
+    final budget = math.min(600.0, math.min(seconds * 30, straight * 1.8 + 30));
     if (start != null && end != null && start != end) {
       final first = route(start, end, budget, {});
       if (first != null) {
